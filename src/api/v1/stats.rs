@@ -20,7 +20,7 @@ pub async fn res(data: web::Data<Data>) -> impl Responder {
     let response = Response {
         accounts: 0,
         uptime: SystemTime::now().duration_since(data.start_time).expect("Seriously why dont you have time??").as_secs(),
-        version: String::from(VERSION.unwrap_or_else(|| "UNKNOWN")),
+        version: String::from(VERSION.unwrap_or("UNKNOWN")),
         build_number: String::from("how do i implement this?"),
     };
 
