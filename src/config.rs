@@ -13,6 +13,7 @@ pub struct Database {
     username: String,
     password: String,
     hostname: String,
+    database: String,
     port: u16
 }
 
