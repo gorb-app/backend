@@ -1,0 +1,23 @@
+use actix_web::{get, HttpResponse, Responder};
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct Response {
+    unstable_features: UnstableFeatures,
+    versions: Vec<String>,
+}
+
+#[derive(Serialize)]
+struct UnstableFeatures;
+
+#[get("/versions")]
+pub async fn res() -> impl Responder {
+    let response = Response {
+        unstable_features: UnstableFeatures,
+        versions: vec![
+            String::from("1"),
+        ]
+    };
+
+    HttpResponse::Ok().json(response)
+}

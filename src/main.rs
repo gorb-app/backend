@@ -1,28 +1,38 @@
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
+use std::time::SystemTime;
+use actix_web::{web, App, HttpServer};
+mod config;
+use config::{Config, ConfigBuilder};
+mod api;
 
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
+type Error = Box<dyn std::error::Error>;
+
+#[derive(Clone)]
+struct Data {
+    pub config: Config,
+    pub start_time: SystemTime,
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    let config = ConfigBuilder::load().await?.build();
 
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
+    let web = config.web.clone();
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| {
+    let data = Data {
+        config,
+        start_time: SystemTime::now(),
+    };
+
+    HttpServer::new(move || {
+        let data = data.clone();
+
         App::new()
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .app_data(web::Data::new(data))
+            .service(api::versions::res)
+            .service(api::v1::web())
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((web.url, web.port))?
     .run()
-    .await
+    .await?;
+    Ok(())
 }
