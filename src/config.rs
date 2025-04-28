@@ -1,8 +1,6 @@
 use serde::Deserialize;
 use tokio::fs::read_to_string;
 use crate::Error;
-use url::Url;
-
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigBuilder {
