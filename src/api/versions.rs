@@ -1,4 +1,4 @@
-use actix_web::{get, HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, get};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -14,9 +14,7 @@ struct UnstableFeatures;
 pub async fn res() -> impl Responder {
     let response = Response {
         unstable_features: UnstableFeatures,
-        versions: vec![
-            String::from("1"),
-        ]
+        versions: vec![String::from("1")],
     };
 
     HttpResponse::Ok().json(response)

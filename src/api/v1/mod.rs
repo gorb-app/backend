@@ -1,8 +1,7 @@
-use actix_web::{web, Scope};
+use actix_web::{Scope, web};
 
 mod stats;
 
 pub fn web() -> Scope {
-    web::scope("/v1")
-        .service(stats::res)
+    web::scope("/v1").service(stats::res)
 }

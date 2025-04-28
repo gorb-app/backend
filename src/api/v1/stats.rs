@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use actix_web::{get, web, HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, get, web};
 use serde::Serialize;
 
 use crate::Data;
@@ -19,7 +19,10 @@ struct Response {
 pub async fn res(data: web::Data<Data>) -> impl Responder {
     let response = Response {
         accounts: 0,
-        uptime: SystemTime::now().duration_since(data.start_time).expect("Seriously why dont you have time??").as_secs(),
+        uptime: SystemTime::now()
+            .duration_since(data.start_time)
+            .expect("Seriously why dont you have time??")
+            .as_secs(),
         version: String::from(VERSION.unwrap_or("UNKNOWN")),
         build_number: String::from("how do i implement this?"),
     };

@@ -1,5 +1,5 @@
+use actix_web::{App, HttpServer, web};
 use std::time::SystemTime;
-use actix_web::{web, App, HttpServer};
 mod config;
 use config::{Config, ConfigBuilder};
 mod api;

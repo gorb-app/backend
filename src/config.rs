@@ -1,6 +1,6 @@
+use crate::Error;
 use serde::Deserialize;
 use tokio::fs::read_to_string;
-use crate::Error;
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigBuilder {
@@ -14,7 +14,7 @@ pub struct Database {
     password: String,
     hostname: String,
     database: String,
-    port: u16
+    port: u16,
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,18 +34,17 @@ impl ConfigBuilder {
     }
 
     pub fn build(self) -> Config {
-
         let web = if let Some(web) = self.web {
             Web {
                 url: web.url.unwrap_or(String::from("0.0.0.0")),
                 port: web.port.unwrap_or(8080),
-                ssl: web.ssl.unwrap_or_default()
+                ssl: web.ssl.unwrap_or_default(),
             }
         } else {
             Web {
                 url: String::from("0.0.0.0"),
                 port: 8080,
-                ssl: false
+                ssl: false,
             }
         };
 
