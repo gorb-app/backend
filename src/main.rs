@@ -1,4 +1,5 @@
 use actix_web::{App, HttpServer, web};
+use sqlx::{Executor, PgPool, Pool, Postgres};
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
@@ -8,6 +9,7 @@ type Error = Box<dyn std::error::Error>;
 
 #[derive(Clone)]
 struct Data {
+    pub pool: Pool<Postgres>,
     pub config: Config,
     pub start_time: SystemTime,
 }
@@ -18,7 +20,20 @@ async fn main() -> Result<(), Error> {
 
     let web = config.web.clone();
 
+    let pool = PgPool::connect_with(config.database.connect_options()).await?;
+
+    pool.execute(r#"CREATE TABLE IF NOT EXISTS users (
+    uuid uuid UNIQUE NOT NULL,
+    username varchar(32) UNIQUE NOT NULL,
+    display_name varchar(64),
+    password varchar(512) NOT NULL,
+    email varchar(100) UNIQUE NOT NULL,
+    email_verified integer NOT NULL DEFAULT '0',
+    PRIMARY KEY (uuid)
+    )"#).await?;
+
     let data = Data {
+        pool,
         config,
         start_time: SystemTime::now(),
     };

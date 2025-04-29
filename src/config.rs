@@ -1,5 +1,6 @@
 use crate::Error;
 use serde::Deserialize;
+use sqlx::postgres::PgConnectOptions;
 use tokio::fs::read_to_string;
 
 #[derive(Debug, Deserialize)]
@@ -12,7 +13,7 @@ pub struct ConfigBuilder {
 pub struct Database {
     username: String,
     password: String,
-    hostname: String,
+    host: String,
     database: String,
     port: u16,
 }
@@ -66,4 +67,15 @@ pub struct Web {
     pub url: String,
     pub port: u16,
     pub ssl: bool,
+}
+
+impl Database {
+    pub fn connect_options(&self) -> PgConnectOptions {
+        PgConnectOptions::new()
+            .database(&self.database)
+            .host(&self.host)
+            .username(&self.username)
+            .password(&self.password)
+            .port(self.port)
+    }
 }
