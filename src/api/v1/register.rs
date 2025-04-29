@@ -7,8 +7,6 @@ use uuid::Uuid;
 
 use crate::Data;
 
-const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
-
 #[derive(Deserialize)]
 struct AccountInformation {
     identifier: String,
