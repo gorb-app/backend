@@ -14,6 +14,7 @@ struct UnstableFeatures;
 pub async fn res() -> impl Responder {
     let response = Response {
         unstable_features: UnstableFeatures,
+        // TODO: Find a way to dynamically update this possibly?
         versions: vec![String::from("1")],
     };
 

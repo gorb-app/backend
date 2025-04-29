@@ -22,6 +22,10 @@ async fn main() -> Result<(), Error> {
 
     let pool = PgPool::connect_with(config.database.connect_options()).await?;
 
+    /* 
+    TODO: Figure out if a table should be used here and if not then what.
+    Also figure out if these should be different types from what they currently are and if we should add more "constraints"
+    */
     pool.execute(r#"CREATE TABLE IF NOT EXISTS users (
     uuid uuid UNIQUE NOT NULL,
     username varchar(32) UNIQUE NOT NULL,

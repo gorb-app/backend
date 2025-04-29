@@ -81,6 +81,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
         ))
     }
 
+    // FIXME: This regex doesnt seem to be working
     let username_regex = Regex::new(r"[a-zA-Z0-9.-_]").unwrap();
 
     if !username_regex.is_match(&account_information.identifier) || account_information.identifier.len() < 3 || account_information.identifier.len() > 32 {
@@ -94,14 +95,16 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     Ok(match data.pool.execute(
         &*format!(
+            // FIXME: This can never be put into prod, it works for testing
             "INSERT INTO users VALUES ( '{}', '{}', NULL, '{}', '{}', '0' )",
             uuid,
             account_information.identifier,
+            // FIXME: Password has no security currently, either from a client or server perspective
             account_information.password,
             account_information.email,
         )
     ).await {
-        Ok(v) => {
+        Ok(_out) => {
             HttpResponse::Ok().json(
                 Response {
                     access_token: "bogus".to_string(),
