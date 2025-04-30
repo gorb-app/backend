@@ -93,43 +93,41 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
         ))
     }
 
-    Ok(match data.pool.execute(
-        &*format!(
-            // FIXME: This can never be put into prod, it works for testing
-            "INSERT INTO users VALUES ( '{}', '{}', NULL, '{}', '{}', '0' )",
-            uuid,
-            account_information.identifier,
-            // FIXME: Password has no security currently, either from a client or server perspective
-            account_information.password,
-            account_information.email,
-        )
-    ).await {
-        Ok(_out) => {
-            HttpResponse::Ok().json(
-                Response {
-                    access_token: "bogus".to_string(),
-                    user_id: "bogus".to_string(),
-                    expires_in: 1,
-                    refresh_token: "bogus".to_string(),
+    // TODO: Check security of this implementation
+    Ok(match sqlx::query(&format!("INSERT INTO users VALUES ( '{}', $1, NULL, $2, $3, false )", uuid))
+        .bind(account_information.identifier)
+        // FIXME: Password has no security currently, either from a client or server perspective
+        .bind(account_information.password)
+        .bind(account_information.email)
+        .execute(&data.pool)
+        .await {
+            Ok(_out) => {
+                HttpResponse::Ok().json(
+                    Response {
+                        access_token: "bogus".to_string(),
+                        user_id: "bogus".to_string(),
+                        expires_in: 1,
+                        refresh_token: "bogus".to_string(),
+                    }
+                )
+            },
+            Err(error) => {
+                let err_msg = error.as_database_error().unwrap().message();
+    
+                match err_msg {
+                    err_msg if err_msg.contains("unique") && err_msg.contains("username_key") => HttpResponse::Forbidden().json(ResponseError {
+                        gorb_id_available: false,
+                        ..Default::default()
+                    }),
+                    err_msg if err_msg.contains("unique") && err_msg.contains("email_key") => HttpResponse::Forbidden().json(ResponseError {
+                        email_available: false,
+                        ..Default::default()
+                    }),
+                    _ => {
+                        eprintln!("{}", err_msg);
+                        HttpResponse::InternalServerError().finish()
+                    }
                 }
-            )
-        },
-        Err(error) => {
-            let err_msg = error.as_database_error().unwrap().message();
-
-            match err_msg {
-                err_msg if err_msg.contains("unique") && err_msg.contains("username_key") => HttpResponse::Forbidden().json(ResponseError {
-                    gorb_id_available: false,
-                    ..Default::default()
-                }),
-                err_msg if err_msg.contains("unique") && err_msg.contains("email_key") => HttpResponse::Forbidden().json(ResponseError {
-                    email_available: false,
-                    ..Default::default()
-                }),
-                _ => HttpResponse::Forbidden().json(ResponseError {
-                    ..Default::default()
-                })
-            }
-        },
+            },
     })
 }
