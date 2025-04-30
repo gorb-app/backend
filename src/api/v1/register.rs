@@ -2,7 +2,6 @@ use actix_web::{error, post, web, Error, HttpResponse};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
-use sqlx::Executor;
 use uuid::Uuid;
 
 use crate::Data;
