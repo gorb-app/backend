@@ -3,6 +3,11 @@ name = "backend"
 version = "0.1.0"
 edition = "2024"
 
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
 [dependencies]
 actix-web = "4.10"
 argon2 = { version = "0.5.3", features = ["std"] }
