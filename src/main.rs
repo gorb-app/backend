@@ -26,15 +26,22 @@ async fn main() -> Result<(), Error> {
     TODO: Figure out if a table should be used here and if not then what.
     Also figure out if these should be different types from what they currently are and if we should add more "constraints"
     */
-    pool.execute(r#"CREATE TABLE IF NOT EXISTS users (
-    uuid uuid UNIQUE NOT NULL,
-    username varchar(32) UNIQUE NOT NULL,
-    display_name varchar(64),
-    password varchar(512) NOT NULL,
-    email varchar(100) UNIQUE NOT NULL,
-    email_verified integer NOT NULL DEFAULT '0',
-    PRIMARY KEY (uuid)
-    )"#).await?;
+    sqlx::raw_sql(r#"
+        CREATE TABLE IF NOT EXISTS users (
+            uuid uuid PRIMARY KEY UNIQUE NOT NULL,
+            username varchar(32) UNIQUE NOT NULL,
+            display_name varchar(64),
+            password varchar(512) NOT NULL,
+            email varchar(100) UNIQUE NOT NULL,
+            email_verified boolean NOT NULL DEFAULT FALSE
+        );
+        CREATE TABLE IF NOT EXISTS instance_permissions (
+            uuid uuid REFERENCES users(uuid),
+            administrator boolean NOT NULL DEFAULT FALSE
+        )
+    "#)
+    .execute(&pool)
+    .await?;
 
     let data = Data {
         pool,
