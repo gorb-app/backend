@@ -1,5 +1,6 @@
 use actix_web::{App, HttpServer, web};
-use sqlx::{Executor, PgPool, Pool, Postgres};
+use argon2::Argon2;
+use sqlx::{PgPool, Pool, Postgres};
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
@@ -11,6 +12,7 @@ type Error = Box<dyn std::error::Error>;
 struct Data {
     pub pool: Pool<Postgres>,
     pub config: Config,
+    pub argon2: Argon2<'static>,
     pub start_time: SystemTime,
 }
 
@@ -46,6 +48,8 @@ async fn main() -> Result<(), Error> {
     let data = Data {
         pool,
         config,
+        // TODO: Possibly implement "pepper" into this (thinking it could generate one if it doesnt exist and store it on disk)
+        argon2: Argon2::default(),
         start_time: SystemTime::now(),
     };
 
