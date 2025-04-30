@@ -1,5 +1,6 @@
 use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
+use clap::Parser;
 use sqlx::{PgPool, Pool, Postgres};
 use std::time::SystemTime;
 mod config;
@@ -7,6 +8,14 @@ use config::{Config, ConfigBuilder};
 mod api;
 
 type Error = Box<dyn std::error::Error>;
+
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long, default_value_t = String::from("/etc/gorb/config.toml"))]
+    config: String,
+}
 
 #[derive(Clone)]
 struct Data {
@@ -18,7 +27,9 @@ struct Data {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let config = ConfigBuilder::load().await?.build();
+    let args = Args::parse();
+
+    let config = ConfigBuilder::load(args.config).await?.build();
 
     let web = config.web.clone();
 

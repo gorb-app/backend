@@ -26,8 +26,8 @@ struct WebBuilder {
 }
 
 impl ConfigBuilder {
-    pub async fn load() -> Result<Self, Error> {
-        let raw = read_to_string("./config.toml").await?;
+    pub async fn load(path: String) -> Result<Self, Error> {
+        let raw = read_to_string(path).await?;
 
         let config = toml::from_str(&raw)?;
 
@@ -39,13 +39,11 @@ impl ConfigBuilder {
             Web {
                 url: web.url.unwrap_or(String::from("0.0.0.0")),
                 port: web.port.unwrap_or(8080),
-                ssl: web.ssl.unwrap_or_default(),
             }
         } else {
             Web {
                 url: String::from("0.0.0.0"),
                 port: 8080,
-                ssl: false,
             }
         };
 
@@ -66,7 +64,6 @@ pub struct Config {
 pub struct Web {
     pub url: String,
     pub port: u16,
-    pub ssl: bool,
 }
 
 impl Database {
