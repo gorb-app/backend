@@ -17,9 +17,16 @@ struct Response {
 
 #[get("/stats")]
 pub async fn res(data: web::Data<Data>) -> impl Responder {
+    let accounts;
+    if let Ok(users) = sqlx::query("SELECT uuid FROM users").fetch_all(&data.pool).await {
+        accounts = users.len();
+    } else {
+        return HttpResponse::InternalServerError().finish()
+    }
+
     let response = Response {
         // TODO: Get number of accounts from db
-        accounts: 0,
+        accounts,
         uptime: SystemTime::now()
             .duration_since(data.start_time)
             .expect("Seriously why dont you have time??")
