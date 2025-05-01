@@ -1,0 +1,21 @@
+when:
+  - event: push
+    branch: main
+
+steps:
+  - name: build
+    image: rust:bookworm
+    commands:
+      cargo build --release
+  - name: container-build-and-publish
+    image: docker
+    commands:
+      - docker login --username radical --password $PASSWORD git.gorb.app
+      - docker build --rm -t git.gorb.app/gorb/backend:main .
+      - docker push git.gorb.app/gorb/backend
+      - docker rmi git.gorb.app/gorb/backend:main
+    settings:
+      PASSWORD:
+        from_secret: docker_password
+    volumes:
+      - /var/run/podman/podman.sock:/var/run/docker.sock
