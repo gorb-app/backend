@@ -12,7 +12,7 @@ steps:
     commands:
       - docker login --username radical --password $PASSWORD git.gorb.app
       - docker build --rm -t git.gorb.app/gorb/backend:main .
-      - docker push git.gorb.app/gorb/backend
+      - docker push git.gorb.app/gorb/backend:main
       - docker rmi git.gorb.app/gorb/backend:main
     environment:
       PASSWORD:
