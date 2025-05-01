@@ -21,7 +21,7 @@ struct Args {
 #[derive(Clone)]
 struct Data {
     pub pool: Pool<Postgres>,
-    pub config: Config,
+    pub _config: Config,
     pub argon2: Argon2<'static>,
     pub start_time: SystemTime,
 }
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Error> {
 
     let data = Data {
         pool,
-        config,
+        _config: config,
         // TODO: Possibly implement "pepper" into this (thinking it could generate one if it doesnt exist and store it on disk)
         argon2: Argon2::default(),
         start_time: SystemTime::now(),
