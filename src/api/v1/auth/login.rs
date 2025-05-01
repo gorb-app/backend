@@ -52,14 +52,14 @@ pub async fn response(mut payload: web::Payload, data: web::Data<Data>) -> Resul
     if email_regex.is_match(&login_information.username) {
         if let Ok(row) = sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE email = $1").bind(login_information.username).fetch_one(&data.pool).await {
             let (uuid, password): (String, String) = row;
-            return Ok(login(data.clone(), uuid, login_information.password, password).await)
+            return Ok(login(data.clone(), uuid, login_information.password, password, login_information.device_name).await)
         }
 
         return Ok(HttpResponse::Unauthorized().finish())
     } else if username_regex.is_match(&login_information.username) {
         if let Ok(row) = sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE username = $1").bind(login_information.username).fetch_one(&data.pool).await {
             let (uuid, password): (String, String) = row;
-            return Ok(login(data.clone(), uuid, login_information.password, password).await)
+            return Ok(login(data.clone(), uuid, login_information.password, password, login_information.device_name).await)
         }
 
         return Ok(HttpResponse::Unauthorized().finish())
@@ -68,7 +68,7 @@ pub async fn response(mut payload: web::Payload, data: web::Data<Data>) -> Resul
     Ok(HttpResponse::Unauthorized().finish())
 }
 
-async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password: String, database_password: String) -> HttpResponse {
+async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password: String, database_password: String, device_name: String) -> HttpResponse {
     if let Ok(parsed_hash) = PasswordHash::new(&database_password) {
         if data.argon2.verify_password(request_password.as_bytes(), &parsed_hash).is_ok() {
             let refresh_token = generate_refresh_token();
@@ -90,16 +90,17 @@ async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password:
 
             let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
-            if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created) VALUES ($1, '{}', $2 )", uuid))
+            if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
                 .bind(&refresh_token)
                 .bind(current_time)
+                .bind(device_name)
                 .execute(&data.pool)
                 .await {
                 eprintln!("{}", error);
                 return HttpResponse::InternalServerError().finish()
             }
 
-            if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
+            if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
                 .bind(&access_token)
                 .bind(&refresh_token)
                 .bind(current_time)

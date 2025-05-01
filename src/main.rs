@@ -56,7 +56,8 @@ async fn main() -> Result<(), Error> {
         CREATE TABLE IF NOT EXISTS refresh_tokens (
             token varchar(64) PRIMARY KEY UNIQUE NOT NULL,
             uuid uuid NOT NULL REFERENCES users(uuid),
-            created int8 NOT NULL
+            created int8 NOT NULL,
+            device_name varchar(16) NOT NULL
         );
         CREATE TABLE IF NOT EXISTS access_tokens (
             token varchar(32) PRIMARY KEY UNIQUE NOT NULL,

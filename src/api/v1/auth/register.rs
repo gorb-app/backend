@@ -132,9 +132,10 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
                     let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created) VALUES ($1, '{}', $2 )", uuid))
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
                         .bind(&refresh_token)
                         .bind(current_time)
+                        .bind(account_information.device_name)
                         .execute(&data.pool)
                         .await {
                         eprintln!("{}", error);
