@@ -1,4 +1,5 @@
 use crate::Error;
+use log::debug;
 use serde::Deserialize;
 use sqlx::postgres::PgConnectOptions;
 use tokio::fs::read_to_string;
@@ -22,11 +23,12 @@ pub struct Database {
 struct WebBuilder {
     url: Option<String>,
     port: Option<u16>,
-    ssl: Option<bool>,
+    _ssl: Option<bool>,
 }
 
 impl ConfigBuilder {
     pub async fn load(path: String) -> Result<Self, Error> {
+        debug!("loading config from: {}", path);
         let raw = read_to_string(path).await?;
 
         let config = toml::from_str(&raw)?;

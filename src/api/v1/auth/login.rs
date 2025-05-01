@@ -2,6 +2,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use actix_web::{error, post, web, Error, HttpResponse};
 use argon2::{PasswordHash, PasswordVerifier};
+use log::error;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
@@ -75,14 +76,14 @@ async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password:
             let access_token = generate_access_token();
 
             if refresh_token.is_err() {
-                eprintln!("{}", refresh_token.unwrap_err());
+                error!("{}", refresh_token.unwrap_err());
                 return HttpResponse::InternalServerError().finish()
             }
 
             let refresh_token = refresh_token.unwrap();
 
             if access_token.is_err() {
-                eprintln!("{}", access_token.unwrap_err());
+                error!("{}", access_token.unwrap_err());
                 return HttpResponse::InternalServerError().finish()
             }
 
@@ -96,7 +97,7 @@ async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password:
                 .bind(device_name)
                 .execute(&data.pool)
                 .await {
-                eprintln!("{}", error);
+                error!("{}", error);
                 return HttpResponse::InternalServerError().finish()
             }
 
@@ -106,7 +107,7 @@ async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password:
                 .bind(current_time)
                 .execute(&data.pool)
                 .await {
-                eprintln!("{}", error);
+                error!("{}", error);
                 return HttpResponse::InternalServerError().finish()
             }
 

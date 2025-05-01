@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use actix_web::{error, post, web, Error, HttpResponse};
+use log::error;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
@@ -117,14 +118,14 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                     let access_token = generate_access_token();
 
                     if refresh_token.is_err() {
-                        eprintln!("{}", refresh_token.unwrap_err());
+                        error!("{}", refresh_token.unwrap_err());
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
                     let refresh_token = refresh_token.unwrap();
 
                     if access_token.is_err() {
-                        eprintln!("{}", access_token.unwrap_err());
+                        error!("{}", access_token.unwrap_err());
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
@@ -138,7 +139,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         .bind(account_information.device_name)
                         .execute(&data.pool)
                         .await {
-                        eprintln!("{}", error);
+                        error!("{}", error);
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
@@ -148,7 +149,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         .bind(current_time)
                         .execute(&data.pool)
                         .await {
-                        eprintln!("{}", error);
+                        error!("{}", error);
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
@@ -172,7 +173,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                             ..Default::default()
                         }),
                         _ => {
-                            eprintln!("{}", err_msg);
+                            error!("{}", err_msg);
                             HttpResponse::InternalServerError().finish()
                         }
                     }

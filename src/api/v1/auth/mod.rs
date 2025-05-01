@@ -1,6 +1,7 @@
 use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 use actix_web::{web, HttpResponse, Scope};
+use log::error;
 use sqlx::Postgres;
 use uuid::Uuid;
 
@@ -36,7 +37,7 @@ pub async fn check_access_token<'a>(access_token: String, pool: &'a sqlx::Pool<P
             Ok(Uuid::from_str(&uuid).unwrap())
         },
         Err(error) => {
-            eprintln!("{}", error);
+            error!("{}", error);
             Err(HttpResponse::InternalServerError().finish())
         }
     }

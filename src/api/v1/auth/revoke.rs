@@ -1,5 +1,6 @@
 use actix_web::{error, post, web, Error, HttpResponse};
 use argon2::{PasswordHash, PasswordVerifier};
+use log::error;
 use serde::{Deserialize, Serialize};
 use futures::{future, StreamExt};
 
@@ -54,7 +55,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
         .await;
 
     if database_password_raw.is_err() {
-        eprintln!("{}", database_password_raw.unwrap_err());
+        error!("{}", database_password_raw.unwrap_err());
         return Ok(HttpResponse::InternalServerError().json(Response::new(false)));
     }
 
@@ -63,7 +64,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
     let hashed_password_raw = PasswordHash::new(&database_password);
 
     if hashed_password_raw.is_err() {
-        eprintln!("{}", hashed_password_raw.unwrap_err());
+        error!("{}", hashed_password_raw.unwrap_err());
         return Ok(HttpResponse::InternalServerError().json(Response::new(false)));
     }
 
@@ -79,7 +80,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
         .await;
 
     if tokens_raw.is_err() {
-        eprintln!("{:?}", tokens_raw);
+        error!("{:?}", tokens_raw);
         return Ok(HttpResponse::InternalServerError().json(Response::new(false)))
     }
 
@@ -106,14 +107,14 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
     let refresh_tokens_errors: Vec<&Result<sqlx::postgres::PgQueryResult, sqlx::Error>> = results_refresh_tokens.iter().filter(|r| r.is_err()).collect();
 
     if !access_tokens_errors.is_empty() && !refresh_tokens_errors.is_empty() {
-        println!("{:?}", access_tokens_errors);
-        println!("{:?}", refresh_tokens_errors);
+        error!("{:?}", access_tokens_errors);
+        error!("{:?}", refresh_tokens_errors);
         return Ok(HttpResponse::InternalServerError().finish())
     } else if !access_tokens_errors.is_empty() {
-        println!("{:?}", access_tokens_errors);
+        error!("{:?}", access_tokens_errors);
         return Ok(HttpResponse::InternalServerError().finish())
     } else if !refresh_tokens_errors.is_empty() {
-        println!("{:?}", refresh_tokens_errors);
+        error!("{:?}", refresh_tokens_errors);
         return Ok(HttpResponse::InternalServerError().finish())
     }
     

@@ -1,4 +1,5 @@
 use actix_web::{error, post, web, Error, HttpResponse};
+use log::error;
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
 use uuid::Uuid;
@@ -59,7 +60,7 @@ pub async fn res(mut payload: web::Payload, path: web::Path<(String,)>, data: we
         .await;
 
     if row.is_err() {
-        eprintln!("{}", row.unwrap_err());
+        error!("{}", row.unwrap_err());
         return Ok(HttpResponse::InternalServerError().finish())
     }
 

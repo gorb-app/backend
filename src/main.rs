@@ -1,6 +1,7 @@
 use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
+use simple_logger::SimpleLogger;
 use sqlx::{PgPool, Pool, Postgres};
 use std::time::SystemTime;
 mod config;
@@ -28,6 +29,7 @@ struct Data {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    SimpleLogger::new().with_level(log::LevelFilter::Info).with_colors(true).env().init().unwrap();
     let args = Args::parse();
 
     let config = ConfigBuilder::load(args.config).await?.build();

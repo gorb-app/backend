@@ -1,5 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use actix_web::{error, post, web, Error, HttpResponse};
+use log::error;
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
 
@@ -41,7 +42,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
             .bind(&refresh_request.refresh_token)
             .execute(&data.pool)
             .await {
-            eprintln!("{}", error);
+            error!("{}", error);
         }
     
         let lifetime = current_time - created;
@@ -51,7 +52,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                 .bind(&refresh_request.refresh_token)
                 .execute(&data.pool)
                 .await {
-                eprintln!("{}", error);
+                error!("{}", error);
             }
     
             return Ok(HttpResponse::Unauthorized().finish())
@@ -65,7 +66,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
             let new_refresh_token = generate_refresh_token();
 
             if new_refresh_token.is_err() {
-                eprintln!("{}", new_refresh_token.unwrap_err());
+                error!("{}", new_refresh_token.unwrap_err());
                 return Ok(HttpResponse::InternalServerError().finish())
             }
 
@@ -81,7 +82,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                     refresh_token = new_refresh_token;
                 },
                 Err(error) => {
-                    eprintln!("{}", error);
+                    error!("{}", error);
                 },
             }
         }
@@ -89,7 +90,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
         let access_token = generate_access_token();
 
         if access_token.is_err() {
-            eprintln!("{}", access_token.unwrap_err());
+            error!("{}", access_token.unwrap_err());
             return Ok(HttpResponse::InternalServerError().finish())
         }
 
@@ -101,7 +102,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
             .bind(current_time)
             .execute(&data.pool)
             .await {
-            eprintln!("{}", error);
+            error!("{}", error);
             return Ok(HttpResponse::InternalServerError().finish())
         }
     

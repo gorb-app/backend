@@ -15,6 +15,7 @@ services:
     volumes:
       - gorb-backend:/gorb
     environment:
+      #- RUST_LOG=debug
       - DATABASE_USERNAME=gorb
       - DATABASE_PASSWORD=gorb
       - DATABASE=gorb
