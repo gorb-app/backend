@@ -6,7 +6,7 @@ use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
 mod api;
-mod crypto;
+pub mod crypto;
 
 type Error = Box<dyn std::error::Error>;
 

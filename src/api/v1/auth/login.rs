@@ -1,10 +1,12 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use actix_web::{error, post, web, Error, HttpResponse};
 use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
 
-use crate::Data;
+use crate::{crypto::{generate_access_token, generate_refresh_token}, Data};
 
 #[derive(Deserialize)]
 struct LoginInformation {
@@ -23,7 +25,7 @@ struct Response {
 const MAX_SIZE: usize = 262_144;
 
 #[post("/login")]
-pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn response(mut payload: web::Payload, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let mut body = web::BytesMut::new();
     while let Some(chunk) = payload.next().await {
         let chunk = chunk?;
@@ -49,14 +51,16 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
     }
 
     if email_regex.is_match(&login_information.username) {
-        if let Ok(password) = sqlx::query_scalar("SELECT password FROM users WHERE email = $1").bind(login_information.username).fetch_one(&data.pool).await {
-            return Ok(login(data.argon2.clone(), login_information.password, password))
+        if let Ok(row) = sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE email = $1").bind(login_information.username).fetch_one(&data.pool).await {
+            let (uuid, password): (String, String) = row;
+            return Ok(login(data.clone(), uuid, login_information.password, password).await)
         }
 
         return Ok(HttpResponse::Unauthorized().finish())
     } else if username_regex.is_match(&login_information.username) {
-        if let Ok(password) = sqlx::query_scalar("SELECT password FROM users WHERE username = $1").bind(login_information.username).fetch_one(&data.pool).await {
-            return Ok(login(data.argon2.clone(), login_information.password, password))
+        if let Ok(row) = sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE username = $1").bind(login_information.username).fetch_one(&data.pool).await {
+            let (uuid, password): (String, String) = row;
+            return Ok(login(data.clone(), uuid, login_information.password, password).await)
         }
 
         return Ok(HttpResponse::Unauthorized().finish())
@@ -65,9 +69,47 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
     Ok(HttpResponse::Unauthorized().finish())
 }
 
-fn login(argon2: Argon2, request_password: String, database_password: String) -> HttpResponse {
+async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password: String, database_password: String) -> HttpResponse {
     if let Ok(parsed_hash) = PasswordHash::new(&database_password) {
-        if argon2.verify_password(request_password.as_bytes(), &parsed_hash).is_ok() {
+        if data.argon2.verify_password(request_password.as_bytes(), &parsed_hash).is_ok() {
+            let refresh_token = generate_refresh_token();
+            let access_token = generate_access_token();
+
+            if refresh_token.is_err() {
+                eprintln!("{}", refresh_token.unwrap_err());
+                return HttpResponse::InternalServerError().finish()
+            }
+
+            let refresh_token = refresh_token.unwrap();
+
+            if access_token.is_err() {
+                eprintln!("{}", access_token.unwrap_err());
+                return HttpResponse::InternalServerError().finish()
+            }
+
+            let access_token = access_token.unwrap();
+
+            let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+
+            if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created) VALUES ($1, '{}', $2 )", uuid))
+                .bind(&refresh_token)
+                .bind(current_time)
+                .execute(&data.pool)
+                .await {
+                eprintln!("{}", error);
+                return HttpResponse::InternalServerError().finish()
+            }
+
+            if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
+                .bind(&access_token)
+                .bind(&refresh_token)
+                .bind(current_time)
+                .execute(&data.pool)
+                .await {
+                eprintln!("{}", error);
+                return HttpResponse::InternalServerError().finish()
+            }
+
             return HttpResponse::Ok().json(Response {
                 access_token: "bogus".to_string(),
                 expires_in: 0,

@@ -7,7 +7,7 @@ use futures::StreamExt;
 use uuid::Uuid;
 use argon2::{password_hash::{rand_core::OsRng, SaltString}, PasswordHasher};
 
-use crate::Data;
+use crate::{crypto::{generate_access_token, generate_refresh_token}, Data};
 
 #[derive(Deserialize)]
 struct AccountInformation {
@@ -95,7 +95,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
     }
 
     // Password is expected to be hashed using SHA3-384
-    let password_regex = Regex::new(r"/[0-9a-f]{96}/i").unwrap();
+    let password_regex = Regex::new(r"[0-9a-f]{96}").unwrap();
 
     if !password_regex.is_match(&account_information.password) {
         return Ok(HttpResponse::Forbidden().json(
@@ -110,7 +110,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     if let Ok(hashed_password) = data.argon2.hash_password(account_information.password.as_bytes(), &salt) {
         // TODO: Check security of this implementation
-        return Ok(match sqlx::query(&format!("INSERT INTO users (uuid, username, password, email,) VALUES ( '{}', $1, $2, $3 )", uuid))
+        return Ok(match sqlx::query(&format!("INSERT INTO users (uuid, username, password, email) VALUES ( '{}', $1, $2, $3 )", uuid))
             .bind(account_information.identifier)
             // FIXME: Password has no security currently, either from a client or server perspective
             .bind(hashed_password.to_string())
@@ -118,13 +118,27 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
             .execute(&data.pool)
             .await {
                 Ok(_out) => {
-                    let refresh_token = todo!();
-                    let access_token = todo!();
+                    let refresh_token = generate_refresh_token();
+                    let access_token = generate_access_token();
+
+                    if refresh_token.is_err() {
+                        eprintln!("{}", refresh_token.unwrap_err());
+                        return Ok(HttpResponse::InternalServerError().finish())
+                    }
+
+                    let refresh_token = refresh_token.unwrap();
+
+                    if access_token.is_err() {
+                        eprintln!("{}", access_token.unwrap_err());
+                        return Ok(HttpResponse::InternalServerError().finish())
+                    }
+
+                    let access_token = access_token.unwrap();
 
                     let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
 
                     if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created) VALUES ($1, '{}', $2 )", uuid))
-                        .bind(refresh_token)
+                        .bind(&refresh_token)
                         .bind(current_time)
                         .execute(&data.pool)
                         .await {
@@ -132,9 +146,9 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
-                        .bind(access_token)
-                        .bind(refresh_token)
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
+                        .bind(&access_token)
+                        .bind(&refresh_token)
                         .bind(current_time)
                         .execute(&data.pool)
                         .await {
