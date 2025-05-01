@@ -43,7 +43,7 @@ pub async fn response(mut payload: web::Payload, data: web::Data<Data>) -> Resul
     let username_regex = Regex::new(r"[a-zA-Z0-9.-_]").unwrap();
 
     // Password is expected to be hashed using SHA3-384
-    let password_regex = Regex::new(r"/[0-9a-f]{96}/i").unwrap();
+    let password_regex = Regex::new(r"[0-9a-f]{96}").unwrap();
 
     if !password_regex.is_match(&login_information.password) {
         return Ok(HttpResponse::Forbidden().json(r#"{ "password_hashed": false }"#));
