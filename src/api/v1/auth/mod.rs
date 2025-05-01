@@ -7,12 +7,14 @@ use uuid::Uuid;
 mod register;
 mod login;
 mod refresh;
+mod revoke;
 
 pub fn web() -> Scope {
     web::scope("/auth")
         .service(register::res)
         .service(login::response)
         .service(refresh::res)
+        .service(revoke::res)
 }
 
 pub async fn check_access_token<'a>(access_token: String, pool: &'a sqlx::Pool<Postgres>) -> Result<Uuid, HttpResponse> {
