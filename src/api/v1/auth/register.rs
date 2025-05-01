@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use actix_web::{error, post, web, Error, HttpResponse};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -49,8 +51,6 @@ impl Default for ResponseError {
 #[derive(Serialize)]
 struct Response {
     access_token: String,
-    user_id: String,
-    expires_in: u64,
     refresh_token: String,
 }
 
@@ -110,7 +110,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     if let Ok(hashed_password) = data.argon2.hash_password(account_information.password.as_bytes(), &salt) {
         // TODO: Check security of this implementation
-        return Ok(match sqlx::query(&format!("INSERT INTO users VALUES ( '{}', $1, NULL, $2, $3, false )", uuid))
+        return Ok(match sqlx::query(&format!("INSERT INTO users (uuid, username, password, email,) VALUES ( '{}', $1, $2, $3 )", uuid))
             .bind(account_information.identifier)
             // FIXME: Password has no security currently, either from a client or server perspective
             .bind(hashed_password.to_string())
@@ -118,12 +118,34 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
             .execute(&data.pool)
             .await {
                 Ok(_out) => {
+                    let refresh_token = todo!();
+                    let access_token = todo!();
+
+                    let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created) VALUES ($1, '{}', $2 )", uuid))
+                        .bind(refresh_token)
+                        .bind(current_time)
+                        .execute(&data.pool)
+                        .await {
+                        eprintln!("{}", error);
+                        return Ok(HttpResponse::InternalServerError().finish())
+                    }
+
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
+                        .bind(access_token)
+                        .bind(refresh_token)
+                        .bind(current_time)
+                        .execute(&data.pool)
+                        .await {
+                        eprintln!("{}", error);
+                        return Ok(HttpResponse::InternalServerError().finish())
+                    }
+
                     HttpResponse::Ok().json(
                         Response {
-                            access_token: "bogus".to_string(),
-                            user_id: "bogus".to_string(),
-                            expires_in: 1,
-                            refresh_token: "bogus".to_string(),
+                            access_token,
+                            refresh_token,
                         }
                     )
                 },
