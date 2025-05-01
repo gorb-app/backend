@@ -14,7 +14,7 @@ steps:
       - docker build --rm -t git.gorb.app/gorb/backend:main .
       - docker push git.gorb.app/gorb/backend
       - docker rmi git.gorb.app/gorb/backend:main
-    settings:
+    environment:
       PASSWORD:
         from_secret: docker_password
     volumes:
