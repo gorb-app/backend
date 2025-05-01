@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use actix_web::{error, post, web, Error, HttpResponse};
-use argon2::{Argon2, PasswordHash, PasswordVerifier};
+use argon2::{PasswordHash, PasswordVerifier};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
