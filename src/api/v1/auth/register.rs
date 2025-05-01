@@ -8,6 +8,7 @@ use uuid::Uuid;
 use argon2::{password_hash::{rand_core::OsRng, SaltString}, PasswordHasher};
 
 use crate::{crypto::{generate_access_token, generate_refresh_token}, Data};
+use super::login::Response;
 
 #[derive(Deserialize)]
 struct AccountInformation {
@@ -46,12 +47,6 @@ impl Default for ResponseError {
             password_numbers: true,
         }
     }
-}
-
-#[derive(Serialize)]
-struct Response {
-    access_token: String,
-    refresh_token: String,
 }
 
 const MAX_SIZE: usize = 262_144;

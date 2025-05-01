@@ -16,10 +16,9 @@ struct LoginInformation {
 }
 
 #[derive(Serialize)]
-struct Response {
-    access_token: String,
-    expires_in: u64,
-    refresh_token: String,
+pub struct Response {
+    pub access_token: String,
+    pub refresh_token: String,
 }
 
 const MAX_SIZE: usize = 262_144;
@@ -111,9 +110,8 @@ async fn login(data: actix_web::web::Data<Data>, uuid: String, request_password:
             }
 
             return HttpResponse::Ok().json(Response {
-                access_token: "bogus".to_string(),
-                expires_in: 0,
-                refresh_token: "bogus".to_string(),
+                access_token,
+                refresh_token,
             })
         }
 
