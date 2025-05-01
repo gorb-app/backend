@@ -50,18 +50,18 @@ async fn main() -> Result<(), Error> {
             email_verified boolean NOT NULL DEFAULT FALSE
         );
         CREATE TABLE IF NOT EXISTS instance_permissions (
-            uuid uuid REFERENCES users(uuid),
+            uuid uuid NOT NULL REFERENCES users(uuid),
             administrator boolean NOT NULL DEFAULT FALSE
         );
         CREATE TABLE IF NOT EXISTS refresh_tokens (
             token varchar(64) PRIMARY KEY UNIQUE NOT NULL,
-            uuid uuid REFERENCES users(uuid),
+            uuid uuid NOT NULL REFERENCES users(uuid),
             created int8 NOT NULL
         );
         CREATE TABLE IF NOT EXISTS access_tokens (
             token varchar(32) PRIMARY KEY UNIQUE NOT NULL,
-            refresh_token varchar(64) UNIQUE REFERENCES refresh_tokens(token),
-            uuid uuid REFERENCES users(uuid),
+            refresh_token varchar(64) UNIQUE NOT NULL REFERENCES refresh_tokens(token),
+            uuid uuid NOT NULL REFERENCES users(uuid),
             created int8 NOT NULL
         )
     "#)
