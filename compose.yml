@@ -6,7 +6,7 @@ networks:
   gorb:
 services:
   backend:
-    image: gorb/backend:latest
+    image: git.gorb.app/gorb/backend:main
     restart: always
     ports:
       - 8080:8080
