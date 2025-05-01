@@ -1,6 +1,7 @@
 use actix_web::{error, post, web, Error, HttpResponse};
 use serde::{Deserialize, Serialize};
 use futures::StreamExt;
+use uuid::Uuid;
 
 use crate::{api::v1::auth::check_access_token, Data};
 
@@ -40,27 +41,29 @@ pub async fn res(mut payload: web::Payload, path: web::Path<(String,)>, data: we
         return Ok(authorized.unwrap_err())
     }
 
-    let uuid = authorized.unwrap();
+    let mut uuid = authorized.unwrap();
 
-    if request == "me" {
-        let row = sqlx::query_as(&format!("SELECT username, display_name FROM users WHERE uuid = '{}'", uuid))
-            .fetch_one(&data.pool)
-            .await
-            .unwrap();
+    if request != "me" {
+        let requested_uuid = Uuid::parse_str(&request);
 
-        let (username, display_name): (String, Option<String>) = row;
-
-        return Ok(HttpResponse::Ok().json(Response { uuid: uuid.to_string(), username, display_name: display_name.unwrap_or_default() }))
-    } else {
-        println!("{}", request);
-        if let Ok(row) = sqlx::query_as(&format!("SELECT CAST(uuid as VARCHAR), username, display_name FROM users WHERE uuid = '{}'", request))
-            .fetch_one(&data.pool)
-            .await {
-            let (uuid, username, display_name): (String, String, Option<String>) = row;
-
-            return Ok(HttpResponse::Ok().json(Response { uuid, username, display_name: display_name.unwrap_or_default() }))
+        if requested_uuid.is_err() {
+            return Ok(HttpResponse::BadRequest().json(r#"{ "error": "UUID is invalid!" }"#))
         }
 
-        Ok(HttpResponse::NotFound().finish())
+        uuid = requested_uuid.unwrap()
     }
+
+    
+    let row = sqlx::query_as(&format!("SELECT username, display_name FROM users WHERE uuid = '{}'", uuid))
+        .fetch_one(&data.pool)
+        .await;
+
+    if row.is_err() {
+        eprintln!("{}", row.unwrap_err());
+        return Ok(HttpResponse::InternalServerError().finish())
+    }
+
+    let (username, display_name): (String, Option<String>) = row.unwrap();
+
+    Ok(HttpResponse::Ok().json(Response { uuid: uuid.to_string(), username, display_name: display_name.unwrap_or_default() }))
 }
