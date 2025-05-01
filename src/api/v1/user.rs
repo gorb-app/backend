@@ -34,7 +34,7 @@ pub async fn res(mut payload: web::Payload, path: web::Path<(String,)>, data: we
 
     let authentication_request = serde_json::from_slice::<AuthenticationRequest>(&body)?;
 
-    let authorized = check_access_token(authentication_request.access_token, data.pool.clone()).await;
+    let authorized = check_access_token(authentication_request.access_token, &data.pool).await;
 
     if authorized.is_err() {
         return Ok(authorized.unwrap_err())

@@ -15,10 +15,10 @@ pub fn web() -> Scope {
         .service(refresh::res)
 }
 
-pub async fn check_access_token(access_token: String, pool: sqlx::Pool<Postgres>) -> Result<Uuid, HttpResponse> {
+pub async fn check_access_token<'a>(access_token: String, pool: &'a sqlx::Pool<Postgres>) -> Result<Uuid, HttpResponse> {
     match sqlx::query_as("SELECT CAST(uuid as VARCHAR), created FROM access_tokens WHERE token = $1")
         .bind(&access_token)
-        .fetch_one(&pool)
+        .fetch_one(&*pool)
         .await {
         Ok(row) => {
             let (uuid, created): (String, i64) = row;
