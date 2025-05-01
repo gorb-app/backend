@@ -71,7 +71,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
             let new_refresh_token = new_refresh_token.unwrap();
 
-            match sqlx::query(&format!("UPDATE refresh_tokens SET token = $1, uuid = {}, created = $2 WHERE token = $3", uuid))
+            match sqlx::query("UPDATE refresh_tokens SET token = $1, created = $2 WHERE token = $3")
                 .bind(&new_refresh_token)
                 .bind(&current_time)
                 .bind(&refresh_token)
