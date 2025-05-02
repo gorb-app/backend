@@ -11,7 +11,6 @@ pub mod crypto;
 
 type Error = Box<dyn std::error::Error>;
 
-/// Simple program to greet a person
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
