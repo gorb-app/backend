@@ -2,7 +2,6 @@ use actix_web::{Error, HttpResponse, error, post, web};
 use futures::StreamExt;
 use log::error;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{Data, api::v1::auth::check_access_token};
 
@@ -20,10 +19,9 @@ struct Response {
 
 const MAX_SIZE: usize = 262_144;
 
-#[post("/user/{uuid}")]
+#[post("/me")]
 pub async fn res(
     mut payload: web::Payload,
-    path: web::Path<(String,)>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
     let mut body = web::BytesMut::new();
@@ -36,8 +34,6 @@ pub async fn res(
         body.extend_from_slice(&chunk);
     }
 
-    let request = path.into_inner().0;
-
     let authentication_request = serde_json::from_slice::<AuthenticationRequest>(&body)?;
 
     let authorized = check_access_token(authentication_request.access_token, &data.pool).await;
@@ -46,17 +42,7 @@ pub async fn res(
         return Ok(error);
     }
 
-    let mut uuid = authorized.unwrap();
-
-    if request != "me" {
-        let requested_uuid = Uuid::parse_str(&request);
-
-        if requested_uuid.is_err() {
-            return Ok(HttpResponse::BadRequest().json(r#"{ "error": "UUID is invalid!" }"#));
-        }
-
-        uuid = requested_uuid.unwrap()
-    }
+    let uuid = authorized.unwrap();
 
     let row = sqlx::query_as(&format!(
         "SELECT username, display_name FROM users WHERE uuid = '{}'",

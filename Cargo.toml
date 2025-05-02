@@ -23,7 +23,7 @@ simple_logger = "5.0.0"
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-native-tls", "postgres"] }
 toml = "0.8"
 url = { version = "2.5", features = ["serde"] }
-uuid = { version = "1.16", features = ["v7"] }
+uuid = { version = "1.16", features = ["serde", "v7"] }
 
 [dependencies.tokio]
 version = "1.44"
