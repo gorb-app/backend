@@ -16,8 +16,7 @@ steps:
       - chmod a+r /etc/apt/keyrings/docker.asc
       - echo \
           "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-          /usr/bin/tee /etc/apt/sources.list.d/docker.list > /dev/null
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
       - apt-get update && apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
       - CROSS_CONTAINER_IN_CONTAINER=true cargo install -f cross
       - CROSS_CONTAINER_IN_CONTAINER=true cross build --target=aarch64-unknown-linux-gnu --release
