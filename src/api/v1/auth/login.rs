@@ -49,43 +49,65 @@ pub async fn response(
     }
 
     if EMAIL_REGEX.is_match(&login_information.username) {
-        if let Ok(row) =
+        let row =
             sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE email = $1")
                 .bind(login_information.username)
                 .fetch_one(&data.pool)
-                .await
-        {
-            let (uuid, password): (String, String) = row;
-            return Ok(login(
-                data.clone(),
-                uuid,
-                login_information.password,
-                password,
-                login_information.device_name,
-            )
-            .await);
+                .await;
+
+        if let Err(error) = row {
+            if error.to_string()
+                == "no rows returned by a query that expected to return at least one row"
+            {
+                return Ok(HttpResponse::Unauthorized().finish());
+            }
+
+            error!("{}", error);
+            return Ok(HttpResponse::InternalServerError().json(
+                r#"{ "error": "Unhandled exception occured, contact the server administrator" }"#,
+            ));
         }
 
-        return Ok(HttpResponse::Unauthorized().finish());
+        let (uuid, password): (String, String) = row.unwrap();
+
+        return Ok(login(
+            data.clone(),
+            uuid,
+            login_information.password,
+            password,
+            login_information.device_name,
+        )
+        .await);
     } else if USERNAME_REGEX.is_match(&login_information.username) {
-        if let Ok(row) =
+        let row =
             sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE username = $1")
                 .bind(login_information.username)
                 .fetch_one(&data.pool)
-                .await
-        {
-            let (uuid, password): (String, String) = row;
-            return Ok(login(
-                data.clone(),
-                uuid,
-                login_information.password,
-                password,
-                login_information.device_name,
-            )
-            .await);
+                .await;
+
+        if let Err(error) = row {
+            if error.to_string()
+                == "no rows returned by a query that expected to return at least one row"
+            {
+                return Ok(HttpResponse::Unauthorized().finish());
+            }
+
+            error!("{}", error);
+            return Ok(HttpResponse::InternalServerError().json(
+                r#"{ "error": "Unhandled exception occured, contact the server administrator" }"#,
+            ));
         }
 
-        return Ok(HttpResponse::Unauthorized().finish());
+        let (uuid, password): (String, String) = row.unwrap();
+
+        return Ok(login(
+            data.clone(),
+            uuid,
+            login_information.password,
+            password,
+            login_information.device_name,
+        )
+        .await);
     }
 
     Ok(HttpResponse::Unauthorized().finish())
@@ -98,62 +120,75 @@ async fn login(
     database_password: String,
     device_name: String,
 ) -> HttpResponse {
-    if let Ok(parsed_hash) = PasswordHash::new(&database_password) {
-        if data
-            .argon2
-            .verify_password(request_password.as_bytes(), &parsed_hash)
-            .is_ok()
-        {
-            let refresh_token = generate_refresh_token();
-            let access_token = generate_access_token();
+    let parsed_hash_raw = PasswordHash::new(&database_password);
 
-            if refresh_token.is_err() {
-                error!("{}", refresh_token.unwrap_err());
-                return HttpResponse::InternalServerError().finish();
-            }
+    if let Err(error) = parsed_hash_raw {
+        error!("{}", error);
+        return HttpResponse::InternalServerError().finish();
+    }
 
-            let refresh_token = refresh_token.unwrap();
+    let parsed_hash = parsed_hash_raw.unwrap();
 
-            if access_token.is_err() {
-                error!("{}", access_token.unwrap_err());
-                return HttpResponse::InternalServerError().finish();
-            }
-
-            let access_token = access_token.unwrap();
-
-            let current_time = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs() as i64;
-
-            if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
-                .bind(&refresh_token)
-                .bind(current_time)
-                .bind(device_name)
-                .execute(&data.pool)
-                .await {
-                error!("{}", error);
-                return HttpResponse::InternalServerError().finish()
-            }
-
-            if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
-                .bind(&access_token)
-                .bind(&refresh_token)
-                .bind(current_time)
-                .execute(&data.pool)
-                .await {
-                error!("{}", error);
-                return HttpResponse::InternalServerError().finish()
-            }
-
-            return HttpResponse::Ok().json(Response {
-                access_token,
-                refresh_token,
-            });
-        }
-
+    if data
+        .argon2
+        .verify_password(request_password.as_bytes(), &parsed_hash)
+        .is_err()
+    {
         return HttpResponse::Unauthorized().finish();
     }
 
-    HttpResponse::InternalServerError().finish()
+    let refresh_token_raw = generate_refresh_token();
+    let access_token_raw = generate_access_token();
+
+    if let Err(error) = refresh_token_raw {
+        error!("{}", error);
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let refresh_token = refresh_token_raw.unwrap();
+
+    if let Err(error) = access_token_raw {
+        error!("{}", error);
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    let access_token = access_token_raw.unwrap();
+
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+
+    if let Err(error) = sqlx::query(&format!(
+        "INSERT INTO refresh_tokens (token, uuid, created, device_name) VALUES ($1, '{}', $2, $3 )",
+        uuid
+    ))
+    .bind(&refresh_token)
+    .bind(current_time)
+    .bind(device_name)
+    .execute(&data.pool)
+    .await
+    {
+        error!("{}", error);
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    if let Err(error) = sqlx::query(&format!(
+        "INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )",
+        uuid
+    ))
+    .bind(&access_token)
+    .bind(&refresh_token)
+    .bind(current_time)
+    .execute(&data.pool)
+    .await
+    {
+        error!("{}", error);
+        return HttpResponse::InternalServerError().finish()
+    }
+
+    HttpResponse::Ok().json(Response {
+        access_token,
+        refresh_token,
+    })
 }
