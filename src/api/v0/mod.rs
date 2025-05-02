@@ -4,7 +4,7 @@ mod channel;
 mod send;
 
 pub fn web() -> Scope {
-    web::scope("/v1")
+    web::scope("/v0")
         .service(channel::res)
         .service(send::res)
 }

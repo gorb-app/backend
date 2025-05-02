@@ -15,7 +15,7 @@ struct Request {
 
 const MAX_SIZE: usize = 262_144;
 
-#[post("/channel")]
+#[post("/send")]
 pub async fn res(
     mut payload: web::Payload,
     data: web::Data<Data>,
