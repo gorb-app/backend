@@ -1,10 +1,10 @@
-use actix_web::{error, post, web, Error, HttpResponse};
+use actix_web::{Error, HttpResponse, error, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
+use futures::{StreamExt, future};
 use log::error;
 use serde::{Deserialize, Serialize};
-use futures::{future, StreamExt};
 
-use crate::{api::v1::auth::check_access_token, Data};
+use crate::{Data, api::v1::auth::check_access_token};
 
 #[derive(Deserialize)]
 struct RevokeRequest {
@@ -20,9 +20,7 @@ struct Response {
 
 impl Response {
     fn new(deleted: bool) -> Self {
-        Self {
-            deleted
-        }
+        Self { deleted }
     }
 }
 
@@ -44,18 +42,21 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     let authorized = check_access_token(revoke_request.access_token, &data.pool).await;
 
-    if authorized.is_err() {
-        return Ok(authorized.unwrap_err())
+    if let Err(error) = authorized {
+        return Ok(error);
     }
 
     let uuid = authorized.unwrap();
 
-    let database_password_raw = sqlx::query_scalar(&format!("SELECT password FROM users WHERE uuid = '{}'", uuid))
-        .fetch_one(&data.pool)
-        .await;
+    let database_password_raw = sqlx::query_scalar(&format!(
+        "SELECT password FROM users WHERE uuid = '{}'",
+        uuid
+    ))
+    .fetch_one(&data.pool)
+    .await;
 
-    if database_password_raw.is_err() {
-        error!("{}", database_password_raw.unwrap_err());
+    if let Err(error) = database_password_raw {
+        error!("{}", error);
         return Ok(HttpResponse::InternalServerError().json(Response::new(false)));
     }
 
@@ -63,25 +64,32 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     let hashed_password_raw = PasswordHash::new(&database_password);
 
-    if hashed_password_raw.is_err() {
-        error!("{}", hashed_password_raw.unwrap_err());
+    if let Err(error) = hashed_password_raw {
+        error!("{}", error);
         return Ok(HttpResponse::InternalServerError().json(Response::new(false)));
     }
 
     let hashed_password = hashed_password_raw.unwrap();
 
-    if data.argon2.verify_password(revoke_request.password.as_bytes(), &hashed_password).is_err() {
-        return Ok(HttpResponse::Unauthorized().finish())
+    if data
+        .argon2
+        .verify_password(revoke_request.password.as_bytes(), &hashed_password)
+        .is_err()
+    {
+        return Ok(HttpResponse::Unauthorized().finish());
     }
 
-    let tokens_raw = sqlx::query_scalar(&format!("SELECT token FROM refresh_tokens WHERE uuid = '{}' AND device_name = $1", uuid))
-        .bind(revoke_request.device_name)
-        .fetch_all(&data.pool)
-        .await;
+    let tokens_raw = sqlx::query_scalar(&format!(
+        "SELECT token FROM refresh_tokens WHERE uuid = '{}' AND device_name = $1",
+        uuid
+    ))
+    .bind(revoke_request.device_name)
+    .fetch_all(&data.pool)
+    .await;
 
     if tokens_raw.is_err() {
         error!("{:?}", tokens_raw);
-        return Ok(HttpResponse::InternalServerError().json(Response::new(false)))
+        return Ok(HttpResponse::InternalServerError().json(Response::new(false)));
     }
 
     let tokens: Vec<String> = tokens_raw.unwrap();
@@ -89,34 +97,45 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
     let mut access_tokens_delete = vec![];
     let mut refresh_tokens_delete = vec![];
 
-
     for token in tokens {
-        access_tokens_delete.push(sqlx::query("DELETE FROM access_tokens WHERE refresh_token = $1")
-            .bind(token.clone())
-            .execute(&data.pool));
+        access_tokens_delete.push(
+            sqlx::query("DELETE FROM access_tokens WHERE refresh_token = $1")
+                .bind(token.clone())
+                .execute(&data.pool),
+        );
 
-        refresh_tokens_delete.push(sqlx::query("DELETE FROM refresh_tokens WHERE token = $1")
-            .bind(token.clone())
-            .execute(&data.pool));
+        refresh_tokens_delete.push(
+            sqlx::query("DELETE FROM refresh_tokens WHERE token = $1")
+                .bind(token.clone())
+                .execute(&data.pool),
+        );
     }
 
     let results_access_tokens = future::join_all(access_tokens_delete).await;
     let results_refresh_tokens = future::join_all(refresh_tokens_delete).await;
 
-    let access_tokens_errors: Vec<&Result<sqlx::postgres::PgQueryResult, sqlx::Error>> = results_access_tokens.iter().filter(|r| r.is_err()).collect();
-    let refresh_tokens_errors: Vec<&Result<sqlx::postgres::PgQueryResult, sqlx::Error>> = results_refresh_tokens.iter().filter(|r| r.is_err()).collect();
+    let access_tokens_errors: Vec<&Result<sqlx::postgres::PgQueryResult, sqlx::Error>> =
+        results_access_tokens
+            .iter()
+            .filter(|r| r.is_err())
+            .collect();
+    let refresh_tokens_errors: Vec<&Result<sqlx::postgres::PgQueryResult, sqlx::Error>> =
+        results_refresh_tokens
+            .iter()
+            .filter(|r| r.is_err())
+            .collect();
 
     if !access_tokens_errors.is_empty() && !refresh_tokens_errors.is_empty() {
         error!("{:?}", access_tokens_errors);
         error!("{:?}", refresh_tokens_errors);
-        return Ok(HttpResponse::InternalServerError().finish())
+        return Ok(HttpResponse::InternalServerError().finish());
     } else if !access_tokens_errors.is_empty() {
         error!("{:?}", access_tokens_errors);
-        return Ok(HttpResponse::InternalServerError().finish())
+        return Ok(HttpResponse::InternalServerError().finish());
     } else if !refresh_tokens_errors.is_empty() {
         error!("{:?}", refresh_tokens_errors);
-        return Ok(HttpResponse::InternalServerError().finish())
+        return Ok(HttpResponse::InternalServerError().finish());
     }
-    
+
     Ok(HttpResponse::Ok().json(Response::new(true)))
 }

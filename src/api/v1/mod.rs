@@ -1,7 +1,7 @@
 use actix_web::{Scope, web};
 
-mod stats;
 mod auth;
+mod stats;
 mod user;
 
 pub fn web() -> Scope {

@@ -29,7 +29,12 @@ struct Data {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    SimpleLogger::new().with_level(log::LevelFilter::Info).with_colors(true).env().init().unwrap();
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Info)
+        .with_colors(true)
+        .env()
+        .init()
+        .unwrap();
     let args = Args::parse();
 
     let config = ConfigBuilder::load(args.config).await?.build();
@@ -38,11 +43,12 @@ async fn main() -> Result<(), Error> {
 
     let pool = PgPool::connect_with(config.database.connect_options()).await?;
 
-    /* 
+    /*
     TODO: Figure out if a table should be used here and if not then what.
     Also figure out if these should be different types from what they currently are and if we should add more "constraints"
     */
-    sqlx::raw_sql(r#"
+    sqlx::raw_sql(
+        r#"
         CREATE TABLE IF NOT EXISTS users (
             uuid uuid PRIMARY KEY UNIQUE NOT NULL,
             username varchar(32) UNIQUE NOT NULL,
@@ -67,7 +73,8 @@ async fn main() -> Result<(), Error> {
             uuid uuid NOT NULL REFERENCES users(uuid),
             created int8 NOT NULL
         )
-    "#)
+    "#,
+    )
     .execute(&pool)
     .await?;
 

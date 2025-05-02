@@ -1,10 +1,13 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-use actix_web::{error, post, web, Error, HttpResponse};
+use actix_web::{Error, HttpResponse, error, post, web};
+use futures::StreamExt;
 use log::error;
 use serde::{Deserialize, Serialize};
-use futures::StreamExt;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::{crypto::{generate_access_token, generate_refresh_token}, Data};
+use crate::{
+    Data,
+    crypto::{generate_access_token, generate_refresh_token},
+};
 
 #[derive(Deserialize)]
 struct RefreshRequest {
@@ -33,32 +36,45 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     let refresh_request = serde_json::from_slice::<RefreshRequest>(&body)?;
 
-    let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+    let current_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
 
-    if let Ok(row) = sqlx::query_as("SELECT CAST(uuid as VARCHAR), created FROM refresh_tokens WHERE token = $1").bind(&refresh_request.refresh_token).fetch_one(&data.pool).await {
+    if let Ok(row) =
+        sqlx::query_as("SELECT CAST(uuid as VARCHAR), created FROM refresh_tokens WHERE token = $1")
+            .bind(&refresh_request.refresh_token)
+            .fetch_one(&data.pool)
+            .await
+    {
         let (uuid, created): (String, i64) = row;
 
         if let Err(error) = sqlx::query("DELETE FROM access_tokens WHERE refresh_token = $1")
             .bind(&refresh_request.refresh_token)
             .execute(&data.pool)
-            .await {
+            .await
+        {
             error!("{}", error);
         }
-    
+
         let lifetime = current_time - created;
-    
+
         if lifetime > 2592000 {
             if let Err(error) = sqlx::query("DELETE FROM refresh_tokens WHERE token = $1")
                 .bind(&refresh_request.refresh_token)
                 .execute(&data.pool)
-                .await {
+                .await
+            {
                 error!("{}", error);
             }
-    
-            return Ok(HttpResponse::Unauthorized().finish())
+
+            return Ok(HttpResponse::Unauthorized().finish());
         }
 
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
 
         let mut refresh_token = refresh_request.refresh_token;
 
@@ -67,23 +83,24 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
             if new_refresh_token.is_err() {
                 error!("{}", new_refresh_token.unwrap_err());
-                return Ok(HttpResponse::InternalServerError().finish())
+                return Ok(HttpResponse::InternalServerError().finish());
             }
 
             let new_refresh_token = new_refresh_token.unwrap();
 
             match sqlx::query("UPDATE refresh_tokens SET token = $1, created = $2 WHERE token = $3")
                 .bind(&new_refresh_token)
-                .bind(&current_time)
+                .bind(current_time)
                 .bind(&refresh_token)
                 .execute(&data.pool)
-                .await {
+                .await
+            {
                 Ok(_) => {
                     refresh_token = new_refresh_token;
-                },
+                }
                 Err(error) => {
                     error!("{}", error);
-                },
+                }
             }
         }
 
@@ -91,7 +108,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
         if access_token.is_err() {
             error!("{}", access_token.unwrap_err());
-            return Ok(HttpResponse::InternalServerError().finish())
+            return Ok(HttpResponse::InternalServerError().finish());
         }
 
         let access_token = access_token.unwrap();
@@ -105,11 +122,11 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
             error!("{}", error);
             return Ok(HttpResponse::InternalServerError().finish())
         }
-    
+
         return Ok(HttpResponse::Ok().json(Response {
             refresh_token,
-            access_token
-        }))
+            access_token,
+        }));
     }
 
     Ok(HttpResponse::Unauthorized().finish())

@@ -18,10 +18,13 @@ struct Response {
 #[get("/stats")]
 pub async fn res(data: web::Data<Data>) -> impl Responder {
     let accounts;
-    if let Ok(users) = sqlx::query("SELECT uuid FROM users").fetch_all(&data.pool).await {
+    if let Ok(users) = sqlx::query("SELECT uuid FROM users")
+        .fetch_all(&data.pool)
+        .await
+    {
         accounts = users.len();
     } else {
-        return HttpResponse::InternalServerError().finish()
+        return HttpResponse::InternalServerError().finish();
     }
 
     let response = Response {
