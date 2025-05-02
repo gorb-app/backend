@@ -11,6 +11,7 @@ steps:
   - name: build-arm64
     image: rust:alpine
     commands:
+      - apk add musl-dev
       - rustup target add aarch64-unknown-linux-musl
       - cargo build --target=aarch64-unknown-linux-musl --release
       - cp target/aarch64-unknown-linux-musl/release/backend target/backend-arm64
