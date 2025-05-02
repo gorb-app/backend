@@ -2,7 +2,7 @@ FROM debian:12-slim
 
 RUN apt update && apt install libssl3 && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/*
 
-COPY target/release/backend /usr/bin/gorb-backend
+COPY target/release/backend-${TARGETARCH} /usr/bin/gorb-backend
 
 COPY entrypoint.sh /usr/bin/entrypoint.sh
 

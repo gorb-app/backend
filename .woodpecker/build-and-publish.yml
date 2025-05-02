@@ -3,15 +3,22 @@ when:
     branch: main
 
 steps:
-  - name: build
+  - name: build-x86_64
     image: rust:bookworm
     commands:
       cargo build --release
+      cp target/release/backend target/backend-amd64
+  - name: build-arm64
+    image: rust:bookworm
+    commands:
+      rustup target add aarch64-unknown-linux-gnu
+      cargo build --target=aarch64-unknown-linux-gnu --release
+      cp target/aarch64-unknown-linux-gnu/release/backend target/backend-arm64
   - name: container-build-and-publish
     image: docker
     commands:
       - docker login --username radical --password $PASSWORD git.gorb.app
-      - docker build --rm --push -t git.gorb.app/gorb/backend:main .
+      - docker buildx build --platform linux/amd64,linux/arm64 --rm --push -t git.gorb.app/gorb/backend:main .
     environment:
       PASSWORD:
         from_secret: docker_password
