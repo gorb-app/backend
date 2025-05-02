@@ -15,6 +15,7 @@ struct Request {
 
 #[derive(Serialize, FromRow)]
 struct Response {
+    timestamp: i64,
     uuid: String,
     message: String,
 }
@@ -44,7 +45,7 @@ pub async fn res(
         return Ok(error);
     }
 
-    let row = sqlx::query_as("SELECT timestamp, (uuid AS VARCHAR), message FROM channel ORDERED BY timestamp DESC LIMIT $1 OFFSET $2")
+    let row = sqlx::query_as("SELECT timestamp, CAST(uuid AS VARCHAR), message FROM channel ORDER BY timestamp DESC LIMIT $1 OFFSET $2")
         .bind(request.amount)
         .bind(request.start)
         .fetch_all(&data.pool)
