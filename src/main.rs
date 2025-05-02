@@ -75,7 +75,7 @@ async fn main() -> Result<(), Error> {
         CREATE TABLE IF NOT EXISTS channel (
             timestamp int8 PRIMARY KEY NOT NULL,
             uuid uuid NOT NULL REFERENCES users(uuid),
-            message varchar(2000) NOT NULL,
+            message varchar(2000) NOT NULL
         )
     "#,
     )
