@@ -6,14 +6,14 @@ steps:
   - name: build-x86_64
     image: rust:bookworm
     commands:
-      cargo build --release
-      cp target/release/backend target/backend-amd64
+      - cargo build --release
+      - cp target/release/backend target/backend-amd64
   - name: build-arm64
     image: rust:bookworm
     commands:
-      rustup target add aarch64-unknown-linux-gnu
-      cargo build --target=aarch64-unknown-linux-gnu --release
-      cp target/aarch64-unknown-linux-gnu/release/backend target/backend-arm64
+      - rustup target add aarch64-unknown-linux-gnu
+      - cargo build --target=aarch64-unknown-linux-gnu --release
+      - cp target/aarch64-unknown-linux-gnu/release/backend target/backend-arm64
   - name: container-build-and-publish
     image: docker
     commands:
