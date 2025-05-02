@@ -36,7 +36,6 @@ rotate_log() {
   fi
 }
 
-rotate_log "/gorb/logs/stdout.log"
-rotate_log "/gorb/logs/stderr.log"
+rotate_log "/gorb/logs/backend.log"
 
-/usr/bin/gorb-backend --config /gorb/config/config.toml  > /gorb/logs/stdout.log 2> /gorb/logs/stderr.log
+/usr/bin/gorb-backend --config /gorb/config/config.toml 2>&1 | tee /gorb/logs/backend.log
