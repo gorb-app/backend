@@ -7,13 +7,13 @@ use argon2::{
 };
 use futures::StreamExt;
 use log::error;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::login::Response;
 use crate::{
     Data,
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
     crypto::{generate_access_token, generate_refresh_token},
 };
 
@@ -73,19 +73,14 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     let uuid = Uuid::now_v7();
 
-    let email_regex = Regex::new(r"[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+(?:\.[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+)*@(?:[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?").unwrap();
-
-    if !email_regex.is_match(&account_information.email) {
+    if !EMAIL_REGEX.is_match(&account_information.email) {
         return Ok(HttpResponse::Forbidden().json(ResponseError {
             email_valid: false,
             ..Default::default()
         }));
     }
 
-    // FIXME: This regex doesnt seem to be working
-    let username_regex = Regex::new(r"[a-zA-Z0-9.-_]").unwrap();
-
-    if !username_regex.is_match(&account_information.identifier)
+    if !USERNAME_REGEX.is_match(&account_information.identifier)
         || account_information.identifier.len() < 3
         || account_information.identifier.len() > 32
     {
@@ -95,10 +90,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
         }));
     }
 
-    // Password is expected to be hashed using SHA3-384
-    let password_regex = Regex::new(r"[0-9a-f]{96}").unwrap();
-
-    if !password_regex.is_match(&account_information.password) {
+    if !PASSWORD_REGEX.is_match(&account_information.password) {
         return Ok(HttpResponse::Forbidden().json(ResponseError {
             password_hashed: false,
             ..Default::default()

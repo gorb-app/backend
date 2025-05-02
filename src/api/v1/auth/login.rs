@@ -4,11 +4,11 @@ use actix_web::{Error, HttpResponse, error, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
 use futures::StreamExt;
 use log::error;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     Data,
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
     crypto::{generate_access_token, generate_refresh_token},
 };
 
@@ -44,19 +44,11 @@ pub async fn response(
 
     let login_information = serde_json::from_slice::<LoginInformation>(&body)?;
 
-    let email_regex = Regex::new(r"[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+(?:\.[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+)*@(?:[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?").unwrap();
-
-    // FIXME: This regex doesnt seem to be working
-    let username_regex = Regex::new(r"[a-zA-Z0-9.-_]").unwrap();
-
-    // Password is expected to be hashed using SHA3-384
-    let password_regex = Regex::new(r"[0-9a-f]{96}").unwrap();
-
-    if !password_regex.is_match(&login_information.password) {
+    if !PASSWORD_REGEX.is_match(&login_information.password) {
         return Ok(HttpResponse::Forbidden().json(r#"{ "password_hashed": false }"#));
     }
 
-    if email_regex.is_match(&login_information.username) {
+    if EMAIL_REGEX.is_match(&login_information.username) {
         if let Ok(row) =
             sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE email = $1")
                 .bind(login_information.username)
@@ -75,7 +67,7 @@ pub async fn response(
         }
 
         return Ok(HttpResponse::Unauthorized().finish());
-    } else if username_regex.is_match(&login_information.username) {
+    } else if USERNAME_REGEX.is_match(&login_information.username) {
         if let Ok(row) =
             sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE username = $1")
                 .bind(login_information.username)

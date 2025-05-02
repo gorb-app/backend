@@ -1,10 +1,12 @@
 use std::{
     str::FromStr,
+    sync::LazyLock,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use actix_web::{HttpResponse, Scope, web};
 use log::error;
+use regex::Regex;
 use sqlx::Postgres;
 use uuid::Uuid;
 
@@ -12,6 +14,16 @@ mod login;
 mod refresh;
 mod register;
 mod revoke;
+
+static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+(?:\.[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+)*@(?:[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?").unwrap()
+});
+
+// FIXME: This regex doesnt seem to be working
+static USERNAME_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[a-zA-Z0-9.-_]").unwrap());
+
+// Password is expected to be hashed using SHA3-384
+static PASSWORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-f]{96}").unwrap());
 
 pub fn web() -> Scope {
     web::scope("/auth")
