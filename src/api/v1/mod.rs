@@ -1,6 +1,6 @@
 use actix_web::{Scope, web};
 
-mod auth;
+pub mod auth;
 mod stats;
 mod users;
 

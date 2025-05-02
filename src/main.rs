@@ -71,6 +71,11 @@ async fn main() -> Result<(), Error> {
             refresh_token varchar(64) UNIQUE NOT NULL REFERENCES refresh_tokens(token),
             uuid uuid NOT NULL REFERENCES users(uuid),
             created int8 NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS channel (
+            timestamp int8 PRIMARY KEY NOT NULL,
+            uuid uuid NOT NULL REFERENCES users(uuid),
+            message varchar(2000) NOT NULL,
         )
     "#,
     )
@@ -90,6 +95,7 @@ async fn main() -> Result<(), Error> {
             .app_data(web::Data::new(data.clone()))
             .service(api::versions::res)
             .service(api::v1::web())
+            .service(api::v0::web())
     })
     .bind((web.url, web.port))?
     .run()
