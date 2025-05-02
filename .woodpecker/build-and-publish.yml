@@ -9,11 +9,13 @@ steps:
       - cargo build --release
       - cp target/release/backend target/backend-amd64
   - name: build-arm64
-    image: rust:alpine
+    image: rust:bookworm
     commands:
-      - rustup target add aarch64-unknown-linux-musl
-      - cargo build --target=aarch64-unknown-linux-musl --release
-      - cp target/aarch64-unknown-linux-musl/release/backend target/backend-arm64
+      - dpkg --add-architecture arm64
+      - apt-get update && apt-get --assume-yes install libssl-dev:arm64
+      - rustup target add aarch64-unknown-linux-gnu
+      - cargo build --target=aarch64-unknown-linux-gnu --release
+      - cp target/aarch64-unknown-linux-gnu/release/backend target/backend-arm64
   - name: container-build-and-publish
     image: docker
     commands:
