@@ -71,6 +71,42 @@ async fn main() -> Result<(), Error> {
             refresh_token varchar(64) UNIQUE NOT NULL REFERENCES refresh_tokens(token),
             uuid uuid NOT NULL REFERENCES users(uuid),
             created int8 NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS guilds (
+            uuid uuid PRIMARY KEY NOT NULL,
+            name VARCHAR(100),
+            description VARCHAR(300),
+            created_at int8 NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS guild_members (
+            guild_uuid uuid NOT NULL REFERENCES guilds(uuid),
+            user_uuid uuid NOT NULL REFERENCES users(uuid),
+            permissions int8 NOT NULL DEFAULT 0,
+            PRIMARY KEY (guild_uuid, user_uuid)
+        );
+        CREATE TABLE IF NOT EXISTS channels (
+            uuid uuid PRIMARY KEY NOT NULL,
+            guild_uuid NOT NULL REFERENCES guilds(uuid),
+            name varchar(32) NOT NULL,
+            description varchar(500) NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS messages (
+            uuid uuid PRIMARY KEY NOT NULL,
+            channel_uuid uuid NOT NULL REFERENCES channels(uuid),
+            user_uuid uuid NOT NULL REFERENCES users(uuid),
+            message varchar(2000) NOT NULL,
+            created_at int8 NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS emojis (
+            uuid uuid PRIMARY KEY NOT NULL,
+            name varchar(32) NOT NULL,
+            guild_uuid uuid REFERENCES guilds(uuid)
+        );
+        CREATE TABLE IF NOT EXISTS message_reactions (
+            message_uuid uuid NOT NULL REFERENCES messages(uuid),
+            user_uuid uuid NOT NULL REFERENCES users(uuid),
+            emoji_uuid uuid NOT NULL REFERENCES emojis(uuid),
+            PRIMARY KEY (message_uuid, user_uuid, emoji_uuid)
         )
     "#,
     )
