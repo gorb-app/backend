@@ -1,30 +1,40 @@
-use actix_web::{Error, HttpResponse, error, post, web};
+use actix_web::{error, post, web, Error, HttpResponse, Scope};
 use futures::StreamExt;
 use log::error;
 use serde::{Deserialize, Serialize};
+use ::uuid::Uuid;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod uuid;
 mod channels;
 
-use crate::Data;
+use crate::{api::v1::auth::check_access_token, Data};
 
 #[derive(Deserialize)]
 struct Request {
     access_token: String,
-    name: String
+    name: String,
+    description: Option<String>,
 }
 
 #[derive(Serialize)]
 struct Response {
-    refresh_token: String,
-    access_token: String,
+    guild_uuid: Uuid,
+}
+
+impl Response {
+    fn new(guild_uuid: Uuid) -> Self {
+        Self {
+            guild_uuid
+        }
+    }
 }
 
 const MAX_SIZE: usize = 262_144;
 
 pub fn web() -> Scope {
     web::scope("/servers")
+        .service(res)
         .service(channels::web())
         .service(uuid::res)
 }
@@ -43,6 +53,46 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
     let request = serde_json::from_slice::<Request>(&body)?;
 
-    Ok(HttpResponse::Unauthorized().finish())
+    let authorized = check_access_token(request.access_token, &data.pool).await;
+
+    if let Err(error) = authorized {
+        return Ok(error)
+    }
+
+    let uuid = authorized.unwrap();
+
+    let guild_uuid = Uuid::now_v7();
+
+    let row = sqlx::query(&format!("INSERT INTO guilds (uuid, owner_uuid, name, description) VALUES ('{}', '{}', $1, $2)", guild_uuid, uuid))
+        .bind(request.name)
+        .bind(request.description)
+        .execute(&data.pool)
+        .await;
+
+    if let Err(error) = row {
+        error!("{}", error);
+        return Ok(HttpResponse::InternalServerError().finish())
+    }
+
+    let row = sqlx::query(&format!("INSERT INTO guild_members (uuid, guild_uuid, user_uuid) VALUES ('{}', '{}', '{}')", Uuid::now_v7(), guild_uuid, uuid))
+        .bind(SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64)
+        .execute(&data.pool)
+        .await;
+
+    if let Err(error) = row {
+        error!("{}", error);
+
+        let row = sqlx::query(&format!("DELETE FROM guilds WHERE uuid = '{}'", guild_uuid))
+            .execute(&data.pool)
+            .await;
+
+        if let Err(error) = row {
+            error!("{}", error);
+        }
+
+        return Ok(HttpResponse::InternalServerError().finish())
+    }
+
+    Ok(HttpResponse::Ok().json(Response::new(guild_uuid)))
 }
 

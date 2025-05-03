@@ -10,4 +10,5 @@ pub fn web() -> Scope {
         .service(stats::res)
         .service(auth::web())
         .service(users::web())
+        .service(servers::web())
 }
