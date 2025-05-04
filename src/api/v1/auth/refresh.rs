@@ -42,7 +42,11 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
                 error!("{}", error);
             }
 
-            return Ok(HttpResponse::Unauthorized().finish());
+            let mut refresh_token_cookie = refresh_token_cookie(refresh_token);
+
+            refresh_token_cookie.make_removal();
+
+            return Ok(HttpResponse::Unauthorized().cookie(refresh_token_cookie).finish());
         }
 
         let current_time = SystemTime::now()
@@ -100,5 +104,9 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         }));
     }
 
-    Ok(HttpResponse::Unauthorized().finish())
+    let mut refresh_token_cookie = refresh_token_cookie(refresh_token);
+
+    refresh_token_cookie.make_removal();
+
+    Ok(HttpResponse::Unauthorized().cookie(refresh_token_cookie).finish())
 }
