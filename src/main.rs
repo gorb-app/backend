@@ -8,6 +8,7 @@ mod config;
 use config::{Config, ConfigBuilder};
 mod api;
 pub mod crypto;
+pub mod utils;
 
 type Error = Box<dyn std::error::Error>;
 

@@ -1,0 +1,17 @@
+use actix_web::{HttpResponse, http::header::HeaderMap};
+
+pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
+    let auth_token = headers.get(actix_web::http::header::CONTENT_TYPE);
+
+    if let None = auth_token {
+        return Err(HttpResponse::Unauthorized().finish());
+    }
+
+    let auth = auth_token.unwrap().to_str();
+
+    if let Err(error) = auth {
+        return Err(HttpResponse::Unauthorized().json(format!(r#" {{ "error": "{}" }} "#, error)));
+    }
+
+    Ok(auth.unwrap())
+}
