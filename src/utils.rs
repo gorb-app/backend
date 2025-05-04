@@ -13,5 +13,11 @@ pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
         return Err(HttpResponse::Unauthorized().json(format!(r#" {{ "error": "{}" }} "#, error)));
     }
 
-    Ok(auth.unwrap())
+    let auth_value = auth.unwrap().split_whitespace().nth(1);
+
+    if let None = auth_value {
+        return Err(HttpResponse::BadRequest().finish());
+    }
+
+    Ok(auth_value.unwrap())
 }
