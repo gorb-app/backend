@@ -1,4 +1,4 @@
-use actix_web::{error, post, web, Error, HttpResponse, Scope};
+use actix_web::{error, post, web, Error, HttpRequest, HttpResponse, Scope};
 use futures::StreamExt;
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -7,11 +7,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod uuid;
 
-use crate::{api::v1::auth::check_access_token, Data};
+use crate::{api::v1::auth::check_access_token, utils::get_auth_header, Data};
 
 #[derive(Deserialize)]
 struct Request {
-    access_token: String,
     name: String,
     description: Option<String>,
 }
@@ -38,8 +37,25 @@ pub fn web() -> Scope {
 }
 
 #[post("")]
-pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn res(req: HttpRequest, mut payload: web::Payload, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let headers = req.headers();
+
+    let auth_header = get_auth_header(headers);
+
+    if let Err(error) = auth_header {
+        return Ok(error)
+    }
+
+    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+
+    if let Err(error) = authorized {
+        return Ok(error)
+    }
+
+    let uuid = authorized.unwrap();
+
     let mut body = web::BytesMut::new();
+
     while let Some(chunk) = payload.next().await {
         let chunk = chunk?;
         // limit max size of in-memory payload
@@ -50,14 +66,6 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
     }
 
     let request = serde_json::from_slice::<Request>(&body)?;
-
-    let authorized = check_access_token(request.access_token, &data.pool).await;
-
-    if let Err(error) = authorized {
-        return Ok(error)
-    }
-
-    let uuid = authorized.unwrap();
 
     let guild_uuid = Uuid::now_v7();
 
