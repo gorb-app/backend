@@ -1,40 +1,22 @@
-use actix_web::{Error, HttpResponse, error, post, web};
-use futures::StreamExt;
+use actix_web::{post, web, Error, HttpRequest, HttpResponse};
 use log::error;
-use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    Data,
-    crypto::{generate_access_token, generate_refresh_token},
+    crypto::{generate_access_token, generate_refresh_token}, utils::refresh_token_cookie, Data
 };
 
-#[derive(Deserialize)]
-struct RefreshRequest {
-    refresh_token: String,
-}
-
-#[derive(Serialize)]
-struct Response {
-    refresh_token: String,
-    access_token: String,
-}
-
-const MAX_SIZE: usize = 262_144;
+use super::Response;
 
 #[post("/refresh")]
-pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk?;
-        // limit max size of in-memory payload
-        if (body.len() + chunk.len()) > MAX_SIZE {
-            return Err(error::ErrorBadRequest("overflow"));
-        }
-        body.extend_from_slice(&chunk);
+pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let recv_refresh_token_cookie = req.cookie("refresh_token");
+
+    if let None = recv_refresh_token_cookie {
+        return Ok(HttpResponse::Unauthorized().finish())
     }
 
-    let refresh_request = serde_json::from_slice::<RefreshRequest>(&body)?;
+    let mut refresh_token = String::from(recv_refresh_token_cookie.unwrap().value());
 
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -42,41 +24,35 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
         .as_secs() as i64;
 
     if let Ok(row) =
-        sqlx::query_as("SELECT CAST(uuid as VARCHAR), created FROM refresh_tokens WHERE token = $1")
-            .bind(&refresh_request.refresh_token)
+        sqlx::query_scalar("SELECT created_at FROM refresh_tokens WHERE token = $1")
+            .bind(&refresh_token)
             .fetch_one(&data.pool)
             .await
     {
-        let (uuid, created): (String, i64) = row;
+        let created_at: i64 = row;
 
-        if let Err(error) = sqlx::query("DELETE FROM access_tokens WHERE refresh_token = $1")
-            .bind(&refresh_request.refresh_token)
-            .execute(&data.pool)
-            .await
-        {
-            error!("{}", error);
-        }
-
-        let lifetime = current_time - created;
+        let lifetime = current_time - created_at;
 
         if lifetime > 2592000 {
             if let Err(error) = sqlx::query("DELETE FROM refresh_tokens WHERE token = $1")
-                .bind(&refresh_request.refresh_token)
+                .bind(&refresh_token)
                 .execute(&data.pool)
                 .await
             {
                 error!("{}", error);
             }
 
-            return Ok(HttpResponse::Unauthorized().finish());
+            let mut refresh_token_cookie = refresh_token_cookie(refresh_token);
+
+            refresh_token_cookie.make_removal();
+
+            return Ok(HttpResponse::Unauthorized().cookie(refresh_token_cookie).finish());
         }
 
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64;
-
-        let mut refresh_token = refresh_request.refresh_token;
 
         if lifetime > 1987200 {
             let new_refresh_token = generate_refresh_token();
@@ -88,7 +64,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
             let new_refresh_token = new_refresh_token.unwrap();
 
-            match sqlx::query("UPDATE refresh_tokens SET token = $1, created = $2 WHERE token = $3")
+            match sqlx::query("UPDATE refresh_tokens SET token = $1, created_at = $2 WHERE token = $3")
                 .bind(&new_refresh_token)
                 .bind(current_time)
                 .bind(&refresh_token)
@@ -113,21 +89,24 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
 
         let access_token = access_token.unwrap();
 
-        if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
+        if let Err(error) = sqlx::query("UPDATE access_tokens SET token = $1, created_at = $2 WHERE refresh_token = $3")
             .bind(&access_token)
-            .bind(&refresh_token)
             .bind(current_time)
+            .bind(&refresh_token)
             .execute(&data.pool)
             .await {
             error!("{}", error);
             return Ok(HttpResponse::InternalServerError().finish())
         }
 
-        return Ok(HttpResponse::Ok().json(Response {
-            refresh_token,
+        return Ok(HttpResponse::Ok().cookie(refresh_token_cookie(refresh_token)).json(Response {
             access_token,
         }));
     }
 
-    Ok(HttpResponse::Unauthorized().finish())
+    let mut refresh_token_cookie = refresh_token_cookie(refresh_token);
+
+    refresh_token_cookie.make_removal();
+
+    Ok(HttpResponse::Unauthorized().cookie(refresh_token_cookie).finish())
 }
