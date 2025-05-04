@@ -160,7 +160,7 @@ async fn login(
         .as_secs() as i64;
 
     if let Err(error) = sqlx::query(&format!(
-        "INSERT INTO refresh_tokens (token, uuid, created, device_name) VALUES ($1, '{}', $2, $3 )",
+        "INSERT INTO refresh_tokens (token, uuid, created_at, device_name) VALUES ($1, '{}', $2, $3 )",
         uuid
     ))
     .bind(&refresh_token)
@@ -174,7 +174,7 @@ async fn login(
     }
 
     if let Err(error) = sqlx::query(&format!(
-        "INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )",
+        "INSERT INTO access_tokens (token, refresh_token, uuid, created_at) VALUES ($1, $2, '{}', $3 )",
         uuid
     ))
     .bind(&access_token)

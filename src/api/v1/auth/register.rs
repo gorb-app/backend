@@ -139,7 +139,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         .unwrap()
                         .as_secs() as i64;
 
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created_at, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
                         .bind(&refresh_token)
                         .bind(current_time)
                         .bind(account_information.device_name)
@@ -149,7 +149,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created_at) VALUES ($1, $2, '{}', $3 )", uuid))
                         .bind(&access_token)
                         .bind(&refresh_token)
                         .bind(current_time)
