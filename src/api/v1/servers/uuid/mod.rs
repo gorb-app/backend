@@ -1,10 +1,12 @@
-use actix_web::{error, post, web, Error, HttpResponse};
+use actix_web::{error, post, web, Error, HttpResponse, Scope};
 use futures::StreamExt;
 use log::error;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
 use std::str::FromStr;
+
+mod channels;
 
 use crate::{api::v1::auth::check_access_token, Data};
 
@@ -35,7 +37,13 @@ struct Role {
 
 const MAX_SIZE: usize = 262_144;
 
-#[post("/{uuid}")]
+pub fn web() -> Scope {
+    web::scope("/")
+        .service(res)
+        .service(channels::web())
+}
+
+#[post("{uuid}")]
 pub async fn res(mut payload: web::Payload, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let mut body = web::BytesMut::new();
     while let Some(chunk) = payload.next().await {

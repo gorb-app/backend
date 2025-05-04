@@ -6,7 +6,6 @@ use ::uuid::Uuid;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 mod uuid;
-mod channels;
 
 use crate::{api::v1::auth::check_access_token, Data};
 
@@ -35,8 +34,7 @@ const MAX_SIZE: usize = 262_144;
 pub fn web() -> Scope {
     web::scope("/servers")
         .service(res)
-        .service(channels::web())
-        .service(uuid::res)
+        .service(uuid::web())
 }
 
 #[post("")]
