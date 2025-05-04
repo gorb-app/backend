@@ -8,6 +8,7 @@ mod config;
 use config::{Config, ConfigBuilder};
 mod api;
 pub mod crypto;
+pub mod utils;
 
 type Error = Box<dyn std::error::Error>;
 
@@ -75,12 +76,12 @@ async fn main() -> Result<(), Error> {
         CREATE TABLE IF NOT EXISTS refresh_tokens (
             token varchar(64) PRIMARY KEY UNIQUE NOT NULL,
             uuid uuid NOT NULL REFERENCES users(uuid),
-            created int8 NOT NULL,
+            created_at int8 NOT NULL,
             device_name varchar(16) NOT NULL
         );
         CREATE TABLE IF NOT EXISTS access_tokens (
             token varchar(32) PRIMARY KEY UNIQUE NOT NULL,
-            refresh_token varchar(64) UNIQUE NOT NULL REFERENCES refresh_tokens(token) ON DELETE CASCADE,
+            refresh_token varchar(64) UNIQUE NOT NULL REFERENCES refresh_tokens(token) ON UPDATE CASCADE ON DELETE CASCADE,
             uuid uuid NOT NULL REFERENCES users(uuid),
             created int8 NOT NULL
         );
@@ -161,8 +162,7 @@ async fn main() -> Result<(), Error> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(data.clone()))
-            .service(api::versions::res)
-            .service(api::v1::web())
+            .service(api::web())
     })
     .bind((web.url, web.port))?
     .run()

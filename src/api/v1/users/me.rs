@@ -1,14 +1,8 @@
-use actix_web::{Error, HttpResponse, error, post, web};
-use futures::StreamExt;
+use actix_web::{Error, HttpRequest, HttpResponse, get, web};
 use log::error;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
-use crate::{Data, api::v1::auth::check_access_token};
-
-#[derive(Deserialize)]
-struct AuthenticationRequest {
-    access_token: String,
-}
+use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
 
 #[derive(Serialize)]
 struct Response {
@@ -17,26 +11,17 @@ struct Response {
     display_name: String,
 }
 
-const MAX_SIZE: usize = 262_144;
+#[get("/me")]
+pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let headers = req.headers();
 
-#[post("/me")]
-pub async fn res(
-    mut payload: web::Payload,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk?;
-        // limit max size of in-memory payload
-        if (body.len() + chunk.len()) > MAX_SIZE {
-            return Err(error::ErrorBadRequest("overflow"));
-        }
-        body.extend_from_slice(&chunk);
+    let auth_header = get_auth_header(headers);
+
+    if let Err(error) = auth_header {
+        return Ok(error);
     }
 
-    let authentication_request = serde_json::from_slice::<AuthenticationRequest>(&body)?;
-
-    let authorized = check_access_token(authentication_request.access_token, &data.pool).await;
+    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
     if let Err(error) = authorized {
         return Ok(error);
