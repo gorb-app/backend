@@ -10,11 +10,9 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::login::Response;
+use super::Response;
 use crate::{
-    Data,
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
-    crypto::{generate_access_token, generate_refresh_token},
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, crypto::{generate_access_token, generate_refresh_token}, utils::refresh_token_cookie, Data
 };
 
 #[derive(Deserialize)]
@@ -139,7 +137,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         .unwrap()
                         .as_secs() as i64;
 
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created_at, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
                         .bind(&refresh_token)
                         .bind(current_time)
                         .bind(account_information.device_name)
@@ -149,7 +147,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created) VALUES ($1, $2, '{}', $3 )", uuid))
+                    if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created_at) VALUES ($1, $2, '{}', $3 )", uuid))
                         .bind(&access_token)
                         .bind(&refresh_token)
                         .bind(current_time)
@@ -159,9 +157,8 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
-                    HttpResponse::Ok().json(Response {
+                    HttpResponse::Ok().cookie(refresh_token_cookie(refresh_token)).json(Response {
                         access_token,
-                        refresh_token,
                     })
                 }
                 Err(error) => {
