@@ -1,7 +1,7 @@
 use actix_web::{HttpResponse, http::header::HeaderMap};
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
-    let auth_token = headers.get(actix_web::http::header::CONTENT_TYPE);
+    let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
 
     if let None = auth_token {
         return Err(HttpResponse::Unauthorized().finish());
