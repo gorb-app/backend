@@ -89,8 +89,7 @@ async fn main() -> Result<(), Error> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(data.clone()))
-            .service(api::versions::res)
-            .service(api::v1::web())
+            .service(api::web())
     })
     .bind((web.url, web.port))?
     .run()
