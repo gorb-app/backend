@@ -1,28 +1,22 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use actix_web::{Error, HttpResponse, error, post, web};
+use actix_web::{error, post, web, Error, HttpResponse};
 use argon2::{PasswordHash, PasswordVerifier};
 use futures::StreamExt;
 use log::error;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{
-    Data,
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
-    crypto::{generate_access_token, generate_refresh_token},
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, crypto::{generate_access_token, generate_refresh_token}, utils::refresh_token_cookie, Data
 };
+
+use super::Response;
 
 #[derive(Deserialize)]
 struct LoginInformation {
     username: String,
     password: String,
     device_name: String,
-}
-
-#[derive(Serialize)]
-pub struct Response {
-    pub access_token: String,
-    pub refresh_token: String,
 }
 
 const MAX_SIZE: usize = 262_144;
@@ -187,8 +181,7 @@ async fn login(
         return HttpResponse::InternalServerError().finish()
     }
 
-    HttpResponse::Ok().json(Response {
+    HttpResponse::Ok().cookie(refresh_token_cookie(refresh_token)).json(Response {
         access_token,
-        refresh_token,
     })
 }

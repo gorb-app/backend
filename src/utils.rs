@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, http::header::HeaderMap};
+use actix_web::{cookie::{time::Duration, Cookie, SameSite}, http::header::HeaderMap, HttpResponse};
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
@@ -21,3 +21,13 @@ pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
 
     Ok(auth_value.unwrap())
 }
+
+pub fn refresh_token_cookie(refresh_token: String) -> Cookie<'static> {
+    Cookie::build("refresh_token", refresh_token)
+        .http_only(true)
+        .secure(true)
+        .same_site(SameSite::None)
+        .path("/api")
+        .max_age(Duration::days(30))
+        .finish()
+} 

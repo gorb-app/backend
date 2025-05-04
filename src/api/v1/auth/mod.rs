@@ -7,6 +7,7 @@ use std::{
 use actix_web::{HttpResponse, Scope, web};
 use log::error;
 use regex::Regex;
+use serde::Serialize;
 use sqlx::Postgres;
 use uuid::Uuid;
 
@@ -14,6 +15,11 @@ mod login;
 mod refresh;
 mod register;
 mod revoke;
+
+#[derive(Serialize)]
+struct Response {
+    access_token: String,
+}
 
 static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+(?:\.[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+)*@(?:[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?").unwrap()

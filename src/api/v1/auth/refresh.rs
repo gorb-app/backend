@@ -1,28 +1,22 @@
 use actix_web::{post, web, Error, HttpRequest, HttpResponse};
 use log::error;
-use serde::Serialize;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    Data,
-    crypto::{generate_access_token, generate_refresh_token},
+    crypto::{generate_access_token, generate_refresh_token}, utils::refresh_token_cookie, Data
 };
 
-#[derive(Serialize)]
-struct Response {
-    refresh_token: String,
-    access_token: String,
-}
+use super::Response;
 
 #[post("/refresh")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let refresh_token_cookie = req.cookie("refresh_token");
+    let recv_refresh_token_cookie = req.cookie("refresh_token");
 
-    if let None = refresh_token_cookie {
+    if let None = recv_refresh_token_cookie {
         return Ok(HttpResponse::Unauthorized().finish())
     }
 
-    let mut refresh_token = String::from(refresh_token_cookie.unwrap().value());
+    let mut refresh_token = String::from(recv_refresh_token_cookie.unwrap().value());
 
     let current_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -101,8 +95,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
             return Ok(HttpResponse::InternalServerError().finish())
         }
 
-        return Ok(HttpResponse::Ok().json(Response {
-            refresh_token,
+        return Ok(HttpResponse::Ok().cookie(refresh_token_cookie(refresh_token)).json(Response {
             access_token,
         }));
     }
