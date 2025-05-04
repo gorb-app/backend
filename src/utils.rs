@@ -1,4 +1,6 @@
 use actix_web::{cookie::{time::Duration, Cookie, SameSite}, http::header::HeaderMap, HttpResponse};
+use getrandom::fill;
+use hex::encode;
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
@@ -30,4 +32,17 @@ pub fn refresh_token_cookie(refresh_token: String) -> Cookie<'static> {
         .path("/api")
         .max_age(Duration::days(30))
         .finish()
-} 
+}
+
+pub fn generate_access_token() -> Result<String, getrandom::Error> {
+    let mut buf = [0u8; 16];
+    fill(&mut buf)?;
+    Ok(encode(buf))
+}
+
+pub fn generate_refresh_token() -> Result<String, getrandom::Error> {
+    let mut buf = [0u8; 32];
+    fill(&mut buf)?;
+    Ok(encode(buf))
+}
+

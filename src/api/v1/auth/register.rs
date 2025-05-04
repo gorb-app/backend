@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use super::Response;
 use crate::{
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, crypto::{generate_access_token, generate_refresh_token}, utils::refresh_token_cookie, Data
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
 };
 
 #[derive(Deserialize)]
