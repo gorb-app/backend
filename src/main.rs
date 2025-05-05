@@ -83,7 +83,7 @@ async fn main() -> Result<(), Error> {
             token varchar(32) PRIMARY KEY UNIQUE NOT NULL,
             refresh_token varchar(64) UNIQUE NOT NULL REFERENCES refresh_tokens(token) ON UPDATE CASCADE ON DELETE CASCADE,
             uuid uuid NOT NULL REFERENCES users(uuid),
-            created int8 NOT NULL
+            created_at int8 NOT NULL
         );
         CREATE TABLE IF NOT EXISTS guilds (
             uuid uuid PRIMARY KEY NOT NULL,
