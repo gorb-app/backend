@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
@@ -86,9 +87,38 @@ async fn main() -> Result<(), Error> {
         start_time: SystemTime::now(),
     };
 
+    
     HttpServer::new(move || {
+        // Set CORS headers
+        let cors = Cors::default()
+            /*
+                Set Allowed-Control-Allow-Origin header to whatever
+                the request's Origin header is. Must be done like this
+                rather than setting it to "*" due to CORS not allowing
+                sending of credentials (cookies) with wildcard origin.
+            */
+            .allowed_origin_fn(|_origin, _req_head| {
+                true
+            })
+            /*
+                Allows any request method in CORS preflight requests.
+                This will be restricted to only ones actually in use later.
+            */
+            .allow_any_method()
+            /*
+                Allows any header(s) in request in CORS preflight requests.
+                This wll be restricted to only ones actually in use later.
+            */
+            .allow_any_header()
+            /*
+                Allows browser to include cookies in requests.
+                This is needed for receiving the secure HttpOnly refresh_token cookie.
+            */
+            .supports_credentials();
+
         App::new()
             .app_data(web::Data::new(data.clone()))
+            .wrap(cors)
             .service(api::web())
     })
     .bind((web.url, web.port))?
