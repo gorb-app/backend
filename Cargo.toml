@@ -9,6 +9,7 @@ lto = true
 codegen-units = 1
 
 [dependencies]
+actix-cors = "0.7.1"
 actix-web = "4.10"
 argon2 = { version = "0.5.3", features = ["std"] }
 clap = { version = "4.5.37", features = ["derive"] }
