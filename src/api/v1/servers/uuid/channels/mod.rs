@@ -9,14 +9,14 @@ use log::error;
 
 mod uuid;
 
-#[derive(Serialize, FromRow)]
+#[derive(Serialize, Clone, FromRow)]
 struct ChannelPermission {
     role_uuid: String,
     permissions: i32
 }
 
-#[derive(Serialize)]
-struct Channel {
+#[derive(Serialize, Clone)]
+pub struct Channel {
     uuid: String,
     name: String,
     description: Option<String>,
@@ -63,6 +63,37 @@ impl Channel {
         let channels: Result<Vec<Channel>, HttpResponse> = channels.into_iter().collect();
 
         Ok(channels?)
+    }
+
+    pub async fn fetch_one(pool: &Pool<Postgres>, guild_uuid: Uuid, channel_uuid: Uuid) -> Result<Self, HttpResponse> {
+        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}' AND uuid = '{}'", guild_uuid, channel_uuid))
+            .fetch_one(pool)
+            .await;
+
+        if let Err(error) = row {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        let (uuid, name, description): (String, String, Option<String>) = row.unwrap();
+
+        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}' AND uuid = '{}'", guild_uuid, channel_uuid))
+            .fetch_all(pool)
+            .await;
+
+        if let Err(error) = row {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(Self {
+            uuid,
+            name,
+            description,
+            permissions: row.unwrap(),
+        })
     }
 }
 
