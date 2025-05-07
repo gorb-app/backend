@@ -1,6 +1,10 @@
 use actix_web::{cookie::{time::Duration, Cookie, SameSite}, http::header::HeaderMap, HttpResponse};
 use getrandom::fill;
 use hex::encode;
+use redis::RedisError;
+use serde::Serialize;
+
+use crate::Data;
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
@@ -44,5 +48,27 @@ pub fn generate_refresh_token() -> Result<String, getrandom::Error> {
     let mut buf = [0u8; 32];
     fill(&mut buf)?;
     Ok(encode(buf))
+}
+
+impl Data {
+    pub async fn set_cache_key(&self, key: String, value: impl Serialize, expire: u32) -> Result<(), RedisError> {
+        let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
+
+        let key_encoded = encode(key);
+
+        let value_json = serde_json::to_string(&value).unwrap();
+
+        redis::cmd("SET",).arg(&[key_encoded.clone(), value_json]).exec_async(&mut conn).await?;
+
+        redis::cmd("EXPIRE").arg(&[key_encoded, expire.to_string()]).exec_async(&mut conn).await
+    }
+
+    pub async fn get_cache_key(&self, key: String) -> Result<String, RedisError> {
+        let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
+
+        let key_encoded = encode(key);
+
+        redis::cmd("GET").arg(key_encoded).query_async(&mut conn).await
+    }
 }
 
