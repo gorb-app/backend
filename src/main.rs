@@ -2,9 +2,10 @@ use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
+use redis::aio::MultiplexedConnection;
 use simple_logger::SimpleLogger;
 use sqlx::{PgPool, Pool, Postgres};
-use std::time::SystemTime;
+use std::{cell::Cell, time::SystemTime};
 mod config;
 use config::{Config, ConfigBuilder};
 mod api;
@@ -23,6 +24,7 @@ struct Args {
 #[derive(Clone)]
 struct Data {
     pub pool: Pool<Postgres>,
+    pub cache_pool: redis::Client,
     pub _config: Config,
     pub argon2: Argon2<'static>,
     pub start_time: SystemTime,
@@ -43,6 +45,8 @@ async fn main() -> Result<(), Error> {
     let web = config.web.clone();
 
     let pool = PgPool::connect_with(config.database.connect_options()).await?;
+
+    let cache_pool = redis::Client::open(config.cache_database.url())?;
 
     /*
     TODO: Figure out if a table should be used here and if not then what.
@@ -81,6 +85,7 @@ async fn main() -> Result<(), Error> {
 
     let data = Data {
         pool,
+        cache_pool,
         _config: config,
         // TODO: Possibly implement "pepper" into this (thinking it could generate one if it doesnt exist and store it on disk)
         argon2: Argon2::default(),
