@@ -1,7 +1,7 @@
 use actix_web::{cookie::{time::Duration, Cookie, SameSite}, http::header::HeaderMap, HttpResponse};
 use getrandom::fill;
 use hex::encode;
-use redis::{AsyncCommands, RedisError};
+use redis::RedisError;
 use serde::Serialize;
 use serde_json::json;
 
@@ -57,7 +57,7 @@ impl Data {
 
         let key_encoded = encode(key);
 
-        let value_json = json!(value).to_string();
+        let value_json = json!(value).as_str().unwrap().to_string();
 
         redis::cmd("SET",).arg(&[key_encoded.clone(), value_json]).exec_async(&mut conn).await?;
 

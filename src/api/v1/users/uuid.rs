@@ -1,7 +1,6 @@
 use actix_web::{Error, HttpRequest, HttpResponse, get, web};
 use log::error;
 use serde::Serialize;
-use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
