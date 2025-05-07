@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
-use serde::Serialize;
+use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
+use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, Pool, Postgres};
 use crate::{api::v1::auth::check_access_token, utils::get_auth_header, Data};
 use ::uuid::Uuid;
@@ -97,6 +97,12 @@ impl Channel {
     }
 }
 
+#[derive(Deserialize)]
+struct ChannelInfo {
+    name: String,
+    description: Option<String>
+}
+
 #[get("{uuid}/channels")]
 pub async fn response(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
@@ -151,4 +157,76 @@ pub async fn response(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Dat
     }
 
     Ok(HttpResponse::Ok().json(channels))
+}
+
+#[post("{uuid}/channels")]
+pub async fn response_post(req: HttpRequest, channel_info: web::Json<ChannelInfo>, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let headers = req.headers();
+
+    let auth_header = get_auth_header(headers);
+
+    if let Err(error) = auth_header {
+        return Ok(error)
+    }
+
+    let guild_uuid = path.into_inner().0;
+
+    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+
+    if let Err(error) = authorized {
+        return Ok(error)
+    }
+
+    let uuid = authorized.unwrap();
+
+    let row: Result<String, sqlx::Error> = sqlx::query_scalar(&format!("SELECT CAST(uuid AS VARCHAR) FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, uuid))
+        .fetch_one(&data.pool)
+        .await;
+
+    if let Err(error) = row {
+        error!("{}", error);
+
+        return Ok(HttpResponse::InternalServerError().finish())
+    }
+
+    // FIXME: Logic to check permissions, should probably be done in utils.rs
+
+    let _member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
+
+    let channel_uuid = Uuid::now_v7();
+
+    let row = sqlx::query(&format!("INSERT INTO channels (uuid, guild_uuid, name, description) VALUES ('{}', '{}', $1, $2)", channel_uuid, guild_uuid))
+        .bind(&channel_info.name)
+        .bind(&channel_info.description)
+        .execute(&data.pool)
+        .await;
+
+    if let Err(error) = row {
+        error!("{}", error);
+        return Ok(HttpResponse::InternalServerError().finish())
+    }
+
+    let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
+
+    if let Err(error) = channel_result {
+        return Ok(error)
+    }
+
+    let channel = channel_result.unwrap();
+
+    let cache_result = data.set_cache_key(channel_uuid.to_string(), channel.clone(), 1800).await;
+
+    if let Err(error) = cache_result {
+        error!("{}", error);
+        return Ok(HttpResponse::InternalServerError().finish());
+    }
+
+    let cache_deletion_result = data.del_cache_key(format!("{}_channels", guild_uuid)).await;
+
+    if let Err(error) = cache_deletion_result {
+        error!("{}", error);
+        return Ok(HttpResponse::InternalServerError().finish());
+    }
+
+    Ok(HttpResponse::Ok().json(channel))
 }
