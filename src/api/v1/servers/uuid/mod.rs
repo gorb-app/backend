@@ -32,7 +32,7 @@ struct Role {
 pub fn web() -> Scope {
     web::scope("/")
         .service(res)
-        .service(channels::web())
+        .service(channels::response)
 }
 
 #[get("{uuid}")]
