@@ -1,1 +1,64 @@
 mod messages;
+use std::str::FromStr;
+
+use actix_web::{get, web, Error, HttpRequest, HttpResponse};
+use crate::{api::v1::auth::check_access_token, utils::get_auth_header, Data};
+use ::uuid::Uuid;
+use log::error;
+use super::Channel;
+
+#[get("{uuid}/channels/{channel_uuid}")]
+pub async fn response(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let headers = req.headers();
+
+    let auth_header = get_auth_header(headers);
+
+    if let Err(error) = auth_header {
+        return Ok(error)
+    }
+
+    let (guild_uuid, channel_uuid) = path.into_inner();
+
+    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+
+    if let Err(error) = authorized {
+        return Ok(error)
+    }
+
+    let uuid = authorized.unwrap();
+
+    let row: Result<String, sqlx::Error> = sqlx::query_scalar(&format!("SELECT CAST(uuid AS VARCHAR) FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, uuid))
+        .fetch_one(&data.pool)
+        .await;
+
+    if let Err(error) = row {
+        error!("{}", error);
+
+        return Ok(HttpResponse::InternalServerError().finish())
+    }
+
+    let _member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
+
+    let cache_result = data.get_cache_key(format!("{}", channel_uuid)).await;
+
+    if let Ok(cache_hit) = cache_result {
+        return Ok(HttpResponse::Ok().content_type("application/json").body(cache_hit))
+    }
+
+    let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
+
+    if let Err(error) = channel_result {
+        return Ok(error)
+    }
+
+    let channel = channel_result.unwrap();
+
+    let cache_result = data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60).await;
+
+    if let Err(error) = cache_result {
+        error!("{}", error);
+        return Ok(HttpResponse::InternalServerError().finish());
+    }
+
+    Ok(HttpResponse::Ok().json(channel))
+}
