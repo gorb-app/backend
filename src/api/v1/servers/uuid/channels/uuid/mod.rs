@@ -8,7 +8,7 @@ use log::error;
 use super::Channel;
 
 #[get("{uuid}/channels/{channel_uuid}")]
-pub async fn response(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn res(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);

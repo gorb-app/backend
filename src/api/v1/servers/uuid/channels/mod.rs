@@ -7,7 +7,7 @@ use crate::{api::v1::auth::check_access_token, utils::get_auth_header, Data};
 use ::uuid::Uuid;
 use log::error;
 
-mod uuid;
+pub mod uuid;
 
 #[derive(Serialize, Clone, FromRow)]
 struct ChannelPermission {

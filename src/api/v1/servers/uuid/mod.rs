@@ -31,8 +31,9 @@ struct Role {
 
 pub fn web() -> Scope {
     web::scope("")
-        .service(channels::response)
-        .service(res)
+    .service(res)
+    .service(channels::response)
+    .service(channels::uuid::res)
 
 }
 
