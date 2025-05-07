@@ -127,14 +127,28 @@ pub async fn response(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Dat
         return Ok(HttpResponse::InternalServerError().finish())
     }
 
-    let member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
+    let _member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
 
+    let cache_result = data.get_cache_key(format!("{}_channels", guild_uuid)).await;
 
-    let channels = Channel::fetch_all(&data.pool, guild_uuid).await;
+    if let Ok(cache_hit) = cache_result {
+        return Ok(HttpResponse::Ok().content_type("application/json").body(cache_hit))
+    }
 
-    if let Err(error) = channels {
+    let channels_result = Channel::fetch_all(&data.pool, guild_uuid).await;
+
+    if let Err(error) = channels_result {
         return Ok(error)
     }
 
-    Ok(HttpResponse::Ok().json(channels.unwrap()))
+    let channels = channels_result.unwrap();
+
+    let cache_result = data.set_cache_key(format!("{}_channels", guild_uuid), channels.clone(), 1800).await;
+
+    if let Err(error) = cache_result {
+        error!("{}", error);
+        return Ok(HttpResponse::InternalServerError().finish());
+    }
+
+    Ok(HttpResponse::Ok().json(channels))
 }
