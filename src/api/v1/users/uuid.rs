@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct Response {
     uuid: String,
     username: String,
@@ -34,6 +34,12 @@ pub async fn res(
         return Ok(error);
     }
 
+    let cache_result = data.get_cache_key(uuid.to_string()).await;
+
+    if let Ok(cache_hit) = cache_result {
+        return Ok(HttpResponse::Ok().content_type("application/json").body(cache_hit))
+    }
+
     let row = sqlx::query_as(&format!(
         "SELECT username, display_name FROM users WHERE uuid = '{}'",
         uuid
@@ -48,9 +54,18 @@ pub async fn res(
 
     let (username, display_name): (String, Option<String>) = row.unwrap();
 
-    Ok(HttpResponse::Ok().json(Response {
+    let user = Response {
         uuid: uuid.to_string(),
         username,
         display_name: display_name.unwrap_or_default(),
-    }))
+    };
+
+    let cache_result = data.set_cache_key(uuid.to_string(), user.clone(), 1800).await;
+
+    if let Err(error) = cache_result {
+        error!("{}", error);
+        return Ok(HttpResponse::InternalServerError().finish());
+    }
+
+    Ok(HttpResponse::Ok().json(user))
 }

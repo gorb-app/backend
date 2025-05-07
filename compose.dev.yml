@@ -34,3 +34,8 @@ services:
       - POSTGRES_USER=gorb
       - POSTGRES_PASSWORD=gorb
       - POSTGRES_DB=gorb
+  valkey:
+    image: valkey/valkey
+    restart: always
+    networks:
+      - gorb

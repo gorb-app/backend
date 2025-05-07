@@ -7,6 +7,7 @@ use tokio::fs::read_to_string;
 #[derive(Debug, Deserialize)]
 pub struct ConfigBuilder {
     database: Database,
+    cache_database: CacheDatabase,
     web: Option<WebBuilder>,
 }
 
@@ -16,6 +17,15 @@ pub struct Database {
     password: String,
     host: String,
     database: String,
+    port: u16,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct CacheDatabase {
+    username: Option<String>,
+    password: Option<String>,
+    host: String,
+    database: Option<String>,
     port: u16,
 }
 
@@ -51,6 +61,7 @@ impl ConfigBuilder {
 
         Config {
             database: self.database,
+            cache_database: self.cache_database,
             web,
         }
     }
@@ -59,6 +70,7 @@ impl ConfigBuilder {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database: Database,
+    pub cache_database: CacheDatabase,
     pub web: Web,
 }
 
@@ -76,5 +88,35 @@ impl Database {
             .username(&self.username)
             .password(&self.password)
             .port(self.port)
+    }
+}
+
+impl CacheDatabase {
+    pub fn url(&self) -> String {
+        let mut url = String::from("redis://");
+
+        if let Some(username) = &self.username {
+            url += username;
+        }
+
+        if let Some(password) = &self.password {
+            url += ":";
+            url += password;
+        }
+
+        if self.username.is_some() || self.password.is_some() {
+            url += "@";
+        }
+
+        url += &self.host;
+        url += ":";
+        url += &self.port.to_string();
+
+        if let Some(database) = &self.database {
+            url += "/";
+            url += database;
+        }
+
+        url
     }
 }

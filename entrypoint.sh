@@ -16,6 +16,10 @@ password = "${DATABASE_PASSWORD}"
 database = "${DATABASE}"
 host = "${DATABASE_HOST}"
 port = ${DATABASE_PORT}
+
+[cache_database]
+host = "${CACHE_DB_HOST}"
+port = ${CACHE_DB_PORT}
 EOF
 fi
 

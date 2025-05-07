@@ -3,7 +3,7 @@ use log::error;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    crypto::{generate_access_token, generate_refresh_token}, utils::refresh_token_cookie, Data
+    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
 };
 
 use super::Response;
