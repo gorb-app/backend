@@ -78,7 +78,7 @@ impl Channel {
 
         let (uuid, name, description): (String, String, Option<String>) = row.unwrap();
 
-        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}' AND uuid = '{}'", guild_uuid, channel_uuid))
+        let row = sqlx::query_as(&format!("SELECT CAST(role_uuid AS VARCHAR), permissions FROM channel_permissions WHERE channel_uuid = '{}'", channel_uuid))
             .fetch_all(pool)
             .await;
 
