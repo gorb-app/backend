@@ -37,7 +37,7 @@ pub async fn res(
     let cache_result = data.get_cache_key(uuid.to_string()).await;
 
     if let Ok(cache_hit) = cache_result {
-        return Ok(HttpResponse::Ok().json(cache_hit))
+        return Ok(HttpResponse::Ok().content_type("application/json").body(cache_hit))
     }
 
     let row = sqlx::query_as(&format!(

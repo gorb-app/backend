@@ -3,7 +3,6 @@ use getrandom::fill;
 use hex::encode;
 use redis::RedisError;
 use serde::Serialize;
-use serde_json::json;
 
 use crate::Data;
 
@@ -57,7 +56,7 @@ impl Data {
 
         let key_encoded = encode(key);
 
-        let value_json = json!(value).as_str().unwrap().to_string();
+        let value_json = serde_json::to_string(&value).unwrap();
 
         redis::cmd("SET",).arg(&[key_encoded.clone(), value_json]).exec_async(&mut conn).await?;
 
