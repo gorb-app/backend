@@ -25,7 +25,7 @@ struct Channel {
 
 impl Channel {
     async fn fetch_all(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<Vec<Self>, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT uuid, name, description FROM channels WHERE guild_uuid = '{}'", guild_uuid))
+        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}'", guild_uuid))
         .fetch_all(pool)
         .await;
 
@@ -40,7 +40,7 @@ impl Channel {
         let futures = channels.iter().map(async |t| {
             let (uuid, name, description) = t.to_owned();
 
-            let row = sqlx::query_as(&format!("SELECT role_uuid, permissions FROM channel_permissions WHERE channel_uuid = '{}'", uuid))
+            let row = sqlx::query_as(&format!("SELECT CAST(role_uuid AS VARCHAR), permissions FROM channel_permissions WHERE channel_uuid = '{}'", uuid))
                 .fetch_all(pool)
                 .await;
 

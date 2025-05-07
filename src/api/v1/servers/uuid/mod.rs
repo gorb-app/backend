@@ -30,12 +30,13 @@ struct Role {
 }
 
 pub fn web() -> Scope {
-    web::scope("/")
-        .service(res)
+    web::scope("")
         .service(channels::response)
+        .service(res)
+
 }
 
-#[get("{uuid}")]
+#[get("/{uuid}")]
 pub async fn res(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
