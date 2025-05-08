@@ -6,20 +6,6 @@ use serde::Serialize;
 
 use crate::Data;
 
-enum Permissions {
-    SendMessage = 1,
-    CreateChannel = 2,
-    DeleteChannel = 4,
-    ManageChannel = 8,
-    CreateRole = 16,
-    DeleteRole = 32,
-    ManageRole = 64,
-    CreateInvite = 128,
-    ManageInvite = 256,
-    ManageServer = 512,
-    ManageMember = 1024,
-}
-
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
 

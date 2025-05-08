@@ -1,33 +1,9 @@
 use actix_web::{get, web, Error, HttpRequest, HttpResponse, Scope};
-use log::error;
-use serde::Serialize;
-use sqlx::FromRow;
 use uuid::Uuid;
-use std::str::FromStr;
 
 mod channels;
 
-use crate::{api::v1::auth::check_access_token, utils::get_auth_header, Data};
-
-#[derive(Serialize)]
-struct Response {
-    uuid: Uuid,
-    name: String,
-    description: Option<String>,
-    icon: String,
-    owner_uuid: Uuid,
-    roles: Vec<Role>,
-    member_count: i64,
-}
-
-#[derive(Serialize, FromRow)]
-struct Role {
-    uuid: String,
-    name: String,
-    color: i64,
-    position: i32,
-    permissions: i64,
-}
+use crate::{api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
 
 pub fn web() -> Scope {
     web::scope("")
@@ -57,65 +33,18 @@ pub async fn res(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Dat
 
     let uuid = authorized.unwrap();
 
-    let row: Result<String, sqlx::Error> = sqlx::query_scalar(&format!("SELECT CAST(uuid AS VARCHAR) FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, uuid))
-        .fetch_one(&data.pool)
-        .await;
+    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
 
-    if let Err(error) = row {
-        error!("{}", error);
-
-        return Ok(HttpResponse::InternalServerError().finish())
+    if let Err(error) = member {
+        return Ok(error);
     }
 
-    let member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
+    let guild = Guild::fetch_one(&data.pool, guild_uuid).await;
 
-    let row = sqlx::query_as(&format!("SELECT CAST(owner_uuid AS VARCHAR), name, description FROM guilds WHERE uuid = '{}'", guild_uuid))
-        .fetch_one(&data.pool)
-        .await;
-
-    if let Err(error) = row {
-        error!("{}", error);
-
-        return Ok(HttpResponse::InternalServerError().finish())
+    if let Err(error) = guild {
+        return Ok(error);
     }
 
-    let (owner_uuid_raw, name, description): (String, String, Option<String>) = row.unwrap();
-
-    let owner_uuid = Uuid::from_str(&owner_uuid_raw).unwrap();
-
-    let row = sqlx::query_scalar(&format!("SELECT COUNT(uuid) FROM guild_members WHERE guild_uuid = '{}'", guild_uuid))
-        .fetch_one(&data.pool)
-        .await;
-
-    if let Err(error) = row {
-        error!("{}", error);
-
-        return Ok(HttpResponse::InternalServerError().finish())
-    }
-
-    let member_count: i64 = row.unwrap();
-
-    let roles_raw = sqlx::query_as(&format!("SELECT (uuid, name, color, position, permissions) FROM roles WHERE guild_uuid = '{}'", guild_uuid))
-        .fetch_all(&data.pool)
-        .await;
-
-    if let Err(error) = roles_raw {
-        error!("{}", error);
-
-        return Ok(HttpResponse::InternalServerError().finish())
-    }
-
-    let roles: Vec<Role> = roles_raw.unwrap();
-
-
-    Ok(HttpResponse::Ok().json(Response {
-        uuid,
-        name,
-        description,
-        icon: "bogus".to_string(),
-        owner_uuid,
-        roles,
-        member_count,
-    }))
+    Ok(HttpResponse::Ok().json(guild.unwrap()))
 }
 

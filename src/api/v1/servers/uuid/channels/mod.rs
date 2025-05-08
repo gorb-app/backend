@@ -1,101 +1,10 @@
-use std::str::FromStr;
-
 use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
-use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, Pool, Postgres};
-use crate::{api::v1::auth::check_access_token, utils::get_auth_header, Data};
+use serde::Deserialize;
+use crate::{api::v1::auth::check_access_token, structs::{Channel, Member}, utils::get_auth_header, Data};
 use ::uuid::Uuid;
 use log::error;
 
 pub mod uuid;
-
-#[derive(Serialize, Clone, FromRow)]
-struct ChannelPermission {
-    role_uuid: String,
-    permissions: i32
-}
-
-#[derive(Serialize, Clone)]
-pub struct Channel {
-    uuid: String,
-    name: String,
-    description: Option<String>,
-    permissions: Vec<ChannelPermission>
-}
-
-impl Channel {
-    async fn fetch_all(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<Vec<Self>, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}'", guild_uuid))
-        .fetch_all(pool)
-        .await;
-
-        if let Err(error) = row {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish())
-        }
-
-        let channels: Vec<(String, String, Option<String>)> = row.unwrap();
-
-        let futures = channels.iter().map(async |t| {
-            let (uuid, name, description) = t.to_owned();
-
-            let row = sqlx::query_as(&format!("SELECT CAST(role_uuid AS VARCHAR), permissions FROM channel_permissions WHERE channel_uuid = '{}'", uuid))
-                .fetch_all(pool)
-                .await;
-
-            if let Err(error) = row {
-                error!("{}", error);
-
-                return Err(HttpResponse::InternalServerError().finish())
-            }
-
-            Ok(Self {
-                uuid,
-                name,
-                description,
-                permissions: row.unwrap(),
-            })
-        });
-
-        let channels = futures::future::join_all(futures).await;
-
-        let channels: Result<Vec<Channel>, HttpResponse> = channels.into_iter().collect();
-
-        Ok(channels?)
-    }
-
-    pub async fn fetch_one(pool: &Pool<Postgres>, guild_uuid: Uuid, channel_uuid: Uuid) -> Result<Self, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}' AND uuid = '{}'", guild_uuid, channel_uuid))
-            .fetch_one(pool)
-            .await;
-
-        if let Err(error) = row {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish())
-        }
-
-        let (uuid, name, description): (String, String, Option<String>) = row.unwrap();
-
-        let row = sqlx::query_as(&format!("SELECT CAST(role_uuid AS VARCHAR), permissions FROM channel_permissions WHERE channel_uuid = '{}'", channel_uuid))
-            .fetch_all(pool)
-            .await;
-
-        if let Err(error) = row {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish())
-        }
-
-        Ok(Self {
-            uuid,
-            name,
-            description,
-            permissions: row.unwrap(),
-        })
-    }
-}
 
 #[derive(Deserialize)]
 struct ChannelInfo {
@@ -123,17 +32,11 @@ pub async fn response(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Dat
 
     let uuid = authorized.unwrap();
 
-    let row: Result<String, sqlx::Error> = sqlx::query_scalar(&format!("SELECT CAST(uuid AS VARCHAR) FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, uuid))
-        .fetch_one(&data.pool)
-        .await;
+    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
 
-    if let Err(error) = row {
-        error!("{}", error);
-
-        return Ok(HttpResponse::InternalServerError().finish())
+    if let Err(error) = member {
+        return Ok(error);
     }
-
-    let _member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
 
     let cache_result = data.get_cache_key(format!("{}_channels", guild_uuid)).await;
 
@@ -179,54 +82,19 @@ pub async fn response_post(req: HttpRequest, channel_info: web::Json<ChannelInfo
 
     let uuid = authorized.unwrap();
 
-    let row: Result<String, sqlx::Error> = sqlx::query_scalar(&format!("SELECT CAST(uuid AS VARCHAR) FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, uuid))
-        .fetch_one(&data.pool)
-        .await;
+    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
 
-    if let Err(error) = row {
-        error!("{}", error);
-
-        return Ok(HttpResponse::InternalServerError().finish())
+    if let Err(error) = member {
+        return Ok(error);
     }
 
     // FIXME: Logic to check permissions, should probably be done in utils.rs
 
-    let _member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
+    let channel = Channel::new(data.clone(), guild_uuid, channel_info.name.clone(), channel_info.description.clone()).await;
 
-    let channel_uuid = Uuid::now_v7();
-
-    let row = sqlx::query(&format!("INSERT INTO channels (uuid, guild_uuid, name, description) VALUES ('{}', '{}', $1, $2)", channel_uuid, guild_uuid))
-        .bind(&channel_info.name)
-        .bind(&channel_info.description)
-        .execute(&data.pool)
-        .await;
-
-    if let Err(error) = row {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish())
+    if let Err(error) = channel {
+        return Ok(error);
     }
 
-    let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
-
-    if let Err(error) = channel_result {
-        return Ok(error)
-    }
-
-    let channel = channel_result.unwrap();
-
-    let cache_result = data.set_cache_key(channel_uuid.to_string(), channel.clone(), 1800).await;
-
-    if let Err(error) = cache_result {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
-    }
-
-    let cache_deletion_result = data.del_cache_key(format!("{}_channels", guild_uuid)).await;
-
-    if let Err(error) = cache_deletion_result {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
-    }
-
-    Ok(HttpResponse::Ok().json(channel))
+    Ok(HttpResponse::Ok().json(channel.unwrap()))
 }

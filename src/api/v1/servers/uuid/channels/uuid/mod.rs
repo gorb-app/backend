@@ -1,11 +1,9 @@
 mod messages;
-use std::str::FromStr;
 
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
-use crate::{api::v1::auth::check_access_token, utils::get_auth_header, Data};
+use crate::{api::v1::auth::check_access_token, structs::{Channel, Member}, utils::get_auth_header, Data};
 use ::uuid::Uuid;
 use log::error;
-use super::Channel;
 
 #[get("{uuid}/channels/{channel_uuid}")]
 pub async fn res(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
@@ -27,17 +25,11 @@ pub async fn res(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, data: web::Dat
 
     let uuid = authorized.unwrap();
 
-    let row: Result<String, sqlx::Error> = sqlx::query_scalar(&format!("SELECT CAST(uuid AS VARCHAR) FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, uuid))
-        .fetch_one(&data.pool)
-        .await;
+    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
 
-    if let Err(error) = row {
-        error!("{}", error);
-
-        return Ok(HttpResponse::InternalServerError().finish())
+    if let Err(error) = member {
+        return Ok(error);
     }
-
-    let _member_uuid = Uuid::from_str(&row.unwrap()).unwrap();
 
     let cache_result = data.get_cache_key(format!("{}", channel_uuid)).await;
 

@@ -10,6 +10,7 @@ use config::{Config, ConfigBuilder};
 mod api;
 
 pub mod utils;
+pub mod structs;
 
 type Error = Box<dyn std::error::Error>;
 
@@ -21,7 +22,7 @@ struct Args {
 }
 
 #[derive(Clone)]
-struct Data {
+pub struct Data {
     pub pool: Pool<Postgres>,
     pub cache_pool: redis::Client,
     pub _config: Config,
