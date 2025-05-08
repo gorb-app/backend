@@ -1,4 +1,4 @@
-mod messages;
+pub mod messages;
 
 use actix_web::{get, web, Error, HttpRequest, HttpResponse};
 use crate::{api::v1::auth::check_access_token, structs::{Channel, Member}, utils::get_auth_header, Data};

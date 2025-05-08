@@ -7,10 +7,10 @@ use crate::{api::v1::auth::check_access_token, structs::{Guild, Member}, utils::
 
 pub fn web() -> Scope {
     web::scope("")
-    .service(res)
-    .service(channels::response)
-    .service(channels::uuid::res)
-
+        .service(res)
+        .service(channels::response)
+        .service(channels::uuid::res)
+        .service(channels::uuid::messages::res)
 }
 
 #[get("/{uuid}")]
