@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::{prelude::FromRow, Pool, Postgres};
 use uuid::Uuid;
 use actix_web::HttpResponse;
@@ -8,7 +8,7 @@ use log::error;
 
 use crate::Data;
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Channel {
     pub uuid: Uuid,
     pub guild_uuid: Uuid,
@@ -32,7 +32,7 @@ impl ChannelPermissionBuilder {
     }
 }
 
-#[derive(Serialize, Clone, FromRow)]
+#[derive(Serialize, Deserialize, Clone, FromRow)]
 pub struct ChannelPermission {
     pub role_uuid: Uuid,
     pub permissions: i32
@@ -154,6 +154,23 @@ impl Channel {
         }
 
         Ok(channel)
+    }
+
+    pub async fn fetch_messages(&self, pool: &Pool<Postgres>, amount: i64, offset: i64) -> Result<Vec<Message>, HttpResponse> {
+        let row = sqlx::query_as(&format!("SELECT uuid, user_uuid, message FROM channels WHERE channel_uuid = '{}' ORDER BY uuid LIMIT $1 OFFSET $2", self.uuid))
+            .bind(amount)
+            .bind(offset)
+            .fetch_all(pool)
+            .await;
+
+        if let Err(error) = row {
+            error!("{}", error);
+            return Err(HttpResponse::InternalServerError().finish());
+        }
+
+        let message_builders: Vec<MessageBuilder> = row.unwrap();
+
+        Ok(message_builders.iter().map(|b| b.build()).collect())
     }
 }
 
@@ -348,4 +365,31 @@ impl Member {
             guild_uuid,
         })
     }
+}
+
+#[derive(FromRow)]
+struct MessageBuilder {
+    uuid: String,
+    channel_uuid: String,
+    user_uuid: String,
+    message: String,
+}
+
+impl MessageBuilder {
+    fn build(&self) -> Message {
+        Message {
+            uuid: Uuid::from_str(&self.uuid).unwrap(),
+            channel_uuid: Uuid::from_str(&self.channel_uuid).unwrap(),
+            user_uuid: Uuid::from_str(&self.user_uuid).unwrap(),
+            message: self.message.clone(),
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct Message {
+    uuid: Uuid,
+    channel_uuid: Uuid,
+    user_uuid: Uuid,
+    message: String,
 }
