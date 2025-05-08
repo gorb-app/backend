@@ -2,6 +2,7 @@ use actix_web::{get, web, Error, HttpRequest, HttpResponse, Scope};
 use uuid::Uuid;
 
 mod channels;
+mod roles;
 
 use crate::{api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
 
@@ -9,8 +10,12 @@ pub fn web() -> Scope {
     web::scope("")
         .service(res)
         .service(channels::response)
+        .service(channels::response_post)
         .service(channels::uuid::res)
         .service(channels::uuid::messages::res)
+        .service(roles::response)
+        .service(roles::response_post)
+        .service(roles::uuid::res)
 }
 
 #[get("/{uuid}")]
