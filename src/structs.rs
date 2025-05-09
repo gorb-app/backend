@@ -444,7 +444,7 @@ impl Role {
 
 pub struct Member {
     pub uuid: Uuid,
-    pub nickname: String,
+    pub nickname: Option<String>,
     pub user_uuid: Uuid,
     pub guild_uuid: Uuid,
 }
@@ -475,11 +475,32 @@ impl Member {
             return Err(HttpResponse::InternalServerError().finish())
         }
 
-        let (uuid, nickname): (String, String) = row.unwrap();
+        let (uuid, nickname): (String, Option<String>) = row.unwrap();
 
-        Ok(Member {
+        Ok(Self {
             uuid: Uuid::from_str(&uuid).unwrap(),
             nickname,
+            user_uuid,
+            guild_uuid,
+        })
+    }
+
+    pub async fn new(pool: &Pool<Postgres>, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
+        let member_uuid = Uuid::now_v7();
+
+        let row = sqlx::query(&format!("INSERT INTO guild_members uuid, guild_uuid, user_uuid VALUES ('{}', '{}', '{}')", member_uuid, guild_uuid, user_uuid))
+            .execute(pool)
+            .await;
+
+        if let Err(error) = row {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(Self {
+            uuid: member_uuid,
+            nickname: None,
             user_uuid,
             guild_uuid,
         })
@@ -538,5 +559,22 @@ pub struct Invite {
     /// User that created the invite
     user_uuid: Uuid,
     /// UUID of the guild that the invite belongs to
-    guild_uuid: Uuid,
+    pub guild_uuid: Uuid,
+}
+
+impl Invite {
+    pub async fn fetch_one(pool: &Pool<Postgres>, invite_id: String) -> Result<Self, HttpResponse> {
+        let invite: Result<InviteBuilder, sqlx::Error> = sqlx::query_as("SELECT id, user_uuid, guild_uuid FROM invites WHERE id = $1")
+            .bind(invite_id)
+            .fetch_one(pool)
+            .await;
+
+        if let Err(error) = invite {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(invite.unwrap().build())
+    }
 }
