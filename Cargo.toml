@@ -27,6 +27,7 @@ tokio-tungstenite = { version = "0.26", features = ["native-tls", "url"] }
 toml = "0.8"
 url = { version = "2.5", features = ["serde"] }
 uuid = { version = "1.16", features = ["serde", "v7"] }
+random-string = "1.1"
 
 [dependencies.tokio]
 version = "1.44"

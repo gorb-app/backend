@@ -296,6 +296,50 @@ impl Guild {
             member_count: 1
         })
     }
+
+    pub async fn get_invites(&self, pool: &Pool<Postgres>) -> Result<Vec<Invite>, HttpResponse> {
+        let invites = sqlx::query_as(&format!("SELECT (id, guild_uuid, user_uuid) FROM invites WHERE guild_uuid = '{}'", self.uuid))
+            .fetch_all(pool)
+            .await;
+
+        if let Err(error) = invites {
+            error!("{}", error);
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(invites.unwrap().iter().map(|b: &InviteBuilder| b.build()).collect())
+    }
+
+    pub async fn create_invite(&self, pool: &Pool<Postgres>, member: &Member, custom_id: Option<String>) -> Result<Invite, HttpResponse> {
+        let invite_id;
+        
+        if custom_id.is_none() {
+            let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+            invite_id = random_string::generate(8, charset);
+        } else {
+            invite_id = custom_id.unwrap();
+            if invite_id.len() > 32 {
+                return Err(HttpResponse::BadRequest().finish())
+            }
+        }
+
+        let result = sqlx::query(&format!("INSERT INTO invites (id, guild_uuid, user_uuid) VALUES ($1, '{}', '{}'", self.uuid, member.user_uuid))
+            .bind(&invite_id)
+            .execute(pool)
+            .await;
+
+        if let Err(error) = result {
+            error!("{}", error);
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(Invite {
+            id: invite_id,
+            user_uuid: member.user_uuid,
+            guild_uuid: self.uuid,
+        })
+    }
 }
 
 #[derive(FromRow)]
@@ -467,4 +511,32 @@ pub struct Message {
     channel_uuid: Uuid,
     user_uuid: Uuid,
     message: String,
+}
+
+#[derive(FromRow)]
+pub struct InviteBuilder {
+    id: String,
+    user_uuid: String,
+    guild_uuid: String,
+}
+
+impl InviteBuilder {
+    fn build(&self) -> Invite {
+        Invite {
+            id: self.id.clone(),
+            user_uuid: Uuid::from_str(&self.user_uuid).unwrap(),
+            guild_uuid: Uuid::from_str(&self.guild_uuid).unwrap(),
+        }
+    }
+}
+
+/// Server invite struct
+#[derive(Serialize)]
+pub struct Invite {
+    /// case-sensitive alphanumeric string with a fixed length of 8 characters, can be up to 32 characters for custom invites
+    id: String,
+    /// User that created the invite
+    user_uuid: Uuid,
+    /// UUID of the guild that the invite belongs to
+    guild_uuid: Uuid,
 }
