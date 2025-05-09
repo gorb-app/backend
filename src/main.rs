@@ -134,6 +134,11 @@ async fn main() -> Result<(), Error> {
             user_uuid uuid NOT NULL REFERENCES users(uuid),
             message varchar(4000) NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS invites (
+            id varchar(32) PRIMARY KEY NOT NULL,
+            guild_uuid uuid NOT NULL REFERENCES guilds(uuid) ON DELETE CASCADE,
+            user_uuid uuid NOT NULL REFERENCES users(uuid)
+        );
     "#,
     )
     .execute(&pool)
