@@ -38,30 +38,26 @@ pub async fn res(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, message_reques
 
     let cache_result = data.get_cache_key(format!("{}", channel_uuid)).await;
 
-    let mut channel_raw: Option<Channel> = None;
+    let channel: Channel;
 
     if let Ok(cache_hit) = cache_result {
-        channel_raw = Some(serde_json::from_str(&cache_hit).unwrap())
-    }
-
-    if channel_raw.is_none() {
+        channel = serde_json::from_str(&cache_hit).unwrap()
+    } else {
         let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
 
         if let Err(error) = channel_result {
             return Ok(error)
         }
     
-        channel_raw = Some(channel_result.unwrap());
+        channel = channel_result.unwrap();
     
-        let cache_result = data.set_cache_key(format!("{}", channel_uuid), channel_raw.clone().unwrap(), 60).await;
+        let cache_result = data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60).await;
     
         if let Err(error) = cache_result {
             error!("{}", error);
             return Ok(HttpResponse::InternalServerError().finish());
         }
     }
-
-    let channel = channel_raw.unwrap();
 
     let messages = channel.fetch_messages(&data.pool, message_request.amount, message_request.offset).await;
 
