@@ -156,6 +156,20 @@ impl Channel {
         Ok(channel)
     }
 
+    pub async fn delete(self, pool: &Pool<Postgres>) -> Result<(), HttpResponse> {
+        let result = sqlx::query(&format!("DELETE FROM channels WHERE channel_uuid = '{}'", self.uuid))
+            .execute(pool)
+            .await;
+
+        if let Err(error) = result {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(())
+    }
+
     pub async fn fetch_messages(&self, pool: &Pool<Postgres>, amount: i64, offset: i64) -> Result<Vec<Message>, HttpResponse> {
         let row = sqlx::query_as(&format!("SELECT uuid, user_uuid, message FROM channels WHERE channel_uuid = '{}' ORDER BY uuid LIMIT $1 OFFSET $2", self.uuid))
             .bind(amount)

@@ -14,7 +14,8 @@ pub fn web() -> Scope {
         // Channels
         .service(channels::response)
         .service(channels::response_post)
-        .service(channels::uuid::res)
+        .service(channels::uuid::get)
+        .service(channels::uuid::delete)
         .service(channels::uuid::messages::res)
         // Roles
         .service(roles::response)
