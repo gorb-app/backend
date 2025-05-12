@@ -10,7 +10,7 @@ struct InviteRequest {
 }
 
 #[get("{uuid}/invites")]
-pub async fn get_invites(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
@@ -53,7 +53,7 @@ pub async fn get_invites(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::
 }
 
 #[post("{uuid}/invites")]
-pub async fn create_invite(req: HttpRequest, path: web::Path<(Uuid,)>, invite_request: web::Json<Option<InviteRequest>>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn create(req: HttpRequest, path: web::Path<(Uuid,)>, invite_request: web::Json<Option<InviteRequest>>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);

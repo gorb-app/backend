@@ -12,18 +12,18 @@ pub fn web() -> Scope {
         // Servers
         .service(res)
         // Channels
-        .service(channels::response)
-        .service(channels::response_post)
+        .service(channels::get)
+        .service(channels::create)
         .service(channels::uuid::get)
         .service(channels::uuid::delete)
-        .service(channels::uuid::messages::res)
+        .service(channels::uuid::messages::get)
         // Roles
-        .service(roles::response)
-        .service(roles::response_post)
-        .service(roles::uuid::res)
+        .service(roles::get)
+        .service(roles::create)
+        .service(roles::uuid::get)
         // Invites
-        .service(invites::get_invites)
-        .service(invites::create_invite)
+        .service(invites::get)
+        .service(invites::create)
 }
 
 #[get("/{uuid}")]

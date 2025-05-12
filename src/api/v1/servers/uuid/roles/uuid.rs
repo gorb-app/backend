@@ -4,7 +4,7 @@ use ::uuid::Uuid;
 use log::error;
 
 #[get("{uuid}/roles/{role_uuid}")]
-pub async fn res(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);

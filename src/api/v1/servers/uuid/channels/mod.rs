@@ -13,7 +13,7 @@ struct ChannelInfo {
 }
 
 #[get("{uuid}/channels")]
-pub async fn response(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
@@ -63,7 +63,7 @@ pub async fn response(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Dat
 }
 
 #[post("{uuid}/channels")]
-pub async fn response_post(req: HttpRequest, channel_info: web::Json<ChannelInfo>, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn create(req: HttpRequest, channel_info: web::Json<ChannelInfo>, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
