@@ -1,7 +1,8 @@
-use actix_web::{rt, web, Error, HttpRequest, HttpResponse};
+use actix_web::{get, rt, web, Error, HttpRequest, HttpResponse};
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt as _;
 
+#[get("{uuid}/channels/{channel_uuid}/socket")]
 pub async fn echo(req: HttpRequest, stream: web::Payload) -> Result<HttpResponse, Error> {
     let (res, mut session, stream) = actix_ws::handle(&req, stream)?;
 
