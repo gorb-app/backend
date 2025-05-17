@@ -186,6 +186,27 @@ impl Channel {
 
         Ok(message_builders.iter().map(|b| b.build()).collect())
     }
+
+    pub async fn new_message(&self, pool: &Pool<Postgres>, user_uuid: Uuid, message: String) -> Result<Message, HttpResponse> {
+        let message_uuid = Uuid::now_v7();
+
+        let row = sqlx::query(&format!("INSERT INTO messages (uuid, channel_uuid, user_uuid, message) VALUES ('{}', '{}', '{}', $1", message_uuid, self.uuid, user_uuid))
+            .bind(&message)
+            .execute(pool)
+            .await;
+    
+        if let Err(error) = row {
+            error!("{}", error);
+            return Err(HttpResponse::InternalServerError().finish());
+        }
+
+        Ok(Message {
+            uuid: message_uuid,
+            channel_uuid: self.uuid,
+            user_uuid,
+            message,
+        })
+    }
 }
 
 #[derive(Clone, Copy)]

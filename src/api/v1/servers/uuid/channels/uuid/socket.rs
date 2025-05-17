@@ -97,6 +97,7 @@ pub async fn echo(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, stream: web::
                 Ok(AggregatedMessage::Text(text)) => {
                     // echo text message
                     redis::cmd("PUBLISH").arg(&[channel_uuid.to_string(), text.to_string()]).exec_async(&mut conn).await.unwrap();
+                    channel.new_message(&data.pool, uuid, text.to_string()).await.unwrap();
                 }
 
                 Ok(AggregatedMessage::Binary(bin)) => {
