@@ -11,7 +11,7 @@ struct MessageRequest {
 }
 
 #[get("{uuid}/channels/{channel_uuid}/messages")]
-pub async fn get(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, message_request: web::Json<MessageRequest>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, message_request: web::Query<MessageRequest>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);

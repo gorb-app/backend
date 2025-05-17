@@ -171,7 +171,7 @@ impl Channel {
     }
 
     pub async fn fetch_messages(&self, pool: &Pool<Postgres>, amount: i64, offset: i64) -> Result<Vec<Message>, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT uuid, user_uuid, message FROM channels WHERE channel_uuid = '{}' ORDER BY uuid LIMIT $1 OFFSET $2", self.uuid))
+        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), CAST(user_uuid AS VARCHAR), CAST(channel_uuid AS VARCHAR), message FROM messages WHERE channel_uuid = '{}' ORDER BY uuid DESC LIMIT $1 OFFSET $2", self.uuid))
             .bind(amount)
             .bind(offset)
             .fetch_all(pool)
@@ -190,7 +190,7 @@ impl Channel {
     pub async fn new_message(&self, pool: &Pool<Postgres>, user_uuid: Uuid, message: String) -> Result<Message, HttpResponse> {
         let message_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!("INSERT INTO messages (uuid, channel_uuid, user_uuid, message) VALUES ('{}', '{}', '{}', $1", message_uuid, self.uuid, user_uuid))
+        let row = sqlx::query(&format!("INSERT INTO messages (uuid, channel_uuid, user_uuid, message) VALUES ('{}', '{}', '{}', $1)", message_uuid, self.uuid, user_uuid))
             .bind(&message)
             .execute(pool)
             .await;
