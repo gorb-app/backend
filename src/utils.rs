@@ -70,5 +70,13 @@ impl Data {
 
         redis::cmd("GET").arg(key_encoded).query_async(&mut conn).await
     }
+
+    pub async fn del_cache_key(&self, key: String) -> Result<(), RedisError> {
+        let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
+
+        let key_encoded = encode(key);
+
+        redis::cmd("DEL").arg(key_encoded).query_async(&mut conn).await
+    }
 }
 
