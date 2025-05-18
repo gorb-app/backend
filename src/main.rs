@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{App, HttpServer, web};
+use actix_web::{web, App, HttpServer};
 use argon2::Argon2;
 use clap::Parser;
 use simple_logger::SimpleLogger;
@@ -169,7 +169,6 @@ async fn main() -> Result<(), Error> {
         argon2: Argon2::default(),
         start_time: SystemTime::now(),
     };
-
     
     HttpServer::new(move || {
         // Set CORS headers
@@ -207,5 +206,6 @@ async fn main() -> Result<(), Error> {
     .bind((web.url, web.port))?
     .run()
     .await?;
+
     Ok(())
 }

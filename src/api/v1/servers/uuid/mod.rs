@@ -17,6 +17,7 @@ pub fn web() -> Scope {
         .service(channels::uuid::get)
         .service(channels::uuid::delete)
         .service(channels::uuid::messages::get)
+        .service(channels::uuid::socket::echo)
         // Roles
         .service(roles::get)
         .service(roles::create)

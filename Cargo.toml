@@ -28,6 +28,8 @@ toml = "0.8"
 url = { version = "2.5", features = ["serde"] }
 uuid = { version = "1.16", features = ["serde", "v7"] }
 random-string = "1.1"
+actix-ws = "0.3.0"
+futures-util = "0.3.31"
 
 [dependencies.tokio]
 version = "1.44"

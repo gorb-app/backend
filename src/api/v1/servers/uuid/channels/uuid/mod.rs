@@ -1,4 +1,5 @@
 pub mod messages;
+pub mod socket;
 
 use actix_web::{delete, get, web, Error, HttpRequest, HttpResponse};
 use crate::{api::v1::auth::check_access_token, structs::{Channel, Member}, utils::get_auth_header, Data};
