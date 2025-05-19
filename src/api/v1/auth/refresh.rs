@@ -12,7 +12,7 @@ use super::Response;
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let recv_refresh_token_cookie = req.cookie("refresh_token");
 
-    if let None = recv_refresh_token_cookie {
+    if recv_refresh_token_cookie.is_none() {
         return Ok(HttpResponse::Unauthorized().finish())
     }
 

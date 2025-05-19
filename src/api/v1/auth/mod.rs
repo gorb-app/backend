@@ -44,7 +44,7 @@ pub async fn check_access_token(
 ) -> Result<Uuid, HttpResponse> {
     let row =
         sqlx::query_as("SELECT CAST(uuid as VARCHAR), created_at FROM access_tokens WHERE token = $1")
-            .bind(&access_token)
+            .bind(access_token)
             .fetch_one(pool)
             .await;
 

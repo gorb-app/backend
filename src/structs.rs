@@ -80,7 +80,7 @@ impl Channel {
 
         let channels: Result<Vec<Channel>, HttpResponse> = channels.into_iter().collect();
 
-        Ok(channels?)
+        channels
     }
 
     pub async fn fetch_one(pool: &Pool<Postgres>, guild_uuid: Uuid, channel_uuid: Uuid) -> Result<Self, HttpResponse> {

@@ -88,7 +88,7 @@ pub async fn create(req: HttpRequest, path: web::Path<(Uuid,)>, invite_request: 
 
     let guild = guild_result.unwrap();
 
-    let custom_id =  invite_request.as_ref().and_then(|ir| Some(ir.custom_id.clone()));
+    let custom_id =  invite_request.as_ref().map(|ir| ir.custom_id.clone());
 
     let invite = guild.create_invite(&data.pool, &member, custom_id).await;
 

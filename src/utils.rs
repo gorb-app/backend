@@ -9,7 +9,7 @@ use crate::Data;
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
 
-    if let None = auth_token {
+    if auth_token.is_none() {
         return Err(HttpResponse::Unauthorized().finish());
     }
 
@@ -21,7 +21,7 @@ pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
 
     let auth_value = auth.unwrap().split_whitespace().nth(1);
 
-    if let None = auth_value {
+    if auth_value.is_none() {
         return Err(HttpResponse::BadRequest().finish());
     }
 
