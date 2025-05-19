@@ -1,8 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use actix_web::{error, post, web, Error, HttpResponse};
+use actix_web::{post, web, Error, HttpResponse};
 use argon2::{PasswordHash, PasswordVerifier};
-use futures::StreamExt;
 use log::error;
 use serde::Deserialize;
 
@@ -19,25 +18,11 @@ struct LoginInformation {
     device_name: String,
 }
 
-const MAX_SIZE: usize = 262_144;
-
 #[post("/login")]
 pub async fn response(
-    mut payload: web::Payload,
+    login_information: web::Json<LoginInformation>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk?;
-        // limit max size of in-memory payload
-        if (body.len() + chunk.len()) > MAX_SIZE {
-            return Err(error::ErrorBadRequest("overflow"));
-        }
-        body.extend_from_slice(&chunk);
-    }
-
-    let login_information = serde_json::from_slice::<LoginInformation>(&body)?;
-
     if !PASSWORD_REGEX.is_match(&login_information.password) {
         return Ok(HttpResponse::Forbidden().json(r#"{ "password_hashed": false }"#));
     }
@@ -45,7 +30,7 @@ pub async fn response(
     if EMAIL_REGEX.is_match(&login_information.username) {
         let row =
             sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE email = $1")
-                .bind(login_information.username)
+                .bind(&login_information.username)
                 .fetch_one(&data.pool)
                 .await;
 
@@ -67,15 +52,15 @@ pub async fn response(
         return Ok(login(
             data.clone(),
             uuid,
-            login_information.password,
+            login_information.password.clone(),
             password,
-            login_information.device_name,
+            login_information.device_name.clone(),
         )
         .await);
     } else if USERNAME_REGEX.is_match(&login_information.username) {
         let row =
             sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE username = $1")
-                .bind(login_information.username)
+                .bind(&login_information.username)
                 .fetch_one(&data.pool)
                 .await;
 
@@ -97,9 +82,9 @@ pub async fn response(
         return Ok(login(
             data.clone(),
             uuid,
-            login_information.password,
+            login_information.password.clone(),
             password,
-            login_information.device_name,
+            login_information.device_name.clone(),
         )
         .await);
     }
