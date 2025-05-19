@@ -1,6 +1,6 @@
-use actix_web::{Error, HttpRequest, HttpResponse, error, post, web};
+use actix_web::{Error, HttpRequest, HttpResponse, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
-use futures::{StreamExt, future};
+use futures::{future};
 use log::error;
 use serde::{Deserialize, Serialize};
 
@@ -23,12 +23,11 @@ impl Response {
     }
 }
 
-const MAX_SIZE: usize = 262_144;
-
+// TODO: Should maybe be a delete request?
 #[post("/revoke")]
 pub async fn res(
     req: HttpRequest,
-    mut payload: web::Payload,
+    revoke_request: web::Json<RevokeRequest>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
@@ -38,18 +37,6 @@ pub async fn res(
     if let Err(error) = auth_header {
         return Ok(error);
     }
-
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk?;
-        // limit max size of in-memory payload
-        if (body.len() + chunk.len()) > MAX_SIZE {
-            return Err(error::ErrorBadRequest("overflow"));
-        }
-        body.extend_from_slice(&chunk);
-    }
-
-    let revoke_request = serde_json::from_slice::<RevokeRequest>(&body)?;
 
     let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
@@ -94,7 +81,7 @@ pub async fn res(
         "SELECT token FROM refresh_tokens WHERE uuid = '{}' AND device_name = $1",
         uuid
     ))
-    .bind(revoke_request.device_name)
+    .bind(&revoke_request.device_name)
     .fetch_all(&data.pool)
     .await;
 

@@ -1,11 +1,10 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use actix_web::{Error, HttpResponse, error, post, web};
+use actix_web::{Error, HttpResponse, post, web};
 use argon2::{
     PasswordHasher,
     password_hash::{SaltString, rand_core::OsRng},
 };
-use futures::StreamExt;
 use log::error;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -54,21 +53,8 @@ impl Default for ResponseError {
     }
 }
 
-const MAX_SIZE: usize = 262_144;
-
 #[post("/register")]
-pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let mut body = web::BytesMut::new();
-    while let Some(chunk) = payload.next().await {
-        let chunk = chunk?;
-        // limit max size of in-memory payload
-        if (body.len() + chunk.len()) > MAX_SIZE {
-            return Err(error::ErrorBadRequest("overflow"));
-        }
-        body.extend_from_slice(&chunk);
-    }
-    let account_information = serde_json::from_slice::<AccountInformation>(&body)?;
-
+pub async fn res(account_information: web::Json<AccountInformation>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let uuid = Uuid::now_v7();
 
     if !EMAIL_REGEX.is_match(&account_information.email) {
@@ -107,10 +93,9 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                 "INSERT INTO users (uuid, username, password, email) VALUES ( '{}', $1, $2, $3 )",
                 uuid
             ))
-            .bind(account_information.identifier)
-            // FIXME: Password has no security currently, either from a client or server perspective
+            .bind(&account_information.identifier)
             .bind(hashed_password.to_string())
-            .bind(account_information.email)
+            .bind(&account_information.email)
             .execute(&data.pool)
             .await
             {
@@ -140,7 +125,7 @@ pub async fn res(mut payload: web::Payload, data: web::Data<Data>) -> Result<Htt
                     if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created_at, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
                         .bind(&refresh_token)
                         .bind(current_time)
-                        .bind(account_information.device_name)
+                        .bind(&account_information.device_name)
                         .execute(&data.pool)
                         .await {
                         error!("{}", error);
