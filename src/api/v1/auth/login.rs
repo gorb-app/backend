@@ -1,12 +1,14 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use actix_web::{post, web, Error, HttpResponse};
+use actix_web::{Error, HttpResponse, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
 use log::error;
 use serde::Deserialize;
 
 use crate::{
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
+    Data,
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
+    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
 };
 
 use super::Response;
@@ -166,7 +168,7 @@ async fn login(
         return HttpResponse::InternalServerError().finish()
     }
 
-    HttpResponse::Ok().cookie(refresh_token_cookie(refresh_token)).json(Response {
-        access_token,
-    })
+    HttpResponse::Ok()
+        .cookie(refresh_token_cookie(refresh_token))
+        .json(Response { access_token })
 }

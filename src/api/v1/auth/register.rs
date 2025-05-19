@@ -11,7 +11,9 @@ use uuid::Uuid;
 
 use super::Response;
 use crate::{
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
+    Data,
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
+    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
 };
 
 #[derive(Deserialize)]
@@ -54,7 +56,10 @@ impl Default for ResponseError {
 }
 
 #[post("/register")]
-pub async fn res(account_information: web::Json<AccountInformation>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn res(
+    account_information: web::Json<AccountInformation>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let uuid = Uuid::now_v7();
 
     if !EMAIL_REGEX.is_match(&account_information.email) {
@@ -142,9 +147,9 @@ pub async fn res(account_information: web::Json<AccountInformation>, data: web::
                         return Ok(HttpResponse::InternalServerError().finish())
                     }
 
-                    HttpResponse::Ok().cookie(refresh_token_cookie(refresh_token)).json(Response {
-                        access_token,
-                    })
+                    HttpResponse::Ok()
+                        .cookie(refresh_token_cookie(refresh_token))
+                        .json(Response { access_token })
                 }
                 Err(error) => {
                     let err_msg = error.as_database_error().unwrap().message();

@@ -1,8 +1,13 @@
-use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
+use actix_web::{Error, HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::{api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    structs::{Guild, Member},
+    utils::get_auth_header,
+};
 
 #[derive(Deserialize)]
 struct InviteRequest {
@@ -10,13 +15,17 @@ struct InviteRequest {
 }
 
 #[get("{uuid}/invites")]
-pub async fn get(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(
+    req: HttpRequest,
+    path: web::Path<(Uuid,)>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
 
     if let Err(error) = auth_header {
-        return Ok(error)
+        return Ok(error);
     }
 
     let guild_uuid = path.into_inner().0;
@@ -24,7 +33,7 @@ pub async fn get(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Dat
     let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
     if let Err(error) = authorized {
-        return Ok(error)
+        return Ok(error);
     }
 
     let uuid = authorized.unwrap();
@@ -47,19 +56,24 @@ pub async fn get(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Dat
 
     if let Err(error) = invites {
         return Ok(error);
-    }    
+    }
 
     Ok(HttpResponse::Ok().json(invites.unwrap()))
 }
 
 #[post("{uuid}/invites")]
-pub async fn create(req: HttpRequest, path: web::Path<(Uuid,)>, invite_request: web::Json<Option<InviteRequest>>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn create(
+    req: HttpRequest,
+    path: web::Path<(Uuid,)>,
+    invite_request: web::Json<Option<InviteRequest>>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
 
     if let Err(error) = auth_header {
-        return Ok(error)
+        return Ok(error);
     }
 
     let guild_uuid = path.into_inner().0;
@@ -67,7 +81,7 @@ pub async fn create(req: HttpRequest, path: web::Path<(Uuid,)>, invite_request: 
     let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
     if let Err(error) = authorized {
-        return Ok(error)
+        return Ok(error);
     }
 
     let uuid = authorized.unwrap();
@@ -88,7 +102,7 @@ pub async fn create(req: HttpRequest, path: web::Path<(Uuid,)>, invite_request: 
 
     let guild = guild_result.unwrap();
 
-    let custom_id =  invite_request.as_ref().map(|ir| ir.custom_id.clone());
+    let custom_id = invite_request.as_ref().map(|ir| ir.custom_id.clone());
 
     let invite = guild.create_invite(&data.pool, &member, custom_id).await;
 

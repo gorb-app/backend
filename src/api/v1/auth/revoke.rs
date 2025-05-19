@@ -1,6 +1,6 @@
 use actix_web::{Error, HttpRequest, HttpResponse, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
-use futures::{future};
+use futures::future;
 use log::error;
 use serde::{Deserialize, Serialize};
 
@@ -105,10 +105,7 @@ pub async fn res(
     let results = future::join_all(refresh_tokens_delete).await;
 
     let errors: Vec<&Result<sqlx::postgres::PgQueryResult, sqlx::Error>> =
-        results
-            .iter()
-            .filter(|r| r.is_err())
-            .collect();
+        results.iter().filter(|r| r.is_err()).collect();
 
     if !errors.is_empty() {
         error!("{:?}", errors);

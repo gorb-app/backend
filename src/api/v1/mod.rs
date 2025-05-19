@@ -1,10 +1,10 @@
 use actix_web::{Scope, web};
 
 mod auth;
+mod invites;
+mod servers;
 mod stats;
 mod users;
-mod servers;
-mod invites;
 
 pub fn web() -> Scope {
     web::scope("/v1")

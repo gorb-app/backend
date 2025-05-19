@@ -1,10 +1,10 @@
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
-use sqlx::{prelude::FromRow, Pool, Postgres};
-use uuid::Uuid;
 use actix_web::HttpResponse;
 use log::error;
+use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Postgres, prelude::FromRow};
+use uuid::Uuid;
 
 use crate::Data;
 
@@ -14,13 +14,13 @@ pub struct Channel {
     pub guild_uuid: Uuid,
     name: String,
     description: Option<String>,
-    pub permissions: Vec<ChannelPermission>
+    pub permissions: Vec<ChannelPermission>,
 }
 
 #[derive(Serialize, Clone, FromRow)]
 struct ChannelPermissionBuilder {
     role_uuid: String,
-    permissions: i32
+    permissions: i32,
 }
 
 impl ChannelPermissionBuilder {
@@ -35,19 +35,25 @@ impl ChannelPermissionBuilder {
 #[derive(Serialize, Deserialize, Clone, FromRow)]
 pub struct ChannelPermission {
     pub role_uuid: Uuid,
-    pub permissions: i32
+    pub permissions: i32,
 }
 
 impl Channel {
-    pub async fn fetch_all(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<Vec<Self>, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}'", guild_uuid))
-            .fetch_all(pool)
-            .await;
+    pub async fn fetch_all(
+        pool: &Pool<Postgres>,
+        guild_uuid: Uuid,
+    ) -> Result<Vec<Self>, HttpResponse> {
+        let row = sqlx::query_as(&format!(
+            "SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}'",
+            guild_uuid
+        ))
+        .fetch_all(pool)
+        .await;
 
         if let Err(error) = row {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let channels: Vec<(String, String, Option<String>)> = row.unwrap();
@@ -83,15 +89,22 @@ impl Channel {
         channels
     }
 
-    pub async fn fetch_one(pool: &Pool<Postgres>, guild_uuid: Uuid, channel_uuid: Uuid) -> Result<Self, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT name, description FROM channels WHERE guild_uuid = '{}' AND uuid = '{}'", guild_uuid, channel_uuid))
-            .fetch_one(pool)
-            .await;
+    pub async fn fetch_one(
+        pool: &Pool<Postgres>,
+        guild_uuid: Uuid,
+        channel_uuid: Uuid,
+    ) -> Result<Self, HttpResponse> {
+        let row = sqlx::query_as(&format!(
+            "SELECT name, description FROM channels WHERE guild_uuid = '{}' AND uuid = '{}'",
+            guild_uuid, channel_uuid
+        ))
+        .fetch_one(pool)
+        .await;
 
         if let Err(error) = row {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let (name, description): (String, Option<String>) = row.unwrap();
@@ -103,7 +116,7 @@ impl Channel {
         if let Err(error) = row {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let channel_permission_builders: Vec<ChannelPermissionBuilder> = row.unwrap();
@@ -113,11 +126,19 @@ impl Channel {
             guild_uuid,
             name,
             description,
-            permissions: channel_permission_builders.iter().map(|b| b.build()).collect(),
+            permissions: channel_permission_builders
+                .iter()
+                .map(|b| b.build())
+                .collect(),
         })
     }
 
-    pub async fn new(data: actix_web::web::Data<Data>, guild_uuid: Uuid, name: String, description: Option<String>) -> Result<Self, HttpResponse> {
+    pub async fn new(
+        data: actix_web::web::Data<Data>,
+        guild_uuid: Uuid,
+        name: String,
+        description: Option<String>,
+    ) -> Result<Self, HttpResponse> {
         let channel_uuid = Uuid::now_v7();
 
         let row = sqlx::query(&format!("INSERT INTO channels (uuid, guild_uuid, name, description) VALUES ('{}', '{}', $1, $2)", channel_uuid, guild_uuid))
@@ -125,10 +146,10 @@ impl Channel {
             .bind(&description)
             .execute(&data.pool)
             .await;
-    
+
         if let Err(error) = row {
             error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let channel = Self {
@@ -139,7 +160,9 @@ impl Channel {
             permissions: vec![],
         };
 
-        let cache_result = data.set_cache_key(channel_uuid.to_string(), channel.clone(), 1800).await;
+        let cache_result = data
+            .set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
+            .await;
 
         if let Err(error) = cache_result {
             error!("{}", error);
@@ -157,20 +180,28 @@ impl Channel {
     }
 
     pub async fn delete(self, pool: &Pool<Postgres>) -> Result<(), HttpResponse> {
-        let result = sqlx::query(&format!("DELETE FROM channels WHERE channel_uuid = '{}'", self.uuid))
-            .execute(pool)
-            .await;
+        let result = sqlx::query(&format!(
+            "DELETE FROM channels WHERE channel_uuid = '{}'",
+            self.uuid
+        ))
+        .execute(pool)
+        .await;
 
         if let Err(error) = result {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         Ok(())
     }
 
-    pub async fn fetch_messages(&self, pool: &Pool<Postgres>, amount: i64, offset: i64) -> Result<Vec<Message>, HttpResponse> {
+    pub async fn fetch_messages(
+        &self,
+        pool: &Pool<Postgres>,
+        amount: i64,
+        offset: i64,
+    ) -> Result<Vec<Message>, HttpResponse> {
         let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), CAST(user_uuid AS VARCHAR), CAST(channel_uuid AS VARCHAR), message FROM messages WHERE channel_uuid = '{}' ORDER BY uuid DESC LIMIT $1 OFFSET $2", self.uuid))
             .bind(amount)
             .bind(offset)
@@ -187,14 +218,19 @@ impl Channel {
         Ok(message_builders.iter().map(|b| b.build()).collect())
     }
 
-    pub async fn new_message(&self, pool: &Pool<Postgres>, user_uuid: Uuid, message: String) -> Result<Message, HttpResponse> {
+    pub async fn new_message(
+        &self,
+        pool: &Pool<Postgres>,
+        user_uuid: Uuid,
+        message: String,
+    ) -> Result<Message, HttpResponse> {
         let message_uuid = Uuid::now_v7();
 
         let row = sqlx::query(&format!("INSERT INTO messages (uuid, channel_uuid, user_uuid, message) VALUES ('{}', '{}', '{}', $1)", message_uuid, self.uuid, user_uuid))
             .bind(&message)
             .execute(pool)
             .await;
-    
+
         if let Err(error) = row {
             error!("{}", error);
             return Err(HttpResponse::InternalServerError().finish());
@@ -240,7 +276,8 @@ impl Permissions {
             Self::ManageMember,
         ];
 
-        all_perms.into_iter()
+        all_perms
+            .into_iter()
             .filter(|p| permissions & (*p as i64) != 0)
             .collect()
     }
@@ -259,14 +296,17 @@ pub struct Guild {
 
 impl Guild {
     pub async fn fetch_one(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT CAST(owner_uuid AS VARCHAR), name, description FROM guilds WHERE uuid = '{}'", guild_uuid))
-            .fetch_one(pool)
-            .await;
+        let row = sqlx::query_as(&format!(
+            "SELECT CAST(owner_uuid AS VARCHAR), name, description FROM guilds WHERE uuid = '{}'",
+            guild_uuid
+        ))
+        .fetch_one(pool)
+        .await;
 
         if let Err(error) = row {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let (owner_uuid_raw, name, description): (String, String, Option<String>) = row.unwrap();
@@ -289,24 +329,37 @@ impl Guild {
         })
     }
 
-    pub async fn new(pool: &Pool<Postgres>, name: String, description: Option<String>, owner_uuid: Uuid) -> Result<Self, HttpResponse> {
+    pub async fn new(
+        pool: &Pool<Postgres>,
+        name: String,
+        description: Option<String>,
+        owner_uuid: Uuid,
+    ) -> Result<Self, HttpResponse> {
         let guild_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!("INSERT INTO guilds (uuid, owner_uuid, name, description) VALUES ('{}', '{}', $1, $2)", guild_uuid, owner_uuid))
-            .bind(&name)
-            .bind(&description)
-            .execute(pool)
-            .await;
-    
+        let row = sqlx::query(&format!(
+            "INSERT INTO guilds (uuid, owner_uuid, name, description) VALUES ('{}', '{}', $1, $2)",
+            guild_uuid, owner_uuid
+        ))
+        .bind(&name)
+        .bind(&description)
+        .execute(pool)
+        .await;
+
         if let Err(error) = row {
             error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
-    
-        let row = sqlx::query(&format!("INSERT INTO guild_members (uuid, guild_uuid, user_uuid) VALUES ('{}', '{}', '{}')", Uuid::now_v7(), guild_uuid, owner_uuid))
-            .execute(pool)
-            .await;
-    
+
+        let row = sqlx::query(&format!(
+            "INSERT INTO guild_members (uuid, guild_uuid, user_uuid) VALUES ('{}', '{}', '{}')",
+            Uuid::now_v7(),
+            guild_uuid,
+            owner_uuid
+        ))
+        .execute(pool)
+        .await;
+
         if let Err(error) = row {
             error!("{}", error);
 
@@ -318,7 +371,7 @@ impl Guild {
                 error!("{}", error);
             }
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         Ok(Guild {
@@ -328,26 +381,38 @@ impl Guild {
             icon: "bogus".to_string(),
             owner_uuid,
             roles: vec![],
-            member_count: 1
+            member_count: 1,
         })
     }
 
     pub async fn get_invites(&self, pool: &Pool<Postgres>) -> Result<Vec<Invite>, HttpResponse> {
-        let invites = sqlx::query_as(&format!("SELECT (id, guild_uuid, user_uuid) FROM invites WHERE guild_uuid = '{}'", self.uuid))
-            .fetch_all(pool)
-            .await;
+        let invites = sqlx::query_as(&format!(
+            "SELECT (id, guild_uuid, user_uuid) FROM invites WHERE guild_uuid = '{}'",
+            self.uuid
+        ))
+        .fetch_all(pool)
+        .await;
 
         if let Err(error) = invites {
             error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
-        Ok(invites.unwrap().iter().map(|b: &InviteBuilder| b.build()).collect())
+        Ok(invites
+            .unwrap()
+            .iter()
+            .map(|b: &InviteBuilder| b.build())
+            .collect())
     }
 
-    pub async fn create_invite(&self, pool: &Pool<Postgres>, member: &Member, custom_id: Option<String>) -> Result<Invite, HttpResponse> {
+    pub async fn create_invite(
+        &self,
+        pool: &Pool<Postgres>,
+        member: &Member,
+        custom_id: Option<String>,
+    ) -> Result<Invite, HttpResponse> {
         let invite_id;
-        
+
         if custom_id.is_none() {
             let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
@@ -355,18 +420,21 @@ impl Guild {
         } else {
             invite_id = custom_id.unwrap();
             if invite_id.len() > 32 {
-                return Err(HttpResponse::BadRequest().finish())
+                return Err(HttpResponse::BadRequest().finish());
             }
         }
 
-        let result = sqlx::query(&format!("INSERT INTO invites (id, guild_uuid, user_uuid) VALUES ($1, '{}', '{}'", self.uuid, member.user_uuid))
-            .bind(&invite_id)
-            .execute(pool)
-            .await;
+        let result = sqlx::query(&format!(
+            "INSERT INTO invites (id, guild_uuid, user_uuid) VALUES ($1, '{}', '{}'",
+            self.uuid, member.user_uuid
+        ))
+        .bind(&invite_id)
+        .execute(pool)
+        .await;
 
         if let Err(error) = result {
             error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         Ok(Invite {
@@ -384,7 +452,7 @@ struct RoleBuilder {
     name: String,
     color: i64,
     position: i32,
-    permissions: i64, 
+    permissions: i64,
 }
 
 impl RoleBuilder {
@@ -411,7 +479,10 @@ pub struct Role {
 }
 
 impl Role {
-    pub async fn fetch_all(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<Vec<Self>, HttpResponse> {
+    pub async fn fetch_all(
+        pool: &Pool<Postgres>,
+        guild_uuid: Uuid,
+    ) -> Result<Vec<Self>, HttpResponse> {
         let role_builders_result = sqlx::query_as(&format!("SELECT (uuid, guild_uuid, name, color, position, permissions) FROM roles WHERE guild_uuid = '{}'", guild_uuid))
             .fetch_all(pool)
             .await;
@@ -419,7 +490,7 @@ impl Role {
         if let Err(error) = role_builders_result {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let role_builders: Vec<RoleBuilder> = role_builders_result.unwrap();
@@ -427,7 +498,11 @@ impl Role {
         Ok(role_builders.iter().map(|b| b.build()).collect())
     }
 
-    pub async fn fetch_one(pool: &Pool<Postgres>, role_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
+    pub async fn fetch_one(
+        pool: &Pool<Postgres>,
+        role_uuid: Uuid,
+        guild_uuid: Uuid,
+    ) -> Result<Self, HttpResponse> {
         let row = sqlx::query_as(&format!("SELECT (name, color, position, permissions) FROM roles WHERE guild_uuid = '{}' AND uuid = '{}'", guild_uuid, role_uuid))
             .fetch_one(pool)
             .await;
@@ -435,7 +510,7 @@ impl Role {
         if let Err(error) = row {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let (name, color, position, permissions) = row.unwrap();
@@ -450,18 +525,25 @@ impl Role {
         })
     }
 
-    pub async fn new(pool: &Pool<Postgres>, guild_uuid: Uuid, name: String) -> Result<Self, HttpResponse> {
+    pub async fn new(
+        pool: &Pool<Postgres>,
+        guild_uuid: Uuid,
+        name: String,
+    ) -> Result<Self, HttpResponse> {
         let role_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!("INSERT INTO channels (uuid, guild_uuid, name, position) VALUES ('{}', '{}', $1, $2)", role_uuid, guild_uuid))
-            .bind(&name)
-            .bind(0)
-            .execute(pool)
-            .await;
-    
+        let row = sqlx::query(&format!(
+            "INSERT INTO channels (uuid, guild_uuid, name, position) VALUES ('{}', '{}', $1, $2)",
+            role_uuid, guild_uuid
+        ))
+        .bind(&name)
+        .bind(0)
+        .execute(pool)
+        .await;
+
         if let Err(error) = row {
             error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let role = Self {
@@ -486,20 +568,27 @@ pub struct Member {
 
 impl Member {
     async fn count(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<i64, HttpResponse> {
-        let member_count = sqlx::query_scalar(&format!("SELECT COUNT(uuid) FROM guild_members WHERE guild_uuid = '{}'", guild_uuid))
-            .fetch_one(pool)
-            .await;
+        let member_count = sqlx::query_scalar(&format!(
+            "SELECT COUNT(uuid) FROM guild_members WHERE guild_uuid = '{}'",
+            guild_uuid
+        ))
+        .fetch_one(pool)
+        .await;
 
         if let Err(error) = member_count {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         Ok(member_count.unwrap())
     }
 
-    pub async fn fetch_one(pool: &Pool<Postgres>, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
+    pub async fn fetch_one(
+        pool: &Pool<Postgres>,
+        user_uuid: Uuid,
+        guild_uuid: Uuid,
+    ) -> Result<Self, HttpResponse> {
         let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), nickname FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, user_uuid))
             .fetch_one(pool)
             .await;
@@ -507,7 +596,7 @@ impl Member {
         if let Err(error) = row {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         let (uuid, nickname): (String, Option<String>) = row.unwrap();
@@ -520,17 +609,24 @@ impl Member {
         })
     }
 
-    pub async fn new(pool: &Pool<Postgres>, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
+    pub async fn new(
+        pool: &Pool<Postgres>,
+        user_uuid: Uuid,
+        guild_uuid: Uuid,
+    ) -> Result<Self, HttpResponse> {
         let member_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!("INSERT INTO guild_members uuid, guild_uuid, user_uuid VALUES ('{}', '{}', '{}')", member_uuid, guild_uuid, user_uuid))
-            .execute(pool)
-            .await;
+        let row = sqlx::query(&format!(
+            "INSERT INTO guild_members uuid, guild_uuid, user_uuid VALUES ('{}', '{}', '{}')",
+            member_uuid, guild_uuid, user_uuid
+        ))
+        .execute(pool)
+        .await;
 
         if let Err(error) = row {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         Ok(Self {
@@ -599,15 +695,16 @@ pub struct Invite {
 
 impl Invite {
     pub async fn fetch_one(pool: &Pool<Postgres>, invite_id: String) -> Result<Self, HttpResponse> {
-        let invite: Result<InviteBuilder, sqlx::Error> = sqlx::query_as("SELECT id, user_uuid, guild_uuid FROM invites WHERE id = $1")
-            .bind(invite_id)
-            .fetch_one(pool)
-            .await;
+        let invite: Result<InviteBuilder, sqlx::Error> =
+            sqlx::query_as("SELECT id, user_uuid, guild_uuid FROM invites WHERE id = $1")
+                .bind(invite_id)
+                .fetch_one(pool)
+                .await;
 
         if let Err(error) = invite {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish())
+            return Err(HttpResponse::InternalServerError().finish());
         }
 
         Ok(invite.unwrap().build())

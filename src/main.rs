@@ -1,5 +1,5 @@
 use actix_cors::Cors;
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
 use simple_logger::SimpleLogger;
@@ -9,8 +9,8 @@ mod config;
 use config::{Config, ConfigBuilder};
 mod api;
 
-pub mod utils;
 pub mod structs;
+pub mod utils;
 
 type Error = Box<dyn std::error::Error>;
 
@@ -169,7 +169,7 @@ async fn main() -> Result<(), Error> {
         argon2: Argon2::default(),
         start_time: SystemTime::now(),
     };
-    
+
     HttpServer::new(move || {
         // Set CORS headers
         let cors = Cors::default()
@@ -179,9 +179,7 @@ async fn main() -> Result<(), Error> {
                 rather than setting it to "*" due to CORS not allowing
                 sending of credentials (cookies) with wildcard origin.
             */
-            .allowed_origin_fn(|_origin, _req_head| {
-                true
-            })
+            .allowed_origin_fn(|_origin, _req_head| true)
             /*
                 Allows any request method in CORS preflight requests.
                 This will be restricted to only ones actually in use later.

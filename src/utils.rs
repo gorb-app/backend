@@ -1,4 +1,8 @@
-use actix_web::{cookie::{time::Duration, Cookie, SameSite}, http::header::HeaderMap, HttpResponse};
+use actix_web::{
+    HttpResponse,
+    cookie::{Cookie, SameSite, time::Duration},
+    http::header::HeaderMap,
+};
 use getrandom::fill;
 use hex::encode;
 use redis::RedisError;
@@ -51,16 +55,27 @@ pub fn generate_refresh_token() -> Result<String, getrandom::Error> {
 }
 
 impl Data {
-    pub async fn set_cache_key(&self, key: String, value: impl Serialize, expire: u32) -> Result<(), RedisError> {
+    pub async fn set_cache_key(
+        &self,
+        key: String,
+        value: impl Serialize,
+        expire: u32,
+    ) -> Result<(), RedisError> {
         let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
 
         let key_encoded = encode(key);
 
         let value_json = serde_json::to_string(&value).unwrap();
 
-        redis::cmd("SET",).arg(&[key_encoded.clone(), value_json]).exec_async(&mut conn).await?;
+        redis::cmd("SET")
+            .arg(&[key_encoded.clone(), value_json])
+            .exec_async(&mut conn)
+            .await?;
 
-        redis::cmd("EXPIRE").arg(&[key_encoded, expire.to_string()]).exec_async(&mut conn).await
+        redis::cmd("EXPIRE")
+            .arg(&[key_encoded, expire.to_string()])
+            .exec_async(&mut conn)
+            .await
     }
 
     pub async fn get_cache_key(&self, key: String) -> Result<String, RedisError> {
@@ -68,7 +83,10 @@ impl Data {
 
         let key_encoded = encode(key);
 
-        redis::cmd("GET").arg(key_encoded).query_async(&mut conn).await
+        redis::cmd("GET")
+            .arg(key_encoded)
+            .query_async(&mut conn)
+            .await
     }
 
     pub async fn del_cache_key(&self, key: String) -> Result<(), RedisError> {
@@ -76,7 +94,9 @@ impl Data {
 
         let key_encoded = encode(key);
 
-        redis::cmd("DEL").arg(key_encoded).query_async(&mut conn).await
+        redis::cmd("DEL")
+            .arg(key_encoded)
+            .query_async(&mut conn)
+            .await
     }
 }
-

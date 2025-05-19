@@ -1,15 +1,24 @@
-use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
+use actix_web::{Error, HttpRequest, HttpResponse, get, post, web};
 
-use crate::{api::v1::auth::check_access_token, structs::{Guild, Invite, Member}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    structs::{Guild, Invite, Member},
+    utils::get_auth_header,
+};
 
 #[get("{id}")]
-pub async fn get(req: HttpRequest, path: web::Path<(String,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(
+    req: HttpRequest,
+    path: web::Path<(String,)>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
 
     if let Err(error) = auth_header {
-        return Ok(error)
+        return Ok(error);
     }
 
     let invite_id = path.into_inner().0;
@@ -17,7 +26,7 @@ pub async fn get(req: HttpRequest, path: web::Path<(String,)>, data: web::Data<D
     let result = Invite::fetch_one(&data.pool, invite_id).await;
 
     if let Err(error) = result {
-        return Ok(error)
+        return Ok(error);
     }
 
     let invite = result.unwrap();
@@ -34,13 +43,17 @@ pub async fn get(req: HttpRequest, path: web::Path<(String,)>, data: web::Data<D
 }
 
 #[post("{id}")]
-pub async fn join(req: HttpRequest, path: web::Path<(String,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn join(
+    req: HttpRequest,
+    path: web::Path<(String,)>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
 
     if let Err(error) = auth_header {
-        return Ok(error)
+        return Ok(error);
     }
 
     let invite_id = path.into_inner().0;
@@ -48,7 +61,7 @@ pub async fn join(req: HttpRequest, path: web::Path<(String,)>, data: web::Data<
     let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
     if let Err(error) = authorized {
-        return Ok(error)
+        return Ok(error);
     }
 
     let uuid = authorized.unwrap();
@@ -56,7 +69,7 @@ pub async fn join(req: HttpRequest, path: web::Path<(String,)>, data: web::Data<
     let result = Invite::fetch_one(&data.pool, invite_id).await;
 
     if let Err(error) = result {
-        return Ok(error)
+        return Ok(error);
     }
 
     let invite = result.unwrap();
@@ -70,7 +83,7 @@ pub async fn join(req: HttpRequest, path: web::Path<(String,)>, data: web::Data<
     let guild = guild_result.unwrap();
 
     let member = Member::new(&data.pool, uuid, guild.uuid).await;
-    
+
     if let Err(error) = member {
         return Ok(error);
     }

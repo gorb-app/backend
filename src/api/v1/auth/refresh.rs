@@ -1,9 +1,10 @@
-use actix_web::{post, web, Error, HttpRequest, HttpResponse};
+use actix_web::{Error, HttpRequest, HttpResponse, post, web};
 use log::error;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
+    Data,
+    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
 };
 
 use super::Response;
@@ -13,7 +14,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
     let recv_refresh_token_cookie = req.cookie("refresh_token");
 
     if recv_refresh_token_cookie.is_none() {
-        return Ok(HttpResponse::Unauthorized().finish())
+        return Ok(HttpResponse::Unauthorized().finish());
     }
 
     let mut refresh_token = String::from(recv_refresh_token_cookie.unwrap().value());
@@ -23,11 +24,10 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         .unwrap()
         .as_secs() as i64;
 
-    if let Ok(row) =
-        sqlx::query_scalar("SELECT created_at FROM refresh_tokens WHERE token = $1")
-            .bind(&refresh_token)
-            .fetch_one(&data.pool)
-            .await
+    if let Ok(row) = sqlx::query_scalar("SELECT created_at FROM refresh_tokens WHERE token = $1")
+        .bind(&refresh_token)
+        .fetch_one(&data.pool)
+        .await
     {
         let created_at: i64 = row;
 
@@ -46,7 +46,9 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
             refresh_token_cookie.make_removal();
 
-            return Ok(HttpResponse::Unauthorized().cookie(refresh_token_cookie).finish());
+            return Ok(HttpResponse::Unauthorized()
+                .cookie(refresh_token_cookie)
+                .finish());
         }
 
         let current_time = SystemTime::now()
@@ -64,12 +66,14 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
             let new_refresh_token = new_refresh_token.unwrap();
 
-            match sqlx::query("UPDATE refresh_tokens SET token = $1, created_at = $2 WHERE token = $3")
-                .bind(&new_refresh_token)
-                .bind(current_time)
-                .bind(&refresh_token)
-                .execute(&data.pool)
-                .await
+            match sqlx::query(
+                "UPDATE refresh_tokens SET token = $1, created_at = $2 WHERE token = $3",
+            )
+            .bind(&new_refresh_token)
+            .bind(current_time)
+            .bind(&refresh_token)
+            .execute(&data.pool)
+            .await
             {
                 Ok(_) => {
                     refresh_token = new_refresh_token;
@@ -89,24 +93,29 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
         let access_token = access_token.unwrap();
 
-        if let Err(error) = sqlx::query("UPDATE access_tokens SET token = $1, created_at = $2 WHERE refresh_token = $3")
-            .bind(&access_token)
-            .bind(current_time)
-            .bind(&refresh_token)
-            .execute(&data.pool)
-            .await {
+        if let Err(error) = sqlx::query(
+            "UPDATE access_tokens SET token = $1, created_at = $2 WHERE refresh_token = $3",
+        )
+        .bind(&access_token)
+        .bind(current_time)
+        .bind(&refresh_token)
+        .execute(&data.pool)
+        .await
+        {
             error!("{}", error);
-            return Ok(HttpResponse::InternalServerError().finish())
+            return Ok(HttpResponse::InternalServerError().finish());
         }
 
-        return Ok(HttpResponse::Ok().cookie(refresh_token_cookie(refresh_token)).json(Response {
-            access_token,
-        }));
+        return Ok(HttpResponse::Ok()
+            .cookie(refresh_token_cookie(refresh_token))
+            .json(Response { access_token }));
     }
 
     let mut refresh_token_cookie = refresh_token_cookie(refresh_token);
 
     refresh_token_cookie.make_removal();
 
-    Ok(HttpResponse::Unauthorized().cookie(refresh_token_cookie).finish())
+    Ok(HttpResponse::Unauthorized()
+        .cookie(refresh_token_cookie)
+        .finish())
 }

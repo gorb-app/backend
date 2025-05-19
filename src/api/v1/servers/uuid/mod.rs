@@ -1,11 +1,16 @@
-use actix_web::{get, web, Error, HttpRequest, HttpResponse, Scope};
+use actix_web::{Error, HttpRequest, HttpResponse, Scope, get, web};
 use uuid::Uuid;
 
 mod channels;
-mod roles;
 mod invites;
+mod roles;
 
-use crate::{api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    structs::{Guild, Member},
+    utils::get_auth_header,
+};
 
 pub fn web() -> Scope {
     web::scope("")
@@ -28,13 +33,17 @@ pub fn web() -> Scope {
 }
 
 #[get("/{uuid}")]
-pub async fn res(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn res(
+    req: HttpRequest,
+    path: web::Path<(Uuid,)>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
 
     if let Err(error) = auth_header {
-        return Ok(error)
+        return Ok(error);
     }
 
     let guild_uuid = path.into_inner().0;
@@ -42,7 +51,7 @@ pub async fn res(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Dat
     let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
     if let Err(error) = authorized {
-        return Ok(error)
+        return Ok(error);
     }
 
     let uuid = authorized.unwrap();
@@ -61,4 +70,3 @@ pub async fn res(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Dat
 
     Ok(HttpResponse::Ok().json(guild.unwrap()))
 }
-

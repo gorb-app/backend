@@ -1,8 +1,13 @@
-use actix_web::{get, web, Error, HttpRequest, HttpResponse};
-use serde::Deserialize;
-use crate::{api::v1::auth::check_access_token, structs::{Channel, Member}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    structs::{Channel, Member},
+    utils::get_auth_header,
+};
 use ::uuid::Uuid;
+use actix_web::{Error, HttpRequest, HttpResponse, get, web};
 use log::error;
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 struct MessageRequest {
@@ -11,13 +16,18 @@ struct MessageRequest {
 }
 
 #[get("{uuid}/channels/{channel_uuid}/messages")]
-pub async fn get(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, message_request: web::Query<MessageRequest>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(
+    req: HttpRequest,
+    path: web::Path<(Uuid, Uuid)>,
+    message_request: web::Query<MessageRequest>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers);
 
     if let Err(error) = auth_header {
-        return Ok(error)
+        return Ok(error);
     }
 
     let (guild_uuid, channel_uuid) = path.into_inner();
@@ -25,7 +35,7 @@ pub async fn get(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, message_reques
     let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
     if let Err(error) = authorized {
-        return Ok(error)
+        return Ok(error);
     }
 
     let uuid = authorized.unwrap();
@@ -46,23 +56,27 @@ pub async fn get(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, message_reques
         let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
 
         if let Err(error) = channel_result {
-            return Ok(error)
+            return Ok(error);
         }
-    
+
         channel = channel_result.unwrap();
-    
-        let cache_result = data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60).await;
-    
+
+        let cache_result = data
+            .set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
+            .await;
+
         if let Err(error) = cache_result {
             error!("{}", error);
             return Ok(HttpResponse::InternalServerError().finish());
         }
     }
 
-    let messages = channel.fetch_messages(&data.pool, message_request.amount, message_request.offset).await;
+    let messages = channel
+        .fetch_messages(&data.pool, message_request.amount, message_request.offset)
+        .await;
 
     if let Err(error) = messages {
-        return Ok(error)
+        return Ok(error);
     }
 
     Ok(HttpResponse::Ok().json(messages.unwrap()))

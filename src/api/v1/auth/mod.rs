@@ -42,11 +42,12 @@ pub async fn check_access_token(
     access_token: &str,
     pool: &sqlx::Pool<Postgres>,
 ) -> Result<Uuid, HttpResponse> {
-    let row =
-        sqlx::query_as("SELECT CAST(uuid as VARCHAR), created_at FROM access_tokens WHERE token = $1")
-            .bind(access_token)
-            .fetch_one(pool)
-            .await;
+    let row = sqlx::query_as(
+        "SELECT CAST(uuid as VARCHAR), created_at FROM access_tokens WHERE token = $1",
+    )
+    .bind(access_token)
+    .fetch_one(pool)
+    .await;
 
     if let Err(error) = row {
         if error.to_string()
