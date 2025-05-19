@@ -612,4 +612,19 @@ impl Invite {
 
         Ok(invite.unwrap().build())
     }
+
+    pub async fn delete(self, pool: &Pool<Postgres>) -> Result<(), HttpResponse> {
+        let invite: Result<InviteBuilder, sqlx::Error> = sqlx::query_as("DELETE FROM invites WHERE id = $1")
+            .bind(self.id)
+            .fetch_one(pool)
+            .await;
+
+        if let Err(error) = invite {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(())    
+    }
 }

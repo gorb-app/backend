@@ -2,6 +2,8 @@ use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
 use serde::Deserialize;
 use uuid::Uuid;
 
+mod id;
+
 use crate::{api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
 
 #[derive(Deserialize)]
