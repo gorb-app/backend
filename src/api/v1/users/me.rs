@@ -1,4 +1,4 @@
-use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
+use actix_web::{get, patch, web, Error, HttpRequest, HttpResponse};
 use serde::Deserialize;
 
 use crate::{api::v1::auth::check_access_token, structs::Me, utils::get_auth_header, Data};
@@ -38,7 +38,7 @@ struct NewInfo {
     email: Option<String>,
 }
 
-#[post("/me")]
+#[patch("/me")]
 pub async fn update(req: HttpRequest, new_info: web::Json<NewInfo>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
@@ -62,7 +62,7 @@ pub async fn update(req: HttpRequest, new_info: web::Json<NewInfo>, data: web::D
         return Ok(error);
     }
 
-    let me = me_result;
+    let me = me_result.unwrap();
 
     if let Some(username) = &new_info.username {
         todo!();
