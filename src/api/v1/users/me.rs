@@ -1,15 +1,7 @@
-use actix_web::{Error, HttpRequest, HttpResponse, get, web};
-use log::error;
-use serde::Serialize;
+use actix_web::{get, post, web, Error, HttpRequest, HttpResponse};
+use serde::Deserialize;
 
-use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
-
-#[derive(Serialize)]
-struct Response {
-    uuid: String,
-    username: String,
-    display_name: String,
-}
+use crate::{api::v1::auth::check_access_token, structs::Me, utils::get_auth_header, Data};
 
 #[get("/me")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
@@ -29,23 +21,64 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
     let uuid = authorized.unwrap();
 
-    let row = sqlx::query_as(&format!(
-        "SELECT username, display_name FROM users WHERE uuid = '{}'",
-        uuid
-    ))
-    .fetch_one(&data.pool)
-    .await;
+    let me = Me::get(&data.pool, uuid).await;
 
-    if let Err(error) = row {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
+    if let Err(error) = me {
+        return Ok(error);
     }
 
-    let (username, display_name): (String, Option<String>) = row.unwrap();
+    Ok(HttpResponse::Ok().json(me.unwrap()))
+}
 
-    Ok(HttpResponse::Ok().json(Response {
-        uuid: uuid.to_string(),
-        username,
-        display_name: display_name.unwrap_or_default(),
-    }))
+#[derive(Deserialize)]
+struct NewInfo {
+    username: Option<String>,
+    display_name: Option<String>,
+    password: Option<String>,
+    email: Option<String>,
+}
+
+#[post("/me")]
+pub async fn update(req: HttpRequest, new_info: web::Json<NewInfo>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let headers = req.headers();
+
+    let auth_header = get_auth_header(headers);
+
+    if let Err(error) = auth_header {
+        return Ok(error);
+    }
+
+    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+
+    if let Err(error) = authorized {
+        return Ok(error);
+    }
+
+    let uuid = authorized.unwrap();
+
+    let me_result = Me::get(&data.pool, uuid).await;
+
+    if let Err(error) = me_result {
+        return Ok(error);
+    }
+
+    let me = me_result;
+
+    if let Some(username) = &new_info.username {
+        todo!();
+    }
+
+    if let Some(display_name) = &new_info.display_name {
+        todo!();
+    }
+
+    if let Some(password) = &new_info.password {
+        todo!();
+    }
+
+    if let Some(email) = &new_info.email {
+        todo!();
+    }
+
+    Ok(HttpResponse::Ok().finish())
 }

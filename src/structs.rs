@@ -740,7 +740,7 @@ pub struct Message {
 }
 
 #[derive(FromRow)]
-pub struct InviteBuilder {
+struct InviteBuilder {
     id: String,
     user_uuid: String,
     guild_uuid: String,
@@ -782,5 +782,123 @@ impl Invite {
         }
 
         Ok(invite.unwrap().build())
+    }
+}
+
+#[derive(FromRow, Clone)]
+struct UserBuilder {
+    uuid: String,
+    username: String,
+    display_name: Option<String>,
+    avatar: Option<String>,
+    email: Option<String>,
+}
+
+impl UserBuilder {
+    fn build(self) -> User {
+        User {
+            uuid: Uuid::from_str(&self.uuid).unwrap(),
+            username: self.username,
+            display_name: self.display_name,
+            avatar: self.avatar,
+            email: self.email,
+        }
+    }
+}
+
+#[derive(Serialize, Clone)]
+pub struct User {
+    uuid: Uuid,
+    username: String,
+    display_name: Option<String>,
+    avatar: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<String>,
+}
+
+impl User {
+    pub async fn fetch_one(pool: &Pool<Postgres>, user_uuid: Uuid) -> Result<Self, HttpResponse> {
+        let user_result: Result<UserBuilder, sqlx::Error> =
+            sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), username, display_name, avatar, email FROM users WHERE uuid = '{}'", user_uuid))
+                .fetch_one(pool)
+                .await;
+
+        if let Err(error) = user_result {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish());
+        }
+
+        let mut user = user_result.unwrap();
+
+        // Override email since it shouldn't be returned by this (FromRow impl kinda sucks since it doesnt automatically count missing columns as Nulls)
+        user.email = None;
+
+        Ok(user.build())
+    }
+
+    pub async fn fetch_all(pool: &Pool<Postgres>, start: i32, amount: i32) -> Result<Vec<Self>, HttpResponse> {
+        let row = sqlx::query_as("SELECT CAST(uuid AS VARCHAR), username, display_name, avatar, email FROM users ORDER BY username LIMIT $1 OFFSET $2")
+            .bind(amount)
+            .bind(start)
+            .fetch_all(pool)
+            .await;
+
+        if let Err(error) = row {
+            error!("{}", error);
+            return Err(HttpResponse::InternalServerError().finish());
+        }
+
+        let accounts: Vec<UserBuilder> = row.unwrap();
+
+        Ok(accounts.iter().map(|u| u.clone().build()).collect())
+    }
+}
+
+#[derive(FromRow)]
+struct MeBuilder {
+    uuid: String,
+    username: String,
+    display_name: Option<String>,
+    avatar: Option<String>,
+    email: String,
+    email_verified: bool,
+}
+
+impl MeBuilder {
+    fn build(self) -> Me {
+        Me {
+            uuid: Uuid::from_str(&self.uuid).unwrap(),
+            username: self.username,
+            display_name: self.display_name,
+            avatar: self.avatar,
+            email: self.email,
+            email_verified: self.email_verified,
+        }
+    }
+}
+
+#[derive(Serialize)]
+pub struct Me {
+    uuid: Uuid,
+    username: String,
+    display_name: Option<String>,
+    avatar: Option<String>,
+    email: String,
+    email_verified: bool,
+}
+
+impl Me {
+    pub async fn get(pool: &Pool<Postgres>, user_uuid: Uuid) -> Result<Self, HttpResponse> {
+        let me: Result<MeBuilder, sqlx::Error> = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), username, display_name, avatar, email, email_verified FROM users WHERE uuid = '{}'", user_uuid))
+            .fetch_one(pool)
+            .await;
+
+        if let Err(error) = me {
+            error!("{}", error);
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(me.unwrap().build())
     }
 }

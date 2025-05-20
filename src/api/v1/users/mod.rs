@@ -1,8 +1,6 @@
-use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
+use crate::{api::v1::auth::check_access_token, structs::User, utils::get_auth_header, Data};
 use actix_web::{Error, HttpRequest, HttpResponse, Scope, get, web};
-use log::error;
-use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use serde::Deserialize;
 
 mod me;
 mod uuid;
@@ -11,14 +9,6 @@ mod uuid;
 struct RequestQuery {
     start: Option<i32>,
     amount: Option<i32>,
-}
-
-#[derive(Serialize, FromRow)]
-struct Response {
-    uuid: String,
-    username: String,
-    display_name: Option<String>,
-    email: String,
 }
 
 pub fn web() -> Scope {
@@ -52,18 +42,11 @@ pub async fn res(
         return Ok(error);
     }
 
-    let row = sqlx::query_as("SELECT CAST(uuid AS VARCHAR), username, display_name, email FROM users ORDER BY username LIMIT $1 OFFSET $2")
-        .bind(amount)
-        .bind(start)
-        .fetch_all(&data.pool)
-        .await;
+    let accounts = User::fetch_all(&data.pool, start, amount).await;
 
-    if let Err(error) = row {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
+    if let Err(error) = accounts {
+        return Ok(error);
     }
 
-    let accounts: Vec<Response> = row.unwrap();
-
-    Ok(HttpResponse::Ok().json(accounts))
+    Ok(HttpResponse::Ok().json(accounts.unwrap()))
 }

@@ -68,6 +68,7 @@ async fn main() -> Result<(), Error> {
             password varchar(512) NOT NULL,
             email varchar(100) NOT NULL,
             email_verified boolean NOT NULL DEFAULT FALSE,
+            avatar varchar(100) DEFAULT NULL,
             is_deleted boolean NOT NULL DEFAULT FALSE,
             deleted_at int8 DEFAULT NULL,
             CONSTRAINT unique_username_active UNIQUE NULLS NOT DISTINCT (username, is_deleted),

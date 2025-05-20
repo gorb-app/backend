@@ -1,16 +1,8 @@
 use actix_web::{Error, HttpRequest, HttpResponse, get, web};
 use log::error;
-use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
-
-#[derive(Serialize, Clone)]
-struct Response {
-    uuid: String,
-    username: String,
-    display_name: String,
-}
+use crate::{api::v1::auth::check_access_token, structs::User, utils::get_auth_header, Data};
 
 #[get("/{uuid}")]
 pub async fn res(
@@ -42,25 +34,13 @@ pub async fn res(
             .body(cache_hit));
     }
 
-    let row = sqlx::query_as(&format!(
-        "SELECT username, display_name FROM users WHERE uuid = '{}'",
-        uuid
-    ))
-    .fetch_one(&data.pool)
-    .await;
+    let user_result = User::fetch_one(&data.pool, uuid).await;
 
-    if let Err(error) = row {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
+    if let Err(error) = user_result {
+        return Ok(error);
     }
 
-    let (username, display_name): (String, Option<String>) = row.unwrap();
-
-    let user = Response {
-        uuid: uuid.to_string(),
-        username,
-        display_name: display_name.unwrap_or_default(),
-    };
+    let user = user_result.unwrap();
 
     let cache_result = data
         .set_cache_key(uuid.to_string(), user.clone(), 1800)
