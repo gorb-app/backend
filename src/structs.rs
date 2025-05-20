@@ -837,7 +837,7 @@ impl User {
         Ok(user.build())
     }
 
-    pub async fn fetch_all(pool: &Pool<Postgres>, start: i32, amount: i32) -> Result<Vec<Self>, HttpResponse> {
+    pub async fn fetch_amount(pool: &Pool<Postgres>, start: i32, amount: i32) -> Result<Vec<Self>, HttpResponse> {
         let row = sqlx::query_as("SELECT CAST(uuid AS VARCHAR), username, display_name, avatar, email FROM users ORDER BY username LIMIT $1 OFFSET $2")
             .bind(amount)
             .bind(start)

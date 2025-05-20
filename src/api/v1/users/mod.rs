@@ -42,7 +42,7 @@ pub async fn res(
         return Ok(error);
     }
 
-    let accounts = User::fetch_all(&data.pool, start, amount).await;
+    let accounts = User::fetch_amount(&data.pool, start, amount).await;
 
     if let Err(error) = accounts {
         return Ok(error);
