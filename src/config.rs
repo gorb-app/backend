@@ -1,14 +1,17 @@
 use crate::Error;
+use bunny_api_tokio::edge_storage::Endpoint;
 use log::debug;
 use serde::Deserialize;
 use sqlx::postgres::PgConnectOptions;
 use tokio::fs::read_to_string;
+use url::Url;
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigBuilder {
     database: Database,
     cache_database: CacheDatabase,
     web: Option<WebBuilder>,
+    bunny: BunnyBuilder,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -36,6 +39,14 @@ struct WebBuilder {
     _ssl: Option<bool>,
 }
 
+#[derive(Debug, Deserialize)]
+struct BunnyBuilder {
+    api_key: String,
+    endpoint: String,
+    storage_zone: String,
+    cdn_url: Url,
+}
+
 impl ConfigBuilder {
     pub async fn load(path: String) -> Result<Self, Error> {
         debug!("loading config from: {}", path);
@@ -59,10 +70,31 @@ impl ConfigBuilder {
             }
         };
 
+        let endpoint = match &*self.bunny.endpoint {
+            "Frankfurt" => Endpoint::Frankfurt,
+            "London" => Endpoint::London,
+            "New York" => Endpoint::NewYork,
+            "Los Angeles" => Endpoint::LosAngeles,
+            "Singapore" => Endpoint::Singapore,
+            "Stockholm" => Endpoint::Stockholm,
+            "Sao Paulo" => Endpoint::SaoPaulo,
+            "Johannesburg" => Endpoint::Johannesburg,
+            "Sydney" => Endpoint::Sydney,
+            url => Endpoint::Custom(url.to_string()),
+        };
+
+        let bunny = Bunny {
+            api_key: self.bunny.api_key,
+            endpoint,
+            storage_zone: self.bunny.storage_zone,
+            cdn_url: self.bunny.cdn_url,
+        };
+
         Config {
             database: self.database,
             cache_database: self.cache_database,
             web,
+            bunny,
         }
     }
 }
@@ -72,12 +104,21 @@ pub struct Config {
     pub database: Database,
     pub cache_database: CacheDatabase,
     pub web: Web,
+    pub bunny: Bunny,
 }
 
 #[derive(Debug, Clone)]
 pub struct Web {
     pub url: String,
     pub port: u16,
+}
+
+#[derive(Debug, Clone)]
+pub struct Bunny {
+    pub api_key: String,
+    pub endpoint: Endpoint,
+    pub storage_zone: String,
+    pub cdn_url: Url,
 }
 
 impl Database {
