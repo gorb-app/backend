@@ -329,6 +329,57 @@ impl Guild {
         })
     }
 
+    pub async fn fetch_amount(
+        pool: &Pool<Postgres>,
+        start: i32,
+        amount: i32,
+    ) -> Result<Vec<Self>, HttpResponse> {
+        // Fetch guild data from database
+        let rows = sqlx::query_as::<_, (String, String, String, Option<String>)>(
+            "SELECT CAST(uuid AS VARCHAR), CAST(owner_uuid AS VARCHAR), name, description 
+            FROM guilds 
+            ORDER BY name 
+            LIMIT $1 OFFSET $2",
+        )
+        .bind(amount)
+        .bind(start)
+        .fetch_all(pool)
+        .await
+        .map_err(|error| {
+            error!("{}", error);
+            HttpResponse::InternalServerError().finish()
+        })?;
+
+        // Process each guild concurrently
+        let guild_futures = rows.into_iter().map(|(guild_uuid_raw, owner_uuid_raw, name, description)| async move {
+            let uuid = Uuid::from_str(&guild_uuid_raw).map_err(|_| {
+                HttpResponse::BadRequest().body("Invalid guild UUID format")
+            })?;
+
+            let owner_uuid = Uuid::from_str(&owner_uuid_raw).map_err(|_| {
+                HttpResponse::BadRequest().body("Invalid owner UUID format")
+            })?;
+
+            let (member_count, roles) = tokio::try_join!(
+                Member::count(pool, uuid),
+                Role::fetch_all(pool, uuid)
+            )?;
+
+            Ok::<Guild, HttpResponse>(Self {
+                uuid,
+                name,
+                description,
+                icon: String::from("bogus"), // FIXME: Replace with actual icon handling
+                owner_uuid,
+                roles,
+                member_count,
+            })
+        });
+
+        // Execute all futures concurrently and collect results
+        futures::future::try_join_all(guild_futures).await
+    }
+
     pub async fn new(
         pool: &Pool<Postgres>,
         name: String,
@@ -709,4 +760,10 @@ impl Invite {
 
         Ok(invite.unwrap().build())
     }
+}
+
+#[derive(Deserialize)]
+pub struct StartAmountQuery {
+    pub start: Option<i32>,
+    pub amount: Option<i32>,
 }

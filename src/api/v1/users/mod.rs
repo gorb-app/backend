@@ -1,17 +1,11 @@
-use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
+use crate::{api::v1::auth::check_access_token, structs::StartAmountQuery, utils::get_auth_header, Data};
 use actix_web::{Error, HttpRequest, HttpResponse, Scope, get, web};
 use log::error;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::prelude::FromRow;
 
 mod me;
 mod uuid;
-
-#[derive(Deserialize)]
-struct RequestQuery {
-    start: Option<i32>,
-    amount: Option<i32>,
-}
 
 #[derive(Serialize, FromRow)]
 struct Response {
@@ -31,7 +25,7 @@ pub fn web() -> Scope {
 #[get("")]
 pub async fn res(
     req: HttpRequest,
-    request_query: web::Query<RequestQuery>,
+    request_query: web::Query<StartAmountQuery>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
