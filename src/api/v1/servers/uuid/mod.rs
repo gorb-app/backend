@@ -4,6 +4,7 @@ use uuid::Uuid;
 mod channels;
 mod invites;
 mod roles;
+mod icon;
 
 use crate::{
     Data,
@@ -30,6 +31,8 @@ pub fn web() -> Scope {
         // Invites
         .service(invites::get)
         .service(invites::create)
+        // Icon
+        .service(icon::upload)
 }
 
 #[get("/{uuid}")]

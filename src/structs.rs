@@ -1,9 +1,12 @@
 use std::str::FromStr;
 
-use actix_web::HttpResponse;
+use actix_web::{web::BytesMut, HttpResponse};
+use bindet::FileType;
 use log::error;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres, prelude::FromRow};
+use tokio::task;
+use url::Url;
 use uuid::Uuid;
 
 use crate::Data;
@@ -288,7 +291,7 @@ pub struct Guild {
     pub uuid: Uuid,
     name: String,
     description: Option<String>,
-    icon: String,
+    icon: Option<String>,
     owner_uuid: Uuid,
     pub roles: Vec<Role>,
     member_count: i64,
@@ -297,7 +300,7 @@ pub struct Guild {
 impl Guild {
     pub async fn fetch_one(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
         let row = sqlx::query_as(&format!(
-            "SELECT CAST(owner_uuid AS VARCHAR), name, description FROM guilds WHERE uuid = '{}'",
+            "SELECT CAST(owner_uuid AS VARCHAR), name, description, icon FROM guilds WHERE uuid = '{}'",
             guild_uuid
         ))
         .fetch_one(pool)
@@ -309,7 +312,7 @@ impl Guild {
             return Err(HttpResponse::InternalServerError().finish());
         }
 
-        let (owner_uuid_raw, name, description): (String, String, Option<String>) = row.unwrap();
+        let (owner_uuid_raw, name, description, icon): (String, String, Option<String>, Option<String>) = row.unwrap();
 
         let owner_uuid = Uuid::from_str(&owner_uuid_raw).unwrap();
 
@@ -321,8 +324,7 @@ impl Guild {
             uuid: guild_uuid,
             name,
             description,
-            // FIXME: This isnt supposed to be bogus
-            icon: String::from("bogus"),
+            icon,
             owner_uuid,
             roles,
             member_count,
@@ -378,7 +380,7 @@ impl Guild {
             uuid: guild_uuid,
             name,
             description,
-            icon: "bogus".to_string(),
+            icon: None,
             owner_uuid,
             roles: vec![],
             member_count: 1,
@@ -442,6 +444,78 @@ impl Guild {
             user_uuid: member.user_uuid,
             guild_uuid: self.uuid,
         })
+    }
+
+    // FIXME: Horrible security
+    pub async fn set_icon(&mut self, bunny_cdn: &bunny_api_tokio::Client, pool: &Pool<Postgres>, cdn_url: Url, icon: BytesMut) -> Result<(), HttpResponse> {
+        let ico = icon.clone();
+
+        let result = task::spawn_blocking(move || {
+            let buf = std::io::Cursor::new(ico.to_vec());
+
+            let detect = bindet::detect(buf).map_err(|e| e.kind());
+
+            if let Ok(Some(file_type)) = detect {
+                if file_type.likely_to_be == vec![FileType::Jpg] {
+                    return String::from("jpg")
+                } else if file_type.likely_to_be == vec![FileType::Png] {
+                    return String::from("png")
+                }
+            }
+            String::from("unknown")
+        }).await;
+
+        if let Err(error) = result {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        let image_type = result.unwrap();
+
+        if image_type == "unknown" {
+            return Err(HttpResponse::BadRequest().finish())
+        }
+
+        if let Some(icon) = &self.icon {
+            let relative_url = icon.trim_start_matches("https://cdn.gorb.app/");
+
+            let delete_result = bunny_cdn.storage.delete(relative_url).await;
+
+            if let Err(error) = delete_result {
+                error!("{}", error);
+
+                return Err(HttpResponse::InternalServerError().finish())
+            }
+        }
+
+        let path = format!("icons/{}/icon.{}", self.uuid, image_type);
+
+        let upload_result = bunny_cdn.storage.upload(path.clone(), icon.into()).await;
+
+        if let Err(error) = upload_result {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        
+        let icon_url = cdn_url.join(&path).unwrap();
+
+        let row = sqlx::query(&format!("UPDATE guilds SET icon = $1 WHERE uuid = '{}'", self.uuid))
+            .bind(icon_url.as_str())
+            .execute(pool)
+            .await;
+
+        if let Err(error) = row {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        self.icon = Some(icon_url.to_string());
+
+        Ok(())
     }
 }
 
