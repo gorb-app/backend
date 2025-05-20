@@ -37,7 +37,9 @@ pub async fn res(
     let cache_result = data.get_cache_key(uuid.to_string()).await;
 
     if let Ok(cache_hit) = cache_result {
-        return Ok(HttpResponse::Ok().content_type("application/json").body(cache_hit))
+        return Ok(HttpResponse::Ok()
+            .content_type("application/json")
+            .body(cache_hit));
     }
 
     let row = sqlx::query_as(&format!(
@@ -60,7 +62,9 @@ pub async fn res(
         display_name: display_name.unwrap_or_default(),
     };
 
-    let cache_result = data.set_cache_key(uuid.to_string(), user.clone(), 1800).await;
+    let cache_result = data
+        .set_cache_key(uuid.to_string(), user.clone(), 1800)
+        .await;
 
     if let Err(error) = cache_result {
         error!("{}", error);

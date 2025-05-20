@@ -1,9 +1,7 @@
-use actix_web::{web, Scope};
+use actix_web::{Scope, web};
 
 mod id;
 
 pub fn web() -> Scope {
-    web::scope("/invites")
-        .service(id::get)
-        .service(id::join)
+    web::scope("/invites").service(id::get).service(id::join)
 }

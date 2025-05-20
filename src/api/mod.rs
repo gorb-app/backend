@@ -5,7 +5,5 @@ mod v1;
 mod versions;
 
 pub fn web() -> Scope {
-    web::scope("/api")
-        .service(v1::web())
-        .service(versions::res)
+    web::scope("/api").service(v1::web()).service(versions::res)
 }

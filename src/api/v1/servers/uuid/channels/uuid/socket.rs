@@ -1,13 +1,23 @@
-use actix_web::{get, rt, web, Error, HttpRequest, HttpResponse};
+use actix_web::{Error, HttpRequest, HttpResponse, get, rt, web};
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt as _;
-use uuid::Uuid;
 use log::error;
+use uuid::Uuid;
 
-use crate::{api::v1::auth::check_access_token, structs::{Channel, Member}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    structs::{Channel, Member},
+    utils::get_auth_header,
+};
 
 #[get("{uuid}/channels/{channel_uuid}/socket")]
-pub async fn echo(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, stream: web::Payload, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn echo(
+    req: HttpRequest,
+    path: web::Path<(Uuid, Uuid)>,
+    stream: web::Payload,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     // Get all headers
     let headers = req.headers();
 
@@ -15,7 +25,7 @@ pub async fn echo(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, stream: web::
     let auth_header = get_auth_header(headers);
 
     if let Err(error) = auth_header {
-        return Ok(error)
+        return Ok(error);
     }
 
     // Get uuids from path
@@ -25,7 +35,7 @@ pub async fn echo(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, stream: web::
     let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
 
     if let Err(error) = authorized {
-        return Ok(error)
+        return Ok(error);
     }
 
     // Unwrap user uuid from authorization
@@ -50,13 +60,15 @@ pub async fn echo(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, stream: web::
         let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
 
         if let Err(error) = channel_result {
-            return Ok(error)
+            return Ok(error);
         }
-    
+
         channel = channel_result.unwrap();
-    
-        let cache_result = data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60).await;
-    
+
+        let cache_result = data
+            .set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
+            .await;
+
         if let Err(error) = cache_result {
             error!("{}", error);
             return Ok(HttpResponse::InternalServerError().finish());
@@ -74,7 +86,7 @@ pub async fn echo(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, stream: web::
 
     if let Err(error) = pubsub_result {
         error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish())
+        return Ok(HttpResponse::InternalServerError().finish());
     }
 
     let mut session_2 = session_1.clone();
@@ -90,14 +102,25 @@ pub async fn echo(req: HttpRequest, path: web::Path<(Uuid, Uuid)>, stream: web::
 
     // start task but don't wait for it
     rt::spawn(async move {
-        let mut conn = data.cache_pool.get_multiplexed_tokio_connection().await.unwrap();
+        let mut conn = data
+            .cache_pool
+            .get_multiplexed_tokio_connection()
+            .await
+            .unwrap();
         // receive messages from websocket
         while let Some(msg) = stream.next().await {
             match msg {
                 Ok(AggregatedMessage::Text(text)) => {
                     // echo text message
-                    redis::cmd("PUBLISH").arg(&[channel_uuid.to_string(), text.to_string()]).exec_async(&mut conn).await.unwrap();
-                    channel.new_message(&data.pool, uuid, text.to_string()).await.unwrap();
+                    redis::cmd("PUBLISH")
+                        .arg(&[channel_uuid.to_string(), text.to_string()])
+                        .exec_async(&mut conn)
+                        .await
+                        .unwrap();
+                    channel
+                        .new_message(&data.pool, uuid, text.to_string())
+                        .await
+                        .unwrap();
                 }
 
                 Ok(AggregatedMessage::Binary(bin)) => {
