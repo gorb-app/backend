@@ -1,15 +1,8 @@
-use crate::{api::v1::auth::check_access_token, structs::User, utils::get_auth_header, Data};
+use crate::{api::v1::auth::check_access_token, structs::{StartAmountQuery, User}, utils::get_auth_header, Data};
 use actix_web::{Error, HttpRequest, HttpResponse, Scope, get, web};
-use serde::Deserialize;
 
 mod me;
 mod uuid;
-
-#[derive(Deserialize)]
-struct RequestQuery {
-    start: Option<i32>,
-    amount: Option<i32>,
-}
 
 pub fn web() -> Scope {
     web::scope("/users")
@@ -21,7 +14,7 @@ pub fn web() -> Scope {
 #[get("")]
 pub async fn res(
     req: HttpRequest,
-    request_query: web::Query<RequestQuery>,
+    request_query: web::Query<StartAmountQuery>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
