@@ -1,14 +1,15 @@
 use std::str::FromStr;
 
 use actix_web::HttpResponse;
+use diesel::Selectable;
 use log::error;
 use serde::{Deserialize, Serialize};
-use sqlx::{Pool, Postgres, prelude::FromRow};
 use uuid::Uuid;
 
-use crate::Data;
+use crate::{Conn, Data, tables::*};
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Selectable)]
+#[diesel(table_name = channels)]
 pub struct Channel {
     pub uuid: Uuid,
     pub guild_uuid: Uuid,
@@ -17,7 +18,7 @@ pub struct Channel {
     pub permissions: Vec<ChannelPermission>,
 }
 
-#[derive(Serialize, Clone, FromRow)]
+#[derive(Serialize, Clone)]
 struct ChannelPermissionBuilder {
     role_uuid: String,
     permissions: i32,
@@ -32,7 +33,8 @@ impl ChannelPermissionBuilder {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, FromRow)]
+#[derive(Serialize, Deserialize, Clone, Selectable)]
+#[diesel(table_name = channel_permissions)]
 pub struct ChannelPermission {
     pub role_uuid: Uuid,
     pub permissions: i32,
@@ -40,15 +42,10 @@ pub struct ChannelPermission {
 
 impl Channel {
     pub async fn fetch_all(
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         guild_uuid: Uuid,
     ) -> Result<Vec<Self>, HttpResponse> {
-        let row = sqlx::query_as(&format!(
-            "SELECT CAST(uuid AS VARCHAR), name, description FROM channels WHERE guild_uuid = '{}'",
-            guild_uuid
-        ))
-        .fetch_all(pool)
-        .await;
+        
 
         if let Err(error) = row {
             error!("{}", error);
