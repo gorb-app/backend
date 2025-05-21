@@ -6,7 +6,7 @@ use log::error;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Conn, Data, tables::*};
+use crate::{Conn, Data, schema::*};
 
 #[derive(Serialize, Deserialize, Clone, Selectable)]
 #[diesel(table_name = channels)]

@@ -1,0 +1,156 @@
+// @generated automatically by Diesel CLI.
+
+diesel::table! {
+    access_tokens (token) {
+        #[max_length = 32]
+        token -> Varchar,
+        #[max_length = 64]
+        refresh_token -> Varchar,
+        uuid -> Uuid,
+        created_at -> Int8,
+    }
+}
+
+diesel::table! {
+    channel_permissions (channel_uuid, role_uuid) {
+        channel_uuid -> Uuid,
+        role_uuid -> Uuid,
+        permissions -> Int8,
+    }
+}
+
+diesel::table! {
+    channels (uuid) {
+        uuid -> Uuid,
+        guild_uuid -> Uuid,
+        #[max_length = 32]
+        name -> Varchar,
+        #[max_length = 500]
+        description -> Varchar,
+    }
+}
+
+diesel::table! {
+    guild_members (uuid) {
+        uuid -> Uuid,
+        guild_uuid -> Uuid,
+        user_uuid -> Uuid,
+        #[max_length = 100]
+        nickname -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
+    guilds (uuid) {
+        uuid -> Uuid,
+        owner_uuid -> Uuid,
+        #[max_length = 100]
+        name -> Varchar,
+        #[max_length = 300]
+        description -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
+    instance_permissions (uuid) {
+        uuid -> Uuid,
+        administrator -> Bool,
+    }
+}
+
+diesel::table! {
+    invites (id) {
+        #[max_length = 32]
+        id -> Varchar,
+        guild_uuid -> Uuid,
+        user_uuid -> Uuid,
+    }
+}
+
+diesel::table! {
+    messages (uuid) {
+        uuid -> Uuid,
+        channel_uuid -> Uuid,
+        user_uuid -> Uuid,
+        #[max_length = 4000]
+        message -> Varchar,
+    }
+}
+
+diesel::table! {
+    refresh_tokens (token) {
+        #[max_length = 64]
+        token -> Varchar,
+        uuid -> Uuid,
+        created_at -> Int8,
+        #[max_length = 16]
+        device_name -> Varchar,
+    }
+}
+
+diesel::table! {
+    role_members (role_uuid, member_uuid) {
+        role_uuid -> Uuid,
+        member_uuid -> Uuid,
+    }
+}
+
+diesel::table! {
+    roles (uuid, guild_uuid) {
+        uuid -> Uuid,
+        guild_uuid -> Uuid,
+        #[max_length = 50]
+        name -> Varchar,
+        color -> Int4,
+        position -> Int4,
+        permissions -> Int8,
+    }
+}
+
+diesel::table! {
+    users (uuid) {
+        uuid -> Uuid,
+        #[max_length = 32]
+        username -> Varchar,
+        #[max_length = 64]
+        display_name -> Nullable<Varchar>,
+        #[max_length = 512]
+        password -> Varchar,
+        #[max_length = 100]
+        email -> Varchar,
+        email_verified -> Bool,
+        is_deleted -> Bool,
+        deleted_at -> Nullable<Int8>,
+    }
+}
+
+diesel::joinable!(access_tokens -> refresh_tokens (refresh_token));
+diesel::joinable!(access_tokens -> users (uuid));
+diesel::joinable!(channel_permissions -> channels (channel_uuid));
+diesel::joinable!(channels -> guilds (guild_uuid));
+diesel::joinable!(guild_members -> guilds (guild_uuid));
+diesel::joinable!(guild_members -> users (user_uuid));
+diesel::joinable!(guilds -> users (owner_uuid));
+diesel::joinable!(instance_permissions -> users (uuid));
+diesel::joinable!(invites -> guilds (guild_uuid));
+diesel::joinable!(invites -> users (user_uuid));
+diesel::joinable!(messages -> channels (channel_uuid));
+diesel::joinable!(messages -> users (user_uuid));
+diesel::joinable!(refresh_tokens -> users (uuid));
+diesel::joinable!(role_members -> guild_members (member_uuid));
+diesel::joinable!(roles -> guilds (guild_uuid));
+
+diesel::allow_tables_to_appear_in_same_query!(
+    access_tokens,
+    channel_permissions,
+    channels,
+    guild_members,
+    guilds,
+    instance_permissions,
+    invites,
+    messages,
+    refresh_tokens,
+    role_members,
+    roles,
+    users,
+);
