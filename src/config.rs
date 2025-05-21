@@ -1,7 +1,6 @@
 use crate::Error;
 use log::debug;
 use serde::Deserialize;
-use sqlx::postgres::PgConnectOptions;
 use tokio::fs::read_to_string;
 
 #[derive(Debug, Deserialize)]
@@ -81,13 +80,24 @@ pub struct Web {
 }
 
 impl Database {
-    pub fn connect_options(&self) -> PgConnectOptions {
-        PgConnectOptions::new()
-            .database(&self.database)
-            .host(&self.host)
-            .username(&self.username)
-            .password(&self.password)
-            .port(self.port)
+    pub fn url(&self) -> String {
+        let mut url = String::from("postgres://");
+
+        url += &self.username;
+
+        url += ":";
+        url += &self.password;
+
+        url += "@";
+
+        url += &self.host;
+        url += ":";
+        url += &self.port.to_string();
+
+        url += "/";
+        url += &self.database;
+
+        url
     }
 }
 
