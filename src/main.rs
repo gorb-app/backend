@@ -3,14 +3,19 @@ use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
 use simple_logger::SimpleLogger;
-use sqlx::{PgPool, Pool, Postgres};
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::RunQueryDsl;
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
 mod api;
 
+type Conn = deadpool::managed::Object<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>>;
+
 pub mod structs;
 pub mod utils;
+pub mod tables;
 
 type Error = Box<dyn std::error::Error>;
 
@@ -23,7 +28,7 @@ struct Args {
 
 #[derive(Clone)]
 pub struct Data {
-    pub pool: Pool<Postgres>,
+    pub pool: deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
     pub cache_pool: redis::Client,
     pub _config: Config,
     pub argon2: Argon2<'static>,
@@ -44,9 +49,13 @@ async fn main() -> Result<(), Error> {
 
     let web = config.web.clone();
 
-    let pool = PgPool::connect_with(config.database.connect_options()).await?;
+    // create a new connection pool with the default config
+    let pool_config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(config.database.url());
+    let pool = Pool::builder(pool_config).build()?;
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
+
+    let mut conn = pool.get().await?;
 
     /*
     TODO: Figure out if a table should be used here and if not then what.
@@ -54,7 +63,7 @@ async fn main() -> Result<(), Error> {
 
     TODO: References to time should be removed in favor of using the timestamp built in to UUIDv7 (apart from deleted_at in users)
     */
-    sqlx::raw_sql(
+    diesel::sql_query(
         r#"
         CREATE TABLE IF NOT EXISTS users (
             uuid uuid PRIMARY KEY NOT NULL,
@@ -141,7 +150,7 @@ async fn main() -> Result<(), Error> {
         );
     "#,
     )
-    .execute(&pool)
+    .execute(&mut conn)
     .await?;
 
     /*
