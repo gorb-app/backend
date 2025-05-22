@@ -26,7 +26,7 @@ diesel::table! {
         #[max_length = 32]
         name -> Varchar,
         #[max_length = 500]
-        description -> Varchar,
+        description -> Nullable<Varchar>,
     }
 }
 
