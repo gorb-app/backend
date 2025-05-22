@@ -1,15 +1,42 @@
-use std::str::FromStr;
-
 use actix_web::HttpResponse;
-use diesel::Selectable;
+use diesel::{delete, insert_into, prelude::{Insertable, Queryable}, ExpressionMethods, QueryDsl, Selectable, SelectableHelper};
 use log::error;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use diesel_async::{pooled_connection::AsyncDieselConnectionManager, RunQueryDsl};
 
 use crate::{Conn, Data, schema::*};
 
-#[derive(Serialize, Deserialize, Clone, Selectable)]
+#[derive(Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = channels)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct ChannelBuilder {
+    uuid: Uuid,
+    guild_uuid: Uuid,
+    name: String,
+    description: Option<String>,
+}
+
+impl ChannelBuilder {
+    async fn build(self, conn: &mut Conn) -> Result<Channel, crate::Error> {
+        use self::channel_permissions::dsl::*;
+        let channel_permission: Vec<ChannelPermission> = channel_permissions
+            .filter(channel_uuid.eq(self.uuid))
+            .select((role_uuid, permissions))
+            .load(conn)
+            .await?;
+
+        Ok(Channel {
+            uuid: self.uuid,
+            guild_uuid: self.guild_uuid,
+            name: self.name,
+            description: self.description,
+            permissions: channel_permission,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Channel {
     pub uuid: Uuid,
     pub guild_uuid: Uuid,
@@ -18,116 +45,81 @@ pub struct Channel {
     pub permissions: Vec<ChannelPermission>,
 }
 
-#[derive(Serialize, Clone)]
-struct ChannelPermissionBuilder {
-    role_uuid: String,
-    permissions: i32,
-}
-
-impl ChannelPermissionBuilder {
-    fn build(&self) -> ChannelPermission {
-        ChannelPermission {
-            role_uuid: Uuid::from_str(&self.role_uuid).unwrap(),
-            permissions: self.permissions,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Clone, Selectable)]
+#[derive(Serialize, Deserialize, Clone, Queryable)]
 #[diesel(table_name = channel_permissions)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ChannelPermission {
     pub role_uuid: Uuid,
-    pub permissions: i32,
+    pub permissions: i64,
 }
 
 impl Channel {
     pub async fn fetch_all(
-        conn: &mut Conn,
+        pool: &deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
         guild_uuid: Uuid,
     ) -> Result<Vec<Self>, HttpResponse> {
-        
+        let mut conn = pool.get().await.unwrap();
 
-        if let Err(error) = row {
+        use channels::dsl;
+        let channel_builders_result: Result<Vec<ChannelBuilder>, diesel::result::Error> = dsl::channels
+            .filter(dsl::guild_uuid.eq(guild_uuid))
+            .select(ChannelBuilder::as_select())
+            .load(&mut conn)
+            .await;
+
+        if let Err(error) = channel_builders_result {
             error!("{}", error);
 
             return Err(HttpResponse::InternalServerError().finish());
         }
 
-        let channels: Vec<(String, String, Option<String>)> = row.unwrap();
+        let channel_builders = channel_builders_result.unwrap();
 
-        let futures = channels.iter().map(async |t| {
-            let (uuid, name, description) = t.to_owned();
-
-            let row = sqlx::query_as(&format!("SELECT CAST(role_uuid AS VARCHAR), permissions FROM channel_permissions WHERE channel_uuid = '{}'", uuid))
-                .fetch_all(pool)
-                .await;
-
-            if let Err(error) = row {
-                error!("{}", error);
-
-                return Err(HttpResponse::InternalServerError().finish())
-            }
-
-            let channel_permission_builders: Vec<ChannelPermissionBuilder> = row.unwrap();
-
-            Ok(Self {
-                uuid: Uuid::from_str(&uuid).unwrap(),
-                guild_uuid,
-                name,
-                description,
-                permissions: channel_permission_builders.iter().map(|b| b.build()).collect(),
-            })
+        let channel_futures = channel_builders.iter().map(async move |c| {
+            let mut conn = pool.get().await?;
+            c.clone().build(&mut conn).await
         });
 
-        let channels = futures::future::join_all(futures).await;
+        
+        let channels = futures::future::try_join_all(channel_futures).await;
 
-        let channels: Result<Vec<Channel>, HttpResponse> = channels.into_iter().collect();
+        if let Err(error) = channels {
+            error!("{}", error);
 
-        channels
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(channels.unwrap())
     }
 
     pub async fn fetch_one(
-        pool: &Pool<Postgres>,
-        guild_uuid: Uuid,
+        conn: &mut Conn,
         channel_uuid: Uuid,
     ) -> Result<Self, HttpResponse> {
-        let row = sqlx::query_as(&format!(
-            "SELECT name, description FROM channels WHERE guild_uuid = '{}' AND uuid = '{}'",
-            guild_uuid, channel_uuid
-        ))
-        .fetch_one(pool)
-        .await;
-
-        if let Err(error) = row {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let (name, description): (String, Option<String>) = row.unwrap();
-
-        let row = sqlx::query_as(&format!("SELECT CAST(role_uuid AS VARCHAR), permissions FROM channel_permissions WHERE channel_uuid = '{}'", channel_uuid))
-            .fetch_all(pool)
+        use channels::dsl;
+        let channel_builder_result: Result<ChannelBuilder, diesel::result::Error> = dsl::channels
+            .filter(dsl::uuid.eq(channel_uuid))
+            .select(ChannelBuilder::as_select())
+            .get_result(conn)
             .await;
 
-        if let Err(error) = row {
+        if let Err(error) = channel_builder_result {
             error!("{}", error);
 
-            return Err(HttpResponse::InternalServerError().finish());
+            return Err(HttpResponse::InternalServerError().finish())
         }
 
-        let channel_permission_builders: Vec<ChannelPermissionBuilder> = row.unwrap();
+        let channel_builder = channel_builder_result.unwrap();
 
-        Ok(Self {
-            uuid: channel_uuid,
-            guild_uuid,
-            name,
-            description,
-            permissions: channel_permission_builders
-                .iter()
-                .map(|b| b.build())
-                .collect(),
-        })
+        let channel = channel_builder.build(conn).await;
+
+        if let Err(error) = channel {
+            error!("{}", error);
+
+            return Err(HttpResponse::InternalServerError().finish())
+        }
+
+        Ok(channel.unwrap())
     }
 
     pub async fn new(
@@ -136,19 +128,28 @@ impl Channel {
         name: String,
         description: Option<String>,
     ) -> Result<Self, HttpResponse> {
+        let mut conn = data.pool.get().await.unwrap();
+
         let channel_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!("INSERT INTO channels (uuid, guild_uuid, name, description) VALUES ('{}', '{}', $1, $2)", channel_uuid, guild_uuid))
-            .bind(&name)
-            .bind(&description)
-            .execute(&data.pool)
+        let new_channel = ChannelBuilder {
+            uuid: channel_uuid,
+            guild_uuid: guild_uuid,
+            name: name.clone(),
+            description: description.clone(),
+        };
+
+        let insert_result = insert_into(channels::table)
+            .values(new_channel)
+            .execute(&mut conn)
             .await;
 
-        if let Err(error) = row {
+        if let Err(error) = insert_result {
             error!("{}", error);
             return Err(HttpResponse::InternalServerError().finish());
         }
 
+        // returns different object because there's no reason to build the channelbuilder (wastes 1 database request)
         let channel = Self {
             uuid: channel_uuid,
             guild_uuid,
@@ -176,13 +177,12 @@ impl Channel {
         Ok(channel)
     }
 
-    pub async fn delete(self, pool: &Pool<Postgres>) -> Result<(), HttpResponse> {
-        let result = sqlx::query(&format!(
-            "DELETE FROM channels WHERE channel_uuid = '{}'",
-            self.uuid
-        ))
-        .execute(pool)
-        .await;
+    pub async fn delete(self, conn: &mut Conn) -> Result<(), HttpResponse> {
+        use channels::dsl;
+        let result = delete(channels::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .execute(conn)
+            .await;
 
         if let Err(error) = result {
             error!("{}", error);
@@ -195,50 +195,53 @@ impl Channel {
 
     pub async fn fetch_messages(
         &self,
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         amount: i64,
         offset: i64,
     ) -> Result<Vec<Message>, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), CAST(user_uuid AS VARCHAR), CAST(channel_uuid AS VARCHAR), message FROM messages WHERE channel_uuid = '{}' ORDER BY uuid DESC LIMIT $1 OFFSET $2", self.uuid))
-            .bind(amount)
-            .bind(offset)
-            .fetch_all(pool)
+        use messages::dsl;
+        let messages: Result<Vec<Message>, diesel::result::Error> = dsl::messages
+            .filter(dsl::channel_uuid.eq(self.uuid))
+            .select(Message::as_select())
+            .limit(amount)
+            .offset(offset)
+            .load(conn)
             .await;
 
-        if let Err(error) = row {
+        if let Err(error) = messages {
             error!("{}", error);
             return Err(HttpResponse::InternalServerError().finish());
         }
 
-        let message_builders: Vec<MessageBuilder> = row.unwrap();
-
-        Ok(message_builders.iter().map(|b| b.build()).collect())
+        Ok(messages.unwrap())
     }
 
     pub async fn new_message(
         &self,
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         user_uuid: Uuid,
         message: String,
     ) -> Result<Message, HttpResponse> {
         let message_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!("INSERT INTO messages (uuid, channel_uuid, user_uuid, message) VALUES ('{}', '{}', '{}', $1)", message_uuid, self.uuid, user_uuid))
-            .bind(&message)
-            .execute(pool)
-            .await;
-
-        if let Err(error) = row {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        Ok(Message {
+        let message = Message {
             uuid: message_uuid,
             channel_uuid: self.uuid,
             user_uuid,
             message,
-        })
+        };
+
+        let insert_result = insert_into(messages::table)
+            .values(message.clone())
+            .execute(conn)
+            .await;
+
+        if let Err(error) = insert_result {
+            error!("{}", error);
+            return Err(HttpResponse::InternalServerError().finish());
+        }
+
+        Ok(message)
     }
 }
 
@@ -280,6 +283,34 @@ impl Permissions {
     }
 }
 
+#[derive(Serialize, Queryable, Selectable, Insertable, Clone)]
+#[diesel(table_name = guilds)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+struct GuildBuilder {
+    uuid: Uuid,
+    name: String,
+    description: Option<String>,
+    owner_uuid: Uuid,
+}
+
+impl GuildBuilder {
+    async fn build(self, conn: &mut Conn) -> Result<Guild, HttpResponse> {
+        let member_count = Member::count(conn, self.uuid).await?;
+
+        let roles = Role::fetch_all(conn, self.uuid).await?;
+
+        Ok(Guild {
+            uuid: self.uuid,
+            name: self.name,
+            description: self.description,
+            icon: String::from("bogus"),
+            owner_uuid: self.owner_uuid,
+            roles: roles,
+            member_count: member_count,
+        })
+    }
+}
+
 #[derive(Serialize)]
 pub struct Guild {
     pub uuid: Uuid,
@@ -292,85 +323,50 @@ pub struct Guild {
 }
 
 impl Guild {
-    pub async fn fetch_one(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
-        let row = sqlx::query_as(&format!(
-            "SELECT CAST(owner_uuid AS VARCHAR), name, description FROM guilds WHERE uuid = '{}'",
-            guild_uuid
-        ))
-        .fetch_one(pool)
-        .await;
+    pub async fn fetch_one(conn: &mut Conn, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
+        use guilds::dsl;
+        let guild_builder: Result<GuildBuilder, diesel::result::Error> = dsl::guilds
+            .filter(dsl::uuid.eq(guild_uuid))
+            .select(GuildBuilder::as_select())
+            .get_result(conn)
+            .await;
 
-        if let Err(error) = row {
+        if let Err(error) = guild_builder {
             error!("{}", error);
 
             return Err(HttpResponse::InternalServerError().finish());
         }
 
-        let (owner_uuid_raw, name, description): (String, String, Option<String>) = row.unwrap();
+        let guild = guild_builder.unwrap().build(conn).await?;
 
-        let owner_uuid = Uuid::from_str(&owner_uuid_raw).unwrap();
-
-        let member_count = Member::count(pool, guild_uuid).await?;
-
-        let roles = Role::fetch_all(pool, guild_uuid).await?;
-
-        Ok(Self {
-            uuid: guild_uuid,
-            name,
-            description,
-            // FIXME: This isnt supposed to be bogus
-            icon: String::from("bogus"),
-            owner_uuid,
-            roles,
-            member_count,
-        })
+        Ok(guild)
     }
 
     pub async fn fetch_amount(
-        pool: &Pool<Postgres>,
-        start: i32,
-        amount: i32,
+        pool: &deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
+        offset: i64,
+        amount: i64,
     ) -> Result<Vec<Self>, HttpResponse> {
         // Fetch guild data from database
-        let rows = sqlx::query_as::<_, (String, String, String, Option<String>)>(
-            "SELECT CAST(uuid AS VARCHAR), CAST(owner_uuid AS VARCHAR), name, description 
-            FROM guilds 
-            ORDER BY name 
-            LIMIT $1 OFFSET $2",
-        )
-        .bind(amount)
-        .bind(start)
-        .fetch_all(pool)
-        .await
-        .map_err(|error| {
-            error!("{}", error);
-            HttpResponse::InternalServerError().finish()
-        })?;
+        let mut conn = pool.get().await.unwrap();
+
+        use guilds::dsl;
+        let guild_builders: Vec<GuildBuilder> = dsl::guilds
+            .select(GuildBuilder::as_select())
+            .order_by(dsl::uuid)
+            .offset(offset)
+            .limit(amount)
+            .load(&mut conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
 
         // Process each guild concurrently
-        let guild_futures = rows.into_iter().map(|(guild_uuid_raw, owner_uuid_raw, name, description)| async move {
-            let uuid = Uuid::from_str(&guild_uuid_raw).map_err(|_| {
-                HttpResponse::BadRequest().body("Invalid guild UUID format")
-            })?;
-
-            let owner_uuid = Uuid::from_str(&owner_uuid_raw).map_err(|_| {
-                HttpResponse::BadRequest().body("Invalid owner UUID format")
-            })?;
-
-            let (member_count, roles) = tokio::try_join!(
-                Member::count(pool, uuid),
-                Role::fetch_all(pool, uuid)
-            )?;
-
-            Ok::<Guild, HttpResponse>(Self {
-                uuid,
-                name,
-                description,
-                icon: String::from("bogus"), // FIXME: Replace with actual icon handling
-                owner_uuid,
-                roles,
-                member_count,
-            })
+        let guild_futures = guild_builders.iter().map(async move |g| {
+            let mut conn = pool.get().await.unwrap();
+            g.clone().build(&mut conn).await
         });
 
         // Execute all futures concurrently and collect results
@@ -378,49 +374,28 @@ impl Guild {
     }
 
     pub async fn new(
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         name: String,
         description: Option<String>,
         owner_uuid: Uuid,
     ) -> Result<Self, HttpResponse> {
         let guild_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!(
-            "INSERT INTO guilds (uuid, owner_uuid, name, description) VALUES ('{}', '{}', $1, $2)",
-            guild_uuid, owner_uuid
-        ))
-        .bind(&name)
-        .bind(&description)
-        .execute(pool)
-        .await;
+        let guild_builder = GuildBuilder {
+            uuid: guild_uuid,
+            name: name.clone(),
+            description: description.clone(),
+            owner_uuid,
+        };
 
-        if let Err(error) = row {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let row = sqlx::query(&format!(
-            "INSERT INTO guild_members (uuid, guild_uuid, user_uuid) VALUES ('{}', '{}', '{}')",
-            Uuid::now_v7(),
-            guild_uuid,
-            owner_uuid
-        ))
-        .execute(pool)
-        .await;
-
-        if let Err(error) = row {
-            error!("{}", error);
-
-            let row = sqlx::query(&format!("DELETE FROM guilds WHERE uuid = '{}'", guild_uuid))
-                .execute(pool)
-                .await;
-
-            if let Err(error) = row {
+        insert_into(guilds::table)
+            .values(guild_builder)
+            .execute(conn)
+            .await
+            .map_err(|error| {
                 error!("{}", error);
-            }
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
+                HttpResponse::InternalServerError().finish()
+            })?;
 
         Ok(Guild {
             uuid: guild_uuid,
@@ -433,168 +408,116 @@ impl Guild {
         })
     }
 
-    pub async fn get_invites(&self, pool: &Pool<Postgres>) -> Result<Vec<Invite>, HttpResponse> {
-        let invites = sqlx::query_as(&format!(
-            "SELECT (id, guild_uuid, user_uuid) FROM invites WHERE guild_uuid = '{}'",
-            self.uuid
-        ))
-        .fetch_all(pool)
-        .await;
+    pub async fn get_invites(&self, conn: &mut Conn) -> Result<Vec<Invite>, HttpResponse> {
+        use invites::dsl;
+        let invites = dsl::invites
+            .filter(dsl::guild_uuid.eq(self.uuid))
+            .select(Invite::as_select())
+            .load(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
 
-        if let Err(error) = invites {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        Ok(invites
-            .unwrap()
-            .iter()
-            .map(|b: &InviteBuilder| b.build())
-            .collect())
+        Ok(invites)
     }
 
     pub async fn create_invite(
         &self,
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         member: &Member,
         custom_id: Option<String>,
     ) -> Result<Invite, HttpResponse> {
         let invite_id;
 
-        if custom_id.is_none() {
-            let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-
-            invite_id = random_string::generate(8, charset);
-        } else {
-            invite_id = custom_id.unwrap();
+        if let Some(id) = custom_id {
+            invite_id = id;
             if invite_id.len() > 32 {
                 return Err(HttpResponse::BadRequest().finish());
             }
+        } else {
+            let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+            invite_id = random_string::generate(8, charset);
         }
 
-        let result = sqlx::query(&format!(
-            "INSERT INTO invites (id, guild_uuid, user_uuid) VALUES ($1, '{}', '{}'",
-            self.uuid, member.user_uuid
-        ))
-        .bind(&invite_id)
-        .execute(pool)
-        .await;
-
-        if let Err(error) = result {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        Ok(Invite {
+        let invite = Invite {
             id: invite_id,
             user_uuid: member.user_uuid,
             guild_uuid: self.uuid,
-        })
+        };
+
+        insert_into(invites::table)
+            .values(invite.clone())
+            .execute(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
+
+        Ok(invite)
     }
 }
 
-#[derive(FromRow)]
-struct RoleBuilder {
-    uuid: String,
-    guild_uuid: String,
-    name: String,
-    color: i64,
-    position: i32,
-    permissions: i64,
-}
-
-impl RoleBuilder {
-    fn build(&self) -> Role {
-        Role {
-            uuid: Uuid::from_str(&self.uuid).unwrap(),
-            guild_uuid: Uuid::from_str(&self.guild_uuid).unwrap(),
-            name: self.name.clone(),
-            color: self.color,
-            position: self.position,
-            permissions: self.permissions,
-        }
-    }
-}
-
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, Queryable, Selectable, Insertable)]
+#[diesel(table_name = roles)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Role {
     uuid: Uuid,
     guild_uuid: Uuid,
     name: String,
-    color: i64,
+    color: i32,
     position: i32,
     permissions: i64,
 }
 
 impl Role {
     pub async fn fetch_all(
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         guild_uuid: Uuid,
     ) -> Result<Vec<Self>, HttpResponse> {
-        let role_builders_result = sqlx::query_as(&format!("SELECT (uuid, guild_uuid, name, color, position, permissions) FROM roles WHERE guild_uuid = '{}'", guild_uuid))
-            .fetch_all(pool)
-            .await;
+        use roles::dsl;
+        let roles: Vec<Role> = dsl::roles
+            .filter(dsl::guild_uuid.eq(guild_uuid))
+            .select(Role::as_select())
+            .load(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
 
-        if let Err(error) = role_builders_result {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let role_builders: Vec<RoleBuilder> = role_builders_result.unwrap();
-
-        Ok(role_builders.iter().map(|b| b.build()).collect())
+        Ok(roles)
     }
 
     pub async fn fetch_one(
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         role_uuid: Uuid,
-        guild_uuid: Uuid,
     ) -> Result<Self, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT (name, color, position, permissions) FROM roles WHERE guild_uuid = '{}' AND uuid = '{}'", guild_uuid, role_uuid))
-            .fetch_one(pool)
-            .await;
+        use roles::dsl;
+        let role: Role = dsl::roles
+            .filter(dsl::uuid.eq(role_uuid))
+            .select(Role::as_select())
+            .get_result(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
 
-        if let Err(error) = row {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let (name, color, position, permissions) = row.unwrap();
-
-        Ok(Role {
-            uuid: role_uuid,
-            guild_uuid,
-            name,
-            color,
-            position,
-            permissions,
-        })
+        Ok(role)
     }
 
     pub async fn new(
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         guild_uuid: Uuid,
         name: String,
     ) -> Result<Self, HttpResponse> {
         let role_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!(
-            "INSERT INTO channels (uuid, guild_uuid, name, position) VALUES ('{}', '{}', $1, $2)",
-            role_uuid, guild_uuid
-        ))
-        .bind(&name)
-        .bind(0)
-        .execute(pool)
-        .await;
-
-        if let Err(error) = row {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let role = Self {
+        let role = Role {
             uuid: role_uuid,
             guild_uuid,
             name,
@@ -603,10 +526,22 @@ impl Role {
             permissions: 0,
         };
 
+        insert_into(roles::table)
+            .values(role.clone())
+            .execute(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
+
         Ok(role)
     }
 }
 
+#[derive(Queryable, Selectable, Insertable)]
+#[diesel(table_name = guild_members)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Member {
     pub uuid: Uuid,
     pub nickname: Option<String>,
@@ -615,67 +550,63 @@ pub struct Member {
 }
 
 impl Member {
-    async fn count(pool: &Pool<Postgres>, guild_uuid: Uuid) -> Result<i64, HttpResponse> {
-        let member_count = sqlx::query_scalar(&format!(
-            "SELECT COUNT(uuid) FROM guild_members WHERE guild_uuid = '{}'",
-            guild_uuid
-        ))
-        .fetch_one(pool)
-        .await;
+    async fn count(conn: &mut Conn, guild_uuid: Uuid) -> Result<i64, HttpResponse> {
+        use guild_members::dsl;
+        let count: i64 = dsl::guild_members
+            .filter(dsl::guild_uuid.eq(guild_uuid))
+            .count()
+            .get_result(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError()
+            })?;
 
-        if let Err(error) = member_count {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        Ok(member_count.unwrap())
+        Ok(count)
     }
 
     pub async fn fetch_one(
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, HttpResponse> {
-        let row = sqlx::query_as(&format!("SELECT CAST(uuid AS VARCHAR), nickname FROM guild_members WHERE guild_uuid = '{}' AND user_uuid = '{}'", guild_uuid, user_uuid))
-            .fetch_one(pool)
-            .await;
-
-        if let Err(error) = row {
+    use guild_members::dsl;
+    let member: Member = dsl::guild_members
+        .filter(dsl::user_uuid.eq(user_uuid))
+        .filter(dsl::guild_uuid.eq(guild_uuid))
+        .select(Member::as_select())
+        .get_result(conn)
+        .await
+        .map_err(|error| {
             error!("{}", error);
+            HttpResponse::InternalServerError().finish()
+        })?;
 
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let (uuid, nickname): (String, Option<String>) = row.unwrap();
-
-        Ok(Self {
-            uuid: Uuid::from_str(&uuid).unwrap(),
-            nickname,
-            user_uuid,
-            guild_uuid,
-        })
+        Ok(member)
     }
 
     pub async fn new(
-        pool: &Pool<Postgres>,
+        conn: &mut Conn,
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, HttpResponse> {
         let member_uuid = Uuid::now_v7();
 
-        let row = sqlx::query(&format!(
-            "INSERT INTO guild_members uuid, guild_uuid, user_uuid VALUES ('{}', '{}', '{}')",
-            member_uuid, guild_uuid, user_uuid
-        ))
-        .execute(pool)
-        .await;
+        let member = Member {
+            uuid: member_uuid,
+            guild_uuid,
+            user_uuid,
+            nickname: None,
+        };
 
-        if let Err(error) = row {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
+        insert_into(guild_members::table)
+            .values(member)
+            .execute(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
 
         Ok(Self {
             uuid: member_uuid,
@@ -686,26 +617,9 @@ impl Member {
     }
 }
 
-#[derive(FromRow)]
-struct MessageBuilder {
-    uuid: String,
-    channel_uuid: String,
-    user_uuid: String,
-    message: String,
-}
-
-impl MessageBuilder {
-    fn build(&self) -> Message {
-        Message {
-            uuid: Uuid::from_str(&self.uuid).unwrap(),
-            channel_uuid: Uuid::from_str(&self.channel_uuid).unwrap(),
-            user_uuid: Uuid::from_str(&self.user_uuid).unwrap(),
-            message: self.message.clone(),
-        }
-    }
-}
-
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Queryable, Selectable, Insertable)]
+#[diesel(table_name = messages)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Message {
     uuid: Uuid,
     channel_uuid: Uuid,
@@ -713,25 +627,8 @@ pub struct Message {
     message: String,
 }
 
-#[derive(FromRow)]
-pub struct InviteBuilder {
-    id: String,
-    user_uuid: String,
-    guild_uuid: String,
-}
-
-impl InviteBuilder {
-    fn build(&self) -> Invite {
-        Invite {
-            id: self.id.clone(),
-            user_uuid: Uuid::from_str(&self.user_uuid).unwrap(),
-            guild_uuid: Uuid::from_str(&self.guild_uuid).unwrap(),
-        }
-    }
-}
-
 /// Server invite struct
-#[derive(Serialize)]
+#[derive(Clone, Serialize, Queryable, Selectable, Insertable)]
 pub struct Invite {
     /// case-sensitive alphanumeric string with a fixed length of 8 characters, can be up to 32 characters for custom invites
     id: String,
@@ -742,20 +639,19 @@ pub struct Invite {
 }
 
 impl Invite {
-    pub async fn fetch_one(pool: &Pool<Postgres>, invite_id: String) -> Result<Self, HttpResponse> {
-        let invite: Result<InviteBuilder, sqlx::Error> =
-            sqlx::query_as("SELECT id, user_uuid, guild_uuid FROM invites WHERE id = $1")
-                .bind(invite_id)
-                .fetch_one(pool)
-                .await;
+    pub async fn fetch_one(conn: &mut Conn, invite_id: String) -> Result<Self, HttpResponse> {
+        use invites::dsl;
+        let invite: Invite = dsl::invites
+            .filter(dsl::id.eq(invite_id))
+            .select(Invite::as_select())
+            .get_result(conn)
+            .await
+            .map_err(|error| {
+                error!("{}", error);
+                HttpResponse::InternalServerError().finish()
+            })?;
 
-        if let Err(error) = invite {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        Ok(invite.unwrap().build())
+        Ok(invite)
     }
 }
 
