@@ -5,14 +5,16 @@ use clap::Parser;
 use simple_logger::SimpleLogger;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
-use diesel_async::RunQueryDsl;
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
-mod api;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 type Conn = deadpool::managed::Object<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>>;
 
+mod api;
 pub mod structs;
 pub mod utils;
 pub mod schema;
@@ -55,8 +57,18 @@ async fn main() -> Result<(), Error> {
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
 
-    let mut conn = pool.get().await?;
+    let database_url = config.database.url();
 
+    tokio::task::spawn_blocking(move || {
+    use diesel::prelude::Connection;
+    use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
+
+
+        let mut conn = AsyncConnectionWrapper::<diesel_async::AsyncPgConnection>::establish(&database_url)?;
+
+        conn.run_pending_migrations(MIGRATIONS);
+        Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
+    }).await?;
 
     /*
     **Stored for later possible use**

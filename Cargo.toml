@@ -30,8 +30,9 @@ random-string = "1.1"
 actix-ws = "0.3.0"
 futures-util = "0.3.31"
 deadpool = "0.12"
-diesel = "2.2"
-diesel-async = { version = "0.5", features = ["deadpool", "postgres"] }
+diesel = { version = "2.2", features = ["uuid"] }
+diesel-async = { version = "0.5", features = ["deadpool", "postgres", "async-connection-wrapper"] }
+diesel_migrations = { version = "2.2.0", features = ["postgres"] }
 
 [dependencies.tokio]
 version = "1.44"
