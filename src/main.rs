@@ -2,6 +2,7 @@ use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
+use error::Error;
 use simple_logger::SimpleLogger;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
@@ -18,8 +19,7 @@ mod api;
 pub mod structs;
 pub mod utils;
 pub mod schema;
-
-type Error = Box<dyn std::error::Error>;
+pub mod error;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -66,9 +66,9 @@ async fn main() -> Result<(), Error> {
 
         let mut conn = AsyncConnectionWrapper::<diesel_async::AsyncPgConnection>::establish(&database_url)?;
 
-        conn.run_pending_migrations(MIGRATIONS);
+        conn.run_pending_migrations(MIGRATIONS)?;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
-    }).await?;
+    }).await?.unwrap();
 
     /*
     **Stored for later possible use**
