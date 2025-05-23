@@ -1,6 +1,7 @@
-use actix_web::{Error, HttpRequest, HttpResponse, get, post, web};
+use actix_web::{HttpRequest, HttpResponse, get, post, web};
 
 use crate::{
+    error::Error,
     Data,
     api::v1::auth::check_access_token,
     structs::{Guild, Invite, Member},
@@ -15,29 +16,17 @@ pub async fn get(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
+    let auth_header = get_auth_header(headers)?;
 
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let mut conn = data.pool.get().await?;
+
+    check_access_token(auth_header, &mut conn).await?;
 
     let invite_id = path.into_inner().0;
 
-    let result = Invite::fetch_one(&data.pool, invite_id).await;
+    let invite = Invite::fetch_one(&mut conn, invite_id).await?;
 
-    if let Err(error) = result {
-        return Ok(error);
-    }
-
-    let invite = result.unwrap();
-
-    let guild_result = Guild::fetch_one(&data.pool, invite.guild_uuid).await;
-
-    if let Err(error) = guild_result {
-        return Ok(error);
-    }
-
-    let guild = guild_result.unwrap();
+    let guild = Guild::fetch_one(&mut conn, invite.guild_uuid).await?;
 
     Ok(HttpResponse::Ok().json(guild))
 }
@@ -50,43 +39,19 @@ pub async fn join(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     let invite_id = path.into_inner().0;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let uuid = authorized.unwrap();
+    let invite = Invite::fetch_one(&mut conn, invite_id).await?;
 
-    let result = Invite::fetch_one(&data.pool, invite_id).await;
+    let guild = Guild::fetch_one(&mut conn, invite.guild_uuid).await?;
 
-    if let Err(error) = result {
-        return Ok(error);
-    }
-
-    let invite = result.unwrap();
-
-    let guild_result = Guild::fetch_one(&data.pool, invite.guild_uuid).await;
-
-    if let Err(error) = guild_result {
-        return Ok(error);
-    }
-
-    let guild = guild_result.unwrap();
-
-    let member = Member::new(&data.pool, uuid, guild.uuid).await;
-
-    if let Err(error) = member {
-        return Ok(error);
-    }
+    Member::new(&mut conn, uuid, guild.uuid).await?;
 
     Ok(HttpResponse::Ok().json(guild))
 }
