@@ -1,19 +1,18 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use actix_web::{Error, HttpResponse, post, web};
+use actix_web::{HttpResponse, post, web};
 use argon2::{
     PasswordHasher,
     password_hash::{SaltString, rand_core::OsRng},
 };
-use log::error;
+use diesel::{dsl::insert_into, ExpressionMethods};
+use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::Response;
 use crate::{
-    Data,
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
-    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, error::Error, schema::{access_tokens::{self, dsl as adsl}, refresh_tokens::{self, dsl as rdsl}, users::{self, dsl as udsl}}, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
 };
 
 #[derive(Deserialize)]
@@ -92,91 +91,49 @@ pub async fn res(
         .argon2
         .hash_password(account_information.password.as_bytes(), &salt)
     {
+        let mut conn = data.pool.get().await?;
+
         // TODO: Check security of this implementation
-        return Ok(
-            match sqlx::query(&format!(
-                "INSERT INTO users (uuid, username, password, email) VALUES ( '{}', $1, $2, $3 )",
-                uuid
+        insert_into(users::table)
+            .values((
+                udsl::uuid.eq(uuid),
+                udsl::username.eq(&account_information.identifier),
+                udsl::password.eq(hashed_password.to_string()),
+                udsl::email.eq(&account_information.email),
             ))
-            .bind(&account_information.identifier)
-            .bind(hashed_password.to_string())
-            .bind(&account_information.email)
-            .execute(&data.pool)
-            .await
-            {
-                Ok(_out) => {
-                    let refresh_token = generate_refresh_token();
-                    let access_token = generate_access_token();
+            .execute(&mut conn)
+            .await?;
 
-                    if refresh_token.is_err() {
-                        error!("{}", refresh_token.unwrap_err());
-                        return Ok(HttpResponse::InternalServerError().finish());
-                    }
+        let refresh_token = generate_refresh_token()?;
+        let access_token = generate_access_token()?;
 
-                    let refresh_token = refresh_token.unwrap();
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_secs() as i64;
 
-                    if access_token.is_err() {
-                        error!("{}", access_token.unwrap_err());
-                        return Ok(HttpResponse::InternalServerError().finish());
-                    }
+        insert_into(refresh_tokens::table)
+            .values((
+                rdsl::token.eq(&refresh_token),
+                rdsl::uuid.eq(uuid),
+                rdsl::created_at.eq(current_time),
+                rdsl::device_name.eq(&account_information.device_name),
+            ))
+            .execute(&mut conn)
+            .await?;
 
-                    let access_token = access_token.unwrap();
+        insert_into(access_tokens::table)
+            .values((
+                adsl::token.eq(&access_token),
+                adsl::refresh_token.eq(&refresh_token),
+                adsl::uuid.eq(uuid),
+                adsl::created_at.eq(current_time),
+            ))
+            .execute(&mut conn)
+            .await?;
 
-                    let current_time = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64;
-
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO refresh_tokens (token, uuid, created_at, device_name) VALUES ($1, '{}', $2, $3 )", uuid))
-                        .bind(&refresh_token)
-                        .bind(current_time)
-                        .bind(&account_information.device_name)
-                        .execute(&data.pool)
-                        .await {
-                        error!("{}", error);
-                        return Ok(HttpResponse::InternalServerError().finish())
-                    }
-
-                    if let Err(error) = sqlx::query(&format!("INSERT INTO access_tokens (token, refresh_token, uuid, created_at) VALUES ($1, $2, '{}', $3 )", uuid))
-                        .bind(&access_token)
-                        .bind(&refresh_token)
-                        .bind(current_time)
-                        .execute(&data.pool)
-                        .await {
-                        error!("{}", error);
-                        return Ok(HttpResponse::InternalServerError().finish())
-                    }
-
-                    HttpResponse::Ok()
-                        .cookie(refresh_token_cookie(refresh_token))
-                        .json(Response { access_token })
-                }
-                Err(error) => {
-                    let err_msg = error.as_database_error().unwrap().message();
-
-                    match err_msg {
-                        err_msg
-                            if err_msg.contains("unique") && err_msg.contains("username_key") =>
-                        {
-                            HttpResponse::Forbidden().json(ResponseError {
-                                gorb_id_available: false,
-                                ..Default::default()
-                            })
-                        }
-                        err_msg if err_msg.contains("unique") && err_msg.contains("email_key") => {
-                            HttpResponse::Forbidden().json(ResponseError {
-                                email_available: false,
-                                ..Default::default()
-                            })
-                        }
-                        _ => {
-                            error!("{}", err_msg);
-                            HttpResponse::InternalServerError().finish()
-                        }
-                    }
-                }
-            },
-        );
+        return Ok(HttpResponse::Ok()
+            .cookie(refresh_token_cookie(refresh_token))
+            .json(Response { access_token }))
     }
 
     Ok(HttpResponse::InternalServerError().finish())

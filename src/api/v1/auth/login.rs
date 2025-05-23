@@ -1,14 +1,14 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use actix_web::{Error, HttpResponse, post, web};
+use actix_web::{HttpResponse, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
-use log::error;
+use diesel::{dsl::insert_into, ExpressionMethods, QueryDsl};
+use diesel_async::RunQueryDsl;
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
-    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
+    error::Error, api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, schema::*, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
 };
 
 use super::Response;
@@ -29,66 +29,42 @@ pub async fn response(
         return Ok(HttpResponse::Forbidden().json(r#"{ "password_hashed": false }"#));
     }
 
+    use users::dsl;
+
+    let mut conn = data.pool.get().await?;
+
     if EMAIL_REGEX.is_match(&login_information.username) {
-        let row =
-            sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE email = $1")
-                .bind(&login_information.username)
-                .fetch_one(&data.pool)
-                .await;
+        // FIXME: error handling, right now i just want this to work
+        let (uuid, password): (Uuid, String) = dsl::users
+            .filter(dsl::email.eq(&login_information.username))
+            .select((dsl::uuid, dsl::password))
+            .get_result(&mut conn)
+            .await?;
 
-        if let Err(error) = row {
-            if error.to_string()
-                == "no rows returned by a query that expected to return at least one row"
-            {
-                return Ok(HttpResponse::Unauthorized().finish());
-            }
-
-            error!("{}", error);
-            return Ok(HttpResponse::InternalServerError().json(
-                r#"{ "error": "Unhandled exception occured, contact the server administrator" }"#,
-            ));
-        }
-
-        let (uuid, password): (String, String) = row.unwrap();
-
-        return Ok(login(
+        return login(
             data.clone(),
             uuid,
             login_information.password.clone(),
             password,
             login_information.device_name.clone(),
         )
-        .await);
+        .await;
     } else if USERNAME_REGEX.is_match(&login_information.username) {
-        let row =
-            sqlx::query_as("SELECT CAST(uuid as VARCHAR), password FROM users WHERE username = $1")
-                .bind(&login_information.username)
-                .fetch_one(&data.pool)
-                .await;
+        // FIXME: error handling, right now i just want this to work
+        let (uuid, password): (Uuid, String) = dsl::users
+            .filter(dsl::username.eq(&login_information.username))
+            .select((dsl::uuid, dsl::password))
+            .get_result(&mut conn)
+            .await?;
 
-        if let Err(error) = row {
-            if error.to_string()
-                == "no rows returned by a query that expected to return at least one row"
-            {
-                return Ok(HttpResponse::Unauthorized().finish());
-            }
-
-            error!("{}", error);
-            return Ok(HttpResponse::InternalServerError().json(
-                r#"{ "error": "Unhandled exception occured, contact the server administrator" }"#,
-            ));
-        }
-
-        let (uuid, password): (String, String) = row.unwrap();
-
-        return Ok(login(
+        return login(
             data.clone(),
             uuid,
             login_information.password.clone(),
             password,
             login_information.device_name.clone(),
         )
-        .await);
+        .await;
     }
 
     Ok(HttpResponse::Unauthorized().finish())
@@ -96,79 +72,45 @@ pub async fn response(
 
 async fn login(
     data: actix_web::web::Data<Data>,
-    uuid: String,
+    uuid: Uuid,
     request_password: String,
     database_password: String,
     device_name: String,
-) -> HttpResponse {
-    let parsed_hash_raw = PasswordHash::new(&database_password);
+) -> Result<HttpResponse, Error> {
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = parsed_hash_raw {
-        error!("{}", error);
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    let parsed_hash = parsed_hash_raw.unwrap();
+    let parsed_hash = PasswordHash::new(&database_password).map_err(|e| Error::PasswordHashError(e.to_string()))?;
 
     if data
         .argon2
         .verify_password(request_password.as_bytes(), &parsed_hash)
         .is_err()
     {
-        return HttpResponse::Unauthorized().finish();
+        return Err(Error::Unauthorized("Wrong username or password".to_string()));
     }
 
-    let refresh_token_raw = generate_refresh_token();
-    let access_token_raw = generate_access_token();
-
-    if let Err(error) = refresh_token_raw {
-        error!("{}", error);
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    let refresh_token = refresh_token_raw.unwrap();
-
-    if let Err(error) = access_token_raw {
-        error!("{}", error);
-        return HttpResponse::InternalServerError().finish();
-    }
-
-    let access_token = access_token_raw.unwrap();
+    let refresh_token = generate_refresh_token()?;
+    let access_token = generate_access_token()?;
 
     let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .duration_since(UNIX_EPOCH)?
         .as_secs() as i64;
 
-    if let Err(error) = sqlx::query(&format!(
-        "INSERT INTO refresh_tokens (token, uuid, created_at, device_name) VALUES ($1, '{}', $2, $3 )",
-        uuid
-    ))
-    .bind(&refresh_token)
-    .bind(current_time)
-    .bind(device_name)
-    .execute(&data.pool)
-    .await
-    {
-        error!("{}", error);
-        return HttpResponse::InternalServerError().finish();
-    }
+    use refresh_tokens::dsl as rdsl;
 
-    if let Err(error) = sqlx::query(&format!(
-        "INSERT INTO access_tokens (token, refresh_token, uuid, created_at) VALUES ($1, $2, '{}', $3 )",
-        uuid
-    ))
-    .bind(&access_token)
-    .bind(&refresh_token)
-    .bind(current_time)
-    .execute(&data.pool)
-    .await
-    {
-        error!("{}", error);
-        return HttpResponse::InternalServerError().finish()
-    }
+    insert_into(refresh_tokens::table)
+        .values((rdsl::token.eq(&refresh_token), rdsl::uuid.eq(uuid), rdsl::created_at.eq(current_time), rdsl::device_name.eq(device_name)))
+        .execute(&mut conn)
+        .await?;
 
-    HttpResponse::Ok()
+    use access_tokens::dsl as adsl;
+
+    insert_into(access_tokens::table)
+        .values((adsl::token.eq(&access_token), adsl::refresh_token.eq(&refresh_token), adsl::uuid.eq(uuid), adsl::created_at.eq(current_time)))
+        .execute(&mut conn)
+        .await?;
+
+    Ok(HttpResponse::Ok()
         .cookie(refresh_token_cookie(refresh_token))
-        .json(Response { access_token })
+        .json(Response { access_token }))
 }
