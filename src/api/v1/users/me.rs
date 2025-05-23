@@ -1,33 +1,21 @@
-use actix_web::{get, patch, web, Error, HttpRequest, HttpResponse};
+use actix_web::{get, patch, web, HttpRequest, HttpResponse};
 use serde::Deserialize;
 
-use crate::{api::v1::auth::check_access_token, structs::Me, utils::get_auth_header, Data};
+use crate::{error::Error, structs::Me, api::v1::auth::check_access_token, utils::get_auth_header, Data};
 
 #[get("/me")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
+    let auth_header = get_auth_header(headers)?;
 
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let mut conn = data.pool.get().await?;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let me = Me::get(&mut conn, uuid).await?;
 
-    let uuid = authorized.unwrap();
-
-    let me = Me::get(&data.pool, uuid).await;
-
-    if let Err(error) = me {
-        return Ok(error);
-    }
-
-    Ok(HttpResponse::Ok().json(me.unwrap()))
+    Ok(HttpResponse::Ok().json(me))
 }
 
 #[derive(Deserialize)]
@@ -42,27 +30,13 @@ struct NewInfo {
 pub async fn update(req: HttpRequest, new_info: web::Json<NewInfo>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
+    let auth_header = get_auth_header(headers)?;
 
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let mut conn = data.pool.get().await?;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
-
-    let uuid = authorized.unwrap();
-
-    let me_result = Me::get(&data.pool, uuid).await;
-
-    if let Err(error) = me_result {
-        return Ok(error);
-    }
-
-    let me = me_result.unwrap();
+    let me = Me::get(&mut conn, uuid).await?;
 
     if let Some(username) = &new_info.username {
         todo!();

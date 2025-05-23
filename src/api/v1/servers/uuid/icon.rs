@@ -1,8 +1,8 @@
-use actix_web::{put, web, Error, HttpRequest, HttpResponse};
+use actix_web::{put, web, HttpRequest, HttpResponse};
 use uuid::Uuid;
 use futures_util::StreamExt as _;
 
-use crate::{api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
+use crate::{error::Error, api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
 
 #[put("{uuid}/icon")]
 pub async fn upload(
@@ -13,44 +13,24 @@ pub async fn upload(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     let guild_uuid = path.into_inner().0;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let uuid = authorized.unwrap();
+    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
-    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
-
-    if let Err(error) = member {
-        return Ok(error);
-    }
-
-    let guild_result = Guild::fetch_one(&data.pool, guild_uuid).await;
-
-    if let Err(error) = guild_result {
-        return Ok(error);
-    }
-
-    let mut guild = guild_result.unwrap();
+    let mut guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 
     let mut bytes = web::BytesMut::new();
     while let Some(item) = payload.next().await {
         bytes.extend_from_slice(&item?);
     }
 
-    if let Err(error) = guild.set_icon(&data.bunny_cdn, &data.pool, data.config.bunny.cdn_url.clone(), bytes).await {
-        return Ok(error)
-    }
+    guild.set_icon(&data.bunny_cdn, &mut conn, data.config.bunny.cdn_url.clone(), bytes).await?;
 
     Ok(HttpResponse::Ok().finish())
 }

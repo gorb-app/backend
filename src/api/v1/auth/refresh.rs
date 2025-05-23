@@ -1,10 +1,11 @@
-use actix_web::{Error, HttpRequest, HttpResponse, post, web};
+use actix_web::{HttpRequest, HttpResponse, post, web};
+use diesel::{delete, update, ExpressionMethods, QueryDsl};
+use diesel_async::RunQueryDsl;
 use log::error;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    Data,
-    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
+    error::Error, schema::{access_tokens::{self, dsl}, refresh_tokens::{self, dsl as rdsl}}, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
 };
 
 use super::Response;
@@ -20,23 +21,23 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
     let mut refresh_token = String::from(recv_refresh_token_cookie.unwrap().value());
 
     let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .duration_since(UNIX_EPOCH)?
         .as_secs() as i64;
 
-    if let Ok(row) = sqlx::query_scalar("SELECT created_at FROM refresh_tokens WHERE token = $1")
-        .bind(&refresh_token)
-        .fetch_one(&data.pool)
+    let mut conn = data.pool.get().await?;
+
+    if let Ok(created_at) = rdsl::refresh_tokens
+        .filter(rdsl::token.eq(&refresh_token))
+        .select(rdsl::created_at)
+        .get_result::<i64>(&mut conn)
         .await
     {
-        let created_at: i64 = row;
-
         let lifetime = current_time - created_at;
 
         if lifetime > 2592000 {
-            if let Err(error) = sqlx::query("DELETE FROM refresh_tokens WHERE token = $1")
-                .bind(&refresh_token)
-                .execute(&data.pool)
+            if let Err(error) = delete(refresh_tokens::table)
+                .filter(rdsl::token.eq(&refresh_token))
+                .execute(&mut conn)
                 .await
             {
                 error!("{}", error);
@@ -52,8 +53,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         }
 
         let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
+            .duration_since(UNIX_EPOCH)?
             .as_secs() as i64;
 
         if lifetime > 1987200 {
@@ -66,14 +66,14 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
             let new_refresh_token = new_refresh_token.unwrap();
 
-            match sqlx::query(
-                "UPDATE refresh_tokens SET token = $1, created_at = $2 WHERE token = $3",
-            )
-            .bind(&new_refresh_token)
-            .bind(current_time)
-            .bind(&refresh_token)
-            .execute(&data.pool)
-            .await
+            match update(refresh_tokens::table)
+                .filter(rdsl::token.eq(&refresh_token))
+                .set((
+                    rdsl::token.eq(&new_refresh_token),
+                    rdsl::created_at.eq(current_time),
+                ))
+                .execute(&mut conn)
+                .await
             {
                 Ok(_) => {
                     refresh_token = new_refresh_token;
@@ -84,27 +84,16 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
             }
         }
 
-        let access_token = generate_access_token();
+        let access_token = generate_access_token()?;
 
-        if access_token.is_err() {
-            error!("{}", access_token.unwrap_err());
-            return Ok(HttpResponse::InternalServerError().finish());
-        }
-
-        let access_token = access_token.unwrap();
-
-        if let Err(error) = sqlx::query(
-            "UPDATE access_tokens SET token = $1, created_at = $2 WHERE refresh_token = $3",
-        )
-        .bind(&access_token)
-        .bind(current_time)
-        .bind(&refresh_token)
-        .execute(&data.pool)
-        .await
-        {
-            error!("{}", error);
-            return Ok(HttpResponse::InternalServerError().finish());
-        }
+        update(access_tokens::table)
+            .filter(dsl::refresh_token.eq(&refresh_token))
+            .set((
+                dsl::token.eq(&access_token),
+                dsl::created_at.eq(current_time),
+            ))
+            .execute(&mut conn)
+            .await?;
 
         return Ok(HttpResponse::Ok()
             .cookie(refresh_token_cookie(refresh_token))

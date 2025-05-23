@@ -1,4 +1,4 @@
-use actix_web::{Error, HttpRequest, HttpResponse, Scope, get, web};
+use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
 use uuid::Uuid;
 
 mod channels;
@@ -7,6 +7,7 @@ mod roles;
 mod icon;
 
 use crate::{
+    error::Error,
     Data,
     api::v1::auth::check_access_token,
     structs::{Guild, Member},
@@ -43,33 +44,17 @@ pub async fn res(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     let guild_uuid = path.into_inner().0;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let uuid = authorized.unwrap();
+    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
-    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
+    let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 
-    if let Err(error) = member {
-        return Ok(error);
-    }
-
-    let guild = Guild::fetch_one(&data.pool, guild_uuid).await;
-
-    if let Err(error) = guild {
-        return Ok(error);
-    }
-
-    Ok(HttpResponse::Ok().json(guild.unwrap()))
+    Ok(HttpResponse::Ok().json(guild))
 }

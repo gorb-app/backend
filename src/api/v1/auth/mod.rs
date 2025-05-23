@@ -1,15 +1,16 @@
 use std::{
-    str::FromStr,
     sync::LazyLock,
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use actix_web::{HttpResponse, Scope, web};
-use log::error;
+use actix_web::{Scope, web};
+use diesel::{ExpressionMethods, QueryDsl};
+use diesel_async::RunQueryDsl;
 use regex::Regex;
 use serde::Serialize;
-use sqlx::Postgres;
 use uuid::Uuid;
+
+use crate::{error::Error, Conn, schema::access_tokens::dsl};
 
 mod login;
 mod refresh;
@@ -40,40 +41,30 @@ pub fn web() -> Scope {
 
 pub async fn check_access_token(
     access_token: &str,
-    pool: &sqlx::Pool<Postgres>,
-) -> Result<Uuid, HttpResponse> {
-    let row = sqlx::query_as(
-        "SELECT CAST(uuid as VARCHAR), created_at FROM access_tokens WHERE token = $1",
-    )
-    .bind(access_token)
-    .fetch_one(pool)
-    .await;
-
-    if let Err(error) = row {
-        if error.to_string()
-            == "no rows returned by a query that expected to return at least one row"
-        {
-            return Err(HttpResponse::Unauthorized().finish());
-        }
-
-        error!("{}", error);
-        return Err(HttpResponse::InternalServerError().json(
-            r#"{ "error": "Unhandled exception occured, contact the server administrator" }"#,
-        ));
-    }
-
-    let (uuid, created_at): (String, i64) = row.unwrap();
+    conn: &mut Conn,
+) -> Result<Uuid, Error> {
+    let (uuid, created_at): (Uuid, i64) = dsl::access_tokens
+        .filter(dsl::token.eq(access_token))
+        .select((dsl::uuid, dsl::created_at))
+        .get_result(conn)
+        .await
+        .map_err(|error| {
+            if error == diesel::result::Error::NotFound {
+                Error::Unauthorized("Invalid access token".to_string())
+            } else {
+                Error::from(error)
+            }
+        })?;
 
     let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
+        .duration_since(UNIX_EPOCH)?
         .as_secs() as i64;
 
     let lifetime = current_time - created_at;
 
     if lifetime > 3600 {
-        return Err(HttpResponse::Unauthorized().finish());
+        return Err(Error::Unauthorized("Invalid access token".to_string()));
     }
 
-    Ok(Uuid::from_str(&uuid).unwrap())
+    Ok(uuid)
 }

@@ -1,5 +1,6 @@
-use crate::{api::v1::auth::check_access_token, structs::{StartAmountQuery, User}, utils::get_auth_header, Data};
-use actix_web::{Error, HttpRequest, HttpResponse, Scope, get, web};
+use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
+
+use crate::{api::v1::auth::check_access_token, error::Error, structs::{StartAmountQuery, User}, utils::get_auth_header, Data};
 
 mod me;
 mod uuid;
@@ -19,7 +20,7 @@ pub async fn res(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
+    let auth_header = get_auth_header(headers)?;
 
     let start = request_query.start.unwrap_or(0);
 
@@ -29,17 +30,11 @@ pub async fn res(
         return Ok(HttpResponse::BadRequest().finish());
     }
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    check_access_token(auth_header, &mut conn).await?;
 
-    let accounts = User::fetch_amount(&data.pool, start, amount).await;
+    let users = User::fetch_amount(&mut conn, start, amount).await?;
 
-    if let Err(error) = accounts {
-        return Ok(error);
-    }
-
-    Ok(HttpResponse::Ok().json(accounts.unwrap()))
+    Ok(HttpResponse::Ok().json(users))
 }
