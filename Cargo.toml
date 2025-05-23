@@ -36,6 +36,7 @@ diesel = { version = "2.2", features = ["uuid"] }
 diesel-async = { version = "0.5", features = ["deadpool", "postgres", "async-connection-wrapper"] }
 diesel_migrations = { version = "2.2.0", features = ["postgres"] }
 thiserror = "2.0.12"
+actix-multipart = "0.7.2"
 
 [dependencies.tokio]
 version = "1.44"

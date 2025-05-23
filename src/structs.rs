@@ -667,6 +667,38 @@ impl Me {
 
         Ok(me)
     }
+
+    pub async fn set_avatar(&mut self, bunny_cdn: &bunny_api_tokio::Client, conn: &mut Conn, cdn_url: Url, avatar: BytesMut) -> Result<(), Error> {
+        let avatar_clone = avatar.clone();
+        let image_type = task::spawn_blocking(move || image_check(avatar_clone)).await??;
+
+        if let Some(avatar) = &self.avatar {
+            let avatar_url: Url = avatar.parse()?;
+
+            let relative_url = avatar_url
+                .path()
+                .trim_start_matches('/');
+
+            bunny_cdn.storage.delete(relative_url).await?;
+        }
+
+        let path = format!("avatar/{}/avatar.{}", self.uuid, image_type);
+
+        bunny_cdn.storage.upload(path.clone(), avatar.into()).await?;
+
+        let avatar_url = cdn_url.join(&path)?;
+
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::avatar.eq(avatar_url.as_str()))
+            .execute(conn)
+            .await?;
+
+        self.avatar = Some(avatar_url.to_string());
+
+        Ok(())
+    }
 }
 
 #[derive(Deserialize)]

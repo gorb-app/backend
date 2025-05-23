@@ -9,6 +9,7 @@ pub fn web() -> Scope {
     web::scope("/users")
         .service(res)
         .service(me::res)
+        .service(me::update)
         .service(uuid::res)
 }
 
