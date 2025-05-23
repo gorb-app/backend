@@ -1,51 +1,41 @@
-use actix_web::{Error, HttpRequest, HttpResponse, get, web};
+use actix_web::{HttpRequest, HttpResponse, get, web};
+use diesel::{prelude::Queryable, ExpressionMethods, QueryDsl, Selectable, SelectableHelper};
+use diesel_async::RunQueryDsl;
 use log::error;
 use serde::Serialize;
+use uuid::Uuid;
 
-use crate::{Data, api::v1::auth::check_access_token, utils::get_auth_header};
+use crate::{error::Error, api::v1::auth::check_access_token, schema::users::{self, dsl}, utils::get_auth_header, Data};
 
-#[derive(Serialize)]
+#[derive(Serialize, Queryable, Selectable)]
+#[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
 struct Response {
-    uuid: String,
+    uuid: Uuid,
     username: String,
-    display_name: String,
+    display_name: Option<String>,
 }
 
 #[get("/me")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
+    let auth_header = get_auth_header(headers)?;
 
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let mut conn = data.pool.get().await?;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let user: Result<Response, diesel::result::Error> = dsl::users
+        .filter(dsl::uuid.eq(uuid))
+        .select(Response::as_select())
+        .get_result(&mut conn)
+        .await;
 
-    let uuid = authorized.unwrap();
-
-    let row = sqlx::query_as(&format!(
-        "SELECT username, display_name FROM users WHERE uuid = '{}'",
-        uuid
-    ))
-    .fetch_one(&data.pool)
-    .await;
-
-    if let Err(error) = row {
+    if let Err(error) = user {
         error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
+        return Ok(HttpResponse::InternalServerError().finish())
     }
 
-    let (username, display_name): (String, Option<String>) = row.unwrap();
-
-    Ok(HttpResponse::Ok().json(Response {
-        uuid: uuid.to_string(),
-        username,
-        display_name: display_name.unwrap_or_default(),
-    }))
+    Ok(HttpResponse::Ok().json(user.unwrap()))
 }

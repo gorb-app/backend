@@ -1,0 +1,3 @@
+-- Your SQL goes here
+ALTER TABLE ONLY channels ALTER COLUMN description DROP NOT NULL;
+ALTER TABLE ONLY channels ALTER COLUMN description SET DEFAULT NULL;

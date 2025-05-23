@@ -1,7 +1,6 @@
 use actix_web::{Error, HttpRequest, HttpResponse, get, rt, web};
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt as _;
-use log::error;
 use uuid::Uuid;
 
 use crate::{
@@ -22,57 +21,30 @@ pub async fn echo(
     let headers = req.headers();
 
     // Retrieve auth header
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     // Get uuids from path
     let (guild_uuid, channel_uuid) = path.into_inner();
 
+    let mut conn = data.pool.get().await.map_err(|e| crate::error::Error::from(e))?;
+
     // Authorize client using auth header
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
-
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
-
-    // Unwrap user uuid from authorization
-    let uuid = authorized.unwrap();
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
     // Get server member from psql
-    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
-
-    if let Err(error) = member {
-        return Ok(error);
-    }
-
-    // Get cache for channel
-    let cache_result = data.get_cache_key(format!("{}", channel_uuid)).await;
+    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
     let channel: Channel;
 
     // Return channel cache or result from psql as `channel` variable
-    if let Ok(cache_hit) = cache_result {
+    if let Ok(cache_hit) = data.get_cache_key(format!("{}", channel_uuid)).await {
         channel = serde_json::from_str(&cache_hit).unwrap()
     } else {
-        let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
+        channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
 
-        if let Err(error) = channel_result {
-            return Ok(error);
-        }
-
-        channel = channel_result.unwrap();
-
-        let cache_result = data
+        data
             .set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
-            .await;
-
-        if let Err(error) = cache_result {
-            error!("{}", error);
-            return Ok(HttpResponse::InternalServerError().finish());
-        }
+            .await?;
     }
 
     let (res, mut session_1, stream) = actix_ws::handle(&req, stream)?;
@@ -82,17 +54,11 @@ pub async fn echo(
         // aggregate continuation frames up to 1MiB
         .max_continuation_size(2_usize.pow(20));
 
-    let pubsub_result = data.cache_pool.get_async_pubsub().await;
-
-    if let Err(error) = pubsub_result {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
-    }
+    let mut pubsub = data.cache_pool.get_async_pubsub().await.map_err(|e| crate::error::Error::from(e))?;
 
     let mut session_2 = session_1.clone();
 
     rt::spawn(async move {
-        let mut pubsub = pubsub_result.unwrap();
         pubsub.subscribe(channel_uuid.to_string()).await.unwrap();
         while let Some(msg) = pubsub.on_message().next().await {
             let payload: String = msg.get_payload().unwrap();
@@ -118,7 +84,7 @@ pub async fn echo(
                         .await
                         .unwrap();
                     channel
-                        .new_message(&data.pool, uuid, text.to_string())
+                        .new_message(&mut data.pool.get().await.unwrap(), uuid, text.to_string())
                         .await
                         .unwrap();
                 }

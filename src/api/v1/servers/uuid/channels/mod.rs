@@ -1,12 +1,12 @@
 use crate::{
+    error::Error,
     Data,
     api::v1::auth::check_access_token,
     structs::{Channel, Member},
     utils::get_auth_header,
 };
 use ::uuid::Uuid;
-use actix_web::{Error, HttpRequest, HttpResponse, get, post, web};
-use log::error;
+use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
 pub mod uuid;
@@ -25,52 +25,27 @@ pub async fn get(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     let guild_uuid = path.into_inner().0;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let uuid = authorized.unwrap();
+    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
-    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
-
-    if let Err(error) = member {
-        return Ok(error);
-    }
-
-    let cache_result = data.get_cache_key(format!("{}_channels", guild_uuid)).await;
-
-    if let Ok(cache_hit) = cache_result {
+    if let Ok(cache_hit) = data.get_cache_key(format!("{}_channels", guild_uuid)).await {
         return Ok(HttpResponse::Ok()
             .content_type("application/json")
             .body(cache_hit));
     }
 
-    let channels_result = Channel::fetch_all(&data.pool, guild_uuid).await;
+    let channels = Channel::fetch_all(&data.pool, guild_uuid).await?;
 
-    if let Err(error) = channels_result {
-        return Ok(error);
-    }
-
-    let channels = channels_result.unwrap();
-
-    let cache_result = data
+    data
         .set_cache_key(format!("{}_channels", guild_uuid), channels.clone(), 1800)
-        .await;
-
-    if let Err(error) = cache_result {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
-    }
+        .await?;
 
     Ok(HttpResponse::Ok().json(channels))
 }
@@ -84,27 +59,15 @@ pub async fn create(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     let guild_uuid = path.into_inner().0;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let uuid = authorized.unwrap();
-
-    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
-
-    if let Err(error) = member {
-        return Ok(error);
-    }
+    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
     // FIXME: Logic to check permissions, should probably be done in utils.rs
 
@@ -115,10 +78,6 @@ pub async fn create(
         channel_info.description.clone(),
     )
     .await;
-
-    if let Err(error) = channel {
-        return Ok(error);
-    }
 
     Ok(HttpResponse::Ok().json(channel.unwrap()))
 }
