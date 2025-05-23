@@ -1,31 +1,31 @@
 use std::time::SystemTime;
 
-use actix_web::{HttpResponse, Responder, get, web};
+use actix_web::{HttpResponse, get, web};
+use diesel::QueryDsl;
+use diesel_async::RunQueryDsl;
 use serde::Serialize;
 
+use crate::error::Error;
 use crate::Data;
+use crate::schema::users::dsl::{users, uuid};
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 
 #[derive(Serialize)]
 struct Response {
-    accounts: usize,
+    accounts: i64,
     uptime: u64,
     version: String,
     build_number: String,
 }
 
 #[get("/stats")]
-pub async fn res(data: web::Data<Data>) -> impl Responder {
-    let accounts;
-    if let Ok(users) = sqlx::query("SELECT uuid FROM users")
-        .fetch_all(&data.pool)
-        .await
-    {
-        accounts = users.len();
-    } else {
-        return HttpResponse::InternalServerError().finish();
-    }
+pub async fn res(data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let accounts: i64 = users
+        .select(uuid)
+        .count()
+        .get_result(&mut data.pool.get().await?)
+        .await?;
 
     let response = Response {
         // TODO: Get number of accounts from db
@@ -39,5 +39,5 @@ pub async fn res(data: web::Data<Data>) -> impl Responder {
         build_number: String::from("how do i implement this?"),
     };
 
-    HttpResponse::Ok().json(response)
+    Ok(HttpResponse::Ok().json(response))
 }
