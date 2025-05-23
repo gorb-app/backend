@@ -1,10 +1,17 @@
 use actix_web::{HttpRequest, HttpResponse, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
-use diesel::{delete, ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, delete};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
-use crate::{api::v1::auth::check_access_token, error::Error, schema::users::dsl as udsl, schema::refresh_tokens::{self, dsl as rdsl}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    schema::refresh_tokens::{self, dsl as rdsl},
+    schema::users::dsl as udsl,
+    utils::get_auth_header,
+};
 
 #[derive(Deserialize)]
 struct RevokeRequest {
@@ -33,14 +40,17 @@ pub async fn res(
         .get_result(&mut conn)
         .await?;
 
-    let hashed_password = PasswordHash::new(&database_password).map_err(|e| Error::PasswordHashError(e.to_string()))?;
+    let hashed_password = PasswordHash::new(&database_password)
+        .map_err(|e| Error::PasswordHashError(e.to_string()))?;
 
     if data
         .argon2
         .verify_password(revoke_request.password.as_bytes(), &hashed_password)
         .is_err()
     {
-        return Err(Error::Unauthorized("Wrong username or password".to_string()));
+        return Err(Error::Unauthorized(
+            "Wrong username or password".to_string(),
+        ));
     }
 
     delete(refresh_tokens::table)

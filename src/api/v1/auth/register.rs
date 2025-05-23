@@ -5,14 +5,22 @@ use argon2::{
     PasswordHasher,
     password_hash::{SaltString, rand_core::OsRng},
 };
-use diesel::{dsl::insert_into, ExpressionMethods};
+use diesel::{ExpressionMethods, dsl::insert_into};
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::Response;
 use crate::{
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, error::Error, schema::{access_tokens::{self, dsl as adsl}, refresh_tokens::{self, dsl as rdsl}, users::{self, dsl as udsl}}, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
+    Data,
+    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
+    error::Error,
+    schema::{
+        access_tokens::{self, dsl as adsl},
+        refresh_tokens::{self, dsl as rdsl},
+        users::{self, dsl as udsl},
+    },
+    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
 };
 
 #[derive(Deserialize)]
@@ -107,9 +115,7 @@ pub async fn res(
         let refresh_token = generate_refresh_token()?;
         let access_token = generate_access_token()?;
 
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs() as i64;
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
         insert_into(refresh_tokens::table)
             .values((
@@ -133,7 +139,7 @@ pub async fn res(
 
         return Ok(HttpResponse::Ok()
             .cookie(refresh_token_cookie(refresh_token))
-            .json(Response { access_token }))
+            .json(Response { access_token }));
     }
 
     Ok(HttpResponse::InternalServerError().finish())

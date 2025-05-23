@@ -26,7 +26,7 @@ pub async fn echo(
     // Get uuids from path
     let (guild_uuid, channel_uuid) = path.into_inner();
 
-    let mut conn = data.pool.get().await.map_err(|e| crate::error::Error::from(e))?;
+    let mut conn = data.pool.get().await.map_err(crate::error::Error::from)?;
 
     // Authorize client using auth header
     let uuid = check_access_token(auth_header, &mut conn).await?;
@@ -42,8 +42,7 @@ pub async fn echo(
     } else {
         channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
 
-        data
-            .set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
+        data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
             .await?;
     }
 
@@ -54,7 +53,11 @@ pub async fn echo(
         // aggregate continuation frames up to 1MiB
         .max_continuation_size(2_usize.pow(20));
 
-    let mut pubsub = data.cache_pool.get_async_pubsub().await.map_err(|e| crate::error::Error::from(e))?;
+    let mut pubsub = data
+        .cache_pool
+        .get_async_pubsub()
+        .await
+        .map_err(crate::error::Error::from)?;
 
     let mut session_2 = session_1.clone();
 

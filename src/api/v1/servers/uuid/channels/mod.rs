@@ -1,7 +1,7 @@
 use crate::{
-    error::Error,
     Data,
     api::v1::auth::check_access_token,
+    error::Error,
     structs::{Channel, Member},
     utils::get_auth_header,
 };
@@ -43,8 +43,7 @@ pub async fn get(
 
     let channels = Channel::fetch_all(&data.pool, guild_uuid).await?;
 
-    data
-        .set_cache_key(format!("{}_channels", guild_uuid), channels.clone(), 1800)
+    data.set_cache_key(format!("{}_channels", guild_uuid), channels.clone(), 1800)
         .await?;
 
     Ok(HttpResponse::Ok().json(channels))

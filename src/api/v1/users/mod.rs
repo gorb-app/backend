@@ -1,6 +1,12 @@
 use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
 
-use crate::{api::v1::auth::check_access_token, error::Error, structs::{StartAmountQuery, User}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{StartAmountQuery, User},
+    utils::get_auth_header,
+};
 
 mod me;
 mod uuid;

@@ -1,7 +1,7 @@
 use crate::{
-    error::Error,
     Data,
     api::v1::auth::check_access_token,
+    error::Error,
     structs::{Channel, Member},
     utils::get_auth_header,
 };
@@ -41,8 +41,7 @@ pub async fn get(
     } else {
         channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
 
-        data
-            .set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
+        data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
             .await?;
     }
 

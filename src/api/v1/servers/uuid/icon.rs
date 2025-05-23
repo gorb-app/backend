@@ -1,8 +1,14 @@
-use actix_web::{put, web, HttpRequest, HttpResponse};
-use uuid::Uuid;
+use actix_web::{HttpRequest, HttpResponse, put, web};
 use futures_util::StreamExt as _;
+use uuid::Uuid;
 
-use crate::{error::Error, api::v1::auth::check_access_token, structs::{Guild, Member}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Guild, Member},
+    utils::get_auth_header,
+};
 
 #[put("{uuid}/icon")]
 pub async fn upload(
@@ -30,7 +36,14 @@ pub async fn upload(
         bytes.extend_from_slice(&item?);
     }
 
-    guild.set_icon(&data.bunny_cdn, &mut conn, data.config.bunny.cdn_url.clone(), bytes).await?;
+    guild
+        .set_icon(
+            &data.bunny_cdn,
+            &mut conn,
+            data.config.bunny.cdn_url.clone(),
+            bytes,
+        )
+        .await?;
 
     Ok(HttpResponse::Ok().finish())
 }

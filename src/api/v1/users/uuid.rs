@@ -1,8 +1,9 @@
 use actix_web::{HttpRequest, HttpResponse, get, web};
 use uuid::Uuid;
 
-use crate::{error::Error, api::v1::auth::check_access_token, structs::User, utils::get_auth_header, Data};
-
+use crate::{
+    Data, api::v1::auth::check_access_token, error::Error, structs::User, utils::get_auth_header,
+};
 
 #[get("/{uuid}")]
 pub async fn res(
@@ -28,8 +29,7 @@ pub async fn res(
 
     let user = User::fetch_one(&mut conn, uuid).await?;
 
-    data
-        .set_cache_key(uuid.to_string(), user.clone(), 1800)
+    data.set_cache_key(uuid.to_string(), user.clone(), 1800)
         .await?;
 
     Ok(HttpResponse::Ok().json(user))

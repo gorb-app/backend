@@ -1,8 +1,10 @@
-use actix_web::{get, patch, web, HttpRequest, HttpResponse};
-use actix_multipart::form::{json::Json as MpJson, tempfile::TempFile, MultipartForm};
+use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile};
+use actix_web::{HttpRequest, HttpResponse, get, patch, web};
 use serde::Deserialize;
 
-use crate::{error::Error, structs::Me, api::v1::auth::check_access_token, utils::get_auth_header, Data};
+use crate::{
+    Data, api::v1::auth::check_access_token, error::Error, structs::Me, utils::get_auth_header,
+};
 
 #[get("/me")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
@@ -35,7 +37,11 @@ struct UploadForm {
 }
 
 #[patch("/me")]
-pub async fn update(req: HttpRequest, MultipartForm(form): MultipartForm<UploadForm>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn update(
+    req: HttpRequest,
+    MultipartForm(form): MultipartForm<UploadForm>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers)?;
@@ -51,7 +57,13 @@ pub async fn update(req: HttpRequest, MultipartForm(form): MultipartForm<UploadF
 
         let byte_slice: &[u8] = &bytes;
 
-        me.set_avatar(&data.bunny_cdn, &mut conn, data.config.bunny.cdn_url.clone(), byte_slice.into()).await?;
+        me.set_avatar(
+            &data.bunny_cdn,
+            &mut conn,
+            data.config.bunny.cdn_url.clone(),
+            byte_slice.into(),
+        )
+        .await?;
     }
 
     if let Some(new_info) = form.json {

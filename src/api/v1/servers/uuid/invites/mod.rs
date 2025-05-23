@@ -3,9 +3,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    error::Error,
     Data,
     api::v1::auth::check_access_token,
+    error::Error,
     structs::{Guild, Member},
     utils::get_auth_header,
 };

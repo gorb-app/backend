@@ -1,14 +1,20 @@
-use diesel::{delete, insert_into, prelude::{Insertable, Queryable}, update, ExpressionMethods, QueryDsl, Selectable, SelectableHelper};
+use actix_web::web::BytesMut;
+use diesel::{
+    ExpressionMethods, QueryDsl, Selectable, SelectableHelper, delete, insert_into,
+    prelude::{Insertable, Queryable},
+    update,
+};
+use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
-use diesel_async::{pooled_connection::AsyncDieselConnectionManager, RunQueryDsl};
 use tokio::task;
 use url::Url;
-use actix_web::web::BytesMut;
+use uuid::Uuid;
 
-use crate::{error::Error, schema::*, utils::image_check, Conn, Data};
+use crate::{Conn, Data, error::Error, schema::*, utils::image_check};
 
-fn load_or_empty<T>(query_result: Result<Vec<T>, diesel::result::Error>) -> Result<Vec<T>, diesel::result::Error> {
+fn load_or_empty<T>(
+    query_result: Result<Vec<T>, diesel::result::Error>,
+) -> Result<Vec<T>, diesel::result::Error> {
     match query_result {
         Ok(vec) => Ok(vec),
         Err(diesel::result::Error::NotFound) => Ok(Vec::new()),
@@ -34,7 +40,7 @@ impl ChannelBuilder {
                 .filter(channel_uuid.eq(self.uuid))
                 .select(ChannelPermission::as_select())
                 .load(conn)
-                .await
+                .await,
         )?;
 
         Ok(Channel {
@@ -66,7 +72,10 @@ pub struct ChannelPermission {
 
 impl Channel {
     pub async fn fetch_all(
-        pool: &deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
+        pool: &deadpool::managed::Pool<
+            AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>,
+            Conn,
+        >,
         guild_uuid: Uuid,
     ) -> Result<Vec<Self>, Error> {
         let mut conn = pool.get().await?;
@@ -77,21 +86,18 @@ impl Channel {
                 .filter(dsl::guild_uuid.eq(guild_uuid))
                 .select(ChannelBuilder::as_select())
                 .load(&mut conn)
-                .await
+                .await,
         )?;
 
         let channel_futures = channel_builders.iter().map(async move |c| {
             let mut conn = pool.get().await?;
             c.clone().build(&mut conn).await
         });
-        
+
         futures::future::try_join_all(channel_futures).await
     }
 
-    pub async fn fetch_one(
-        conn: &mut Conn,
-        channel_uuid: Uuid,
-    ) -> Result<Self, Error> {
+    pub async fn fetch_one(conn: &mut Conn, channel_uuid: Uuid) -> Result<Self, Error> {
         use channels::dsl;
         let channel_builder: ChannelBuilder = dsl::channels
             .filter(dsl::uuid.eq(channel_uuid))
@@ -114,7 +120,7 @@ impl Channel {
 
         let new_channel = ChannelBuilder {
             uuid: channel_uuid,
-            guild_uuid: guild_uuid,
+            guild_uuid,
             name: name.clone(),
             description: description.clone(),
         };
@@ -133,11 +139,11 @@ impl Channel {
             permissions: vec![],
         };
 
-        data
-            .set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
+        data.set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
             .await?;
 
-        data.del_cache_key(format!("{}_channels", guild_uuid)).await?;
+        data.del_cache_key(format!("{}_channels", guild_uuid))
+            .await?;
 
         Ok(channel)
     }
@@ -166,7 +172,7 @@ impl Channel {
                 .limit(amount)
                 .offset(offset)
                 .load(conn)
-                .await
+                .await,
         )?;
 
         Ok(messages)
@@ -257,8 +263,8 @@ impl GuildBuilder {
             description: self.description,
             icon: self.icon.and_then(|i| i.parse().ok()),
             owner_uuid: self.owner_uuid,
-            roles: roles,
-            member_count: member_count,
+            roles,
+            member_count,
         })
     }
 }
@@ -287,7 +293,10 @@ impl Guild {
     }
 
     pub async fn fetch_amount(
-        pool: &deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
+        pool: &deadpool::managed::Pool<
+            AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>,
+            Conn,
+        >,
         offset: i64,
         amount: i64,
     ) -> Result<Vec<Self>, Error> {
@@ -302,7 +311,7 @@ impl Guild {
                 .offset(offset)
                 .limit(amount)
                 .load(&mut conn)
-                .await
+                .await,
         )?;
 
         // Process each guild concurrently
@@ -368,7 +377,7 @@ impl Guild {
                 .filter(dsl::guild_uuid.eq(self.uuid))
                 .select(Invite::as_select())
                 .load(conn)
-                .await
+                .await,
         )?;
 
         Ok(invites)
@@ -385,7 +394,7 @@ impl Guild {
         if let Some(id) = custom_id {
             invite_id = id;
             if invite_id.len() > 32 {
-                return Err(Error::BadRequest("MAX LENGTH".to_string()))
+                return Err(Error::BadRequest("MAX LENGTH".to_string()));
             }
         } else {
             let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -408,14 +417,18 @@ impl Guild {
     }
 
     // FIXME: Horrible security
-    pub async fn set_icon(&mut self, bunny_cdn: &bunny_api_tokio::Client, conn: &mut Conn, cdn_url: Url, icon: BytesMut) -> Result<(), Error> {
+    pub async fn set_icon(
+        &mut self,
+        bunny_cdn: &bunny_api_tokio::Client,
+        conn: &mut Conn,
+        cdn_url: Url,
+        icon: BytesMut,
+    ) -> Result<(), Error> {
         let icon_clone = icon.clone();
         let image_type = task::spawn_blocking(move || image_check(icon_clone)).await??;
 
         if let Some(icon) = &self.icon {
-            let relative_url = icon
-                .path()
-                .trim_start_matches('/');
+            let relative_url = icon.path().trim_start_matches('/');
 
             bunny_cdn.storage.delete(relative_url).await?;
         }
@@ -452,26 +465,20 @@ pub struct Role {
 }
 
 impl Role {
-    pub async fn fetch_all(
-        conn: &mut Conn,
-        guild_uuid: Uuid,
-    ) -> Result<Vec<Self>, Error> {
+    pub async fn fetch_all(conn: &mut Conn, guild_uuid: Uuid) -> Result<Vec<Self>, Error> {
         use roles::dsl;
         let roles: Vec<Role> = load_or_empty(
             dsl::roles
                 .filter(dsl::guild_uuid.eq(guild_uuid))
                 .select(Role::as_select())
                 .load(conn)
-                .await
+                .await,
         )?;
 
         Ok(roles)
     }
 
-    pub async fn fetch_one(
-        conn: &mut Conn,
-        role_uuid: Uuid,
-    ) -> Result<Self, Error> {
+    pub async fn fetch_one(conn: &mut Conn, role_uuid: Uuid) -> Result<Self, Error> {
         use roles::dsl;
         let role: Role = dsl::roles
             .filter(dsl::uuid.eq(role_uuid))
@@ -482,11 +489,7 @@ impl Role {
         Ok(role)
     }
 
-    pub async fn new(
-        conn: &mut Conn,
-        guild_uuid: Uuid,
-        name: String,
-    ) -> Result<Self, Error> {
+    pub async fn new(conn: &mut Conn, guild_uuid: Uuid, name: String) -> Result<Self, Error> {
         let role_uuid = Uuid::now_v7();
 
         let role = Role {
@@ -534,22 +537,18 @@ impl Member {
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, Error> {
-    use guild_members::dsl;
-    let member: Member = dsl::guild_members
-        .filter(dsl::user_uuid.eq(user_uuid))
-        .filter(dsl::guild_uuid.eq(guild_uuid))
-        .select(Member::as_select())
-        .get_result(conn)
-        .await?;
+        use guild_members::dsl;
+        let member: Member = dsl::guild_members
+            .filter(dsl::user_uuid.eq(user_uuid))
+            .filter(dsl::guild_uuid.eq(guild_uuid))
+            .select(Member::as_select())
+            .get_result(conn)
+            .await?;
 
         Ok(member)
     }
 
-    pub async fn new(
-        conn: &mut Conn,
-        user_uuid: Uuid,
-        guild_uuid: Uuid,
-    ) -> Result<Self, Error> {
+    pub async fn new(conn: &mut Conn, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {
         let member_uuid = Uuid::now_v7();
 
         let member = Member {
@@ -629,7 +628,11 @@ impl User {
         Ok(user)
     }
 
-    pub async fn fetch_amount(conn: &mut Conn, offset: i64, amount: i64) -> Result<Vec<Self>, Error> {
+    pub async fn fetch_amount(
+        conn: &mut Conn,
+        offset: i64,
+        amount: i64,
+    ) -> Result<Vec<Self>, Error> {
         use users::dsl;
         let users: Vec<User> = load_or_empty(
             dsl::users
@@ -637,7 +640,7 @@ impl User {
                 .offset(offset)
                 .select(User::as_select())
                 .load(conn)
-                .await
+                .await,
         )?;
 
         Ok(users)
@@ -668,23 +671,30 @@ impl Me {
         Ok(me)
     }
 
-    pub async fn set_avatar(&mut self, bunny_cdn: &bunny_api_tokio::Client, conn: &mut Conn, cdn_url: Url, avatar: BytesMut) -> Result<(), Error> {
+    pub async fn set_avatar(
+        &mut self,
+        bunny_cdn: &bunny_api_tokio::Client,
+        conn: &mut Conn,
+        cdn_url: Url,
+        avatar: BytesMut,
+    ) -> Result<(), Error> {
         let avatar_clone = avatar.clone();
         let image_type = task::spawn_blocking(move || image_check(avatar_clone)).await??;
 
         if let Some(avatar) = &self.avatar {
             let avatar_url: Url = avatar.parse()?;
 
-            let relative_url = avatar_url
-                .path()
-                .trim_start_matches('/');
+            let relative_url = avatar_url.path().trim_start_matches('/');
 
             bunny_cdn.storage.delete(relative_url).await?;
         }
 
         let path = format!("avatar/{}/avatar.{}", self.uuid, image_type);
 
-        bunny_cdn.storage.upload(path.clone(), avatar.into()).await?;
+        bunny_cdn
+            .storage
+            .upload(path.clone(), avatar.into())
+            .await?;
 
         let avatar_url = cdn_url.join(&path)?;
 

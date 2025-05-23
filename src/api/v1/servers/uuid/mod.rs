@@ -2,14 +2,14 @@ use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
 use uuid::Uuid;
 
 mod channels;
+mod icon;
 mod invites;
 mod roles;
-mod icon;
 
 use crate::{
-    error::Error,
     Data,
     api::v1::auth::check_access_token,
+    error::Error,
     structs::{Guild, Member},
     utils::get_auth_header,
 };

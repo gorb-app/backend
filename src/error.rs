@@ -1,16 +1,23 @@
 use std::{io, time::SystemTimeError};
 
-use actix_web::{error::{PayloadError, ResponseError}, http::{header::{ContentType, ToStrError}, StatusCode}, HttpResponse};
+use actix_web::{
+    HttpResponse,
+    error::{PayloadError, ResponseError},
+    http::{
+        StatusCode,
+        header::{ContentType, ToStrError},
+    },
+};
 use deadpool::managed::{BuildError, PoolError};
+use diesel::{ConnectionError, result::Error as DieselError};
+use diesel_async::pooled_connection::PoolError as DieselPoolError;
+use log::{debug, error};
 use redis::RedisError;
 use serde::Serialize;
-use thiserror::Error;
-use diesel::{result::Error as DieselError, ConnectionError};
-use diesel_async::pooled_connection::PoolError as DieselPoolError;
-use tokio::task::JoinError;
 use serde_json::Error as JsonError;
+use thiserror::Error;
+use tokio::task::JoinError;
 use toml::de::Error as TomlError;
-use log::{debug, error};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -55,7 +62,7 @@ pub enum Error {
 impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
         debug!("{:?}", self);
-        error!("{}: {}", self.status_code(), self.to_string());
+        error!("{}: {}", self.status_code(), self);
 
         HttpResponse::build(self.status_code())
             .insert_header(ContentType::json())
@@ -79,8 +86,6 @@ struct WebError {
 
 impl WebError {
     fn new(message: String) -> Self {
-        Self {
-            message,
-        }
+        Self { message }
     }
 }

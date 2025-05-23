@@ -1,9 +1,15 @@
-use actix_web::{get, post, web, HttpRequest, HttpResponse, Scope};
+use actix_web::{HttpRequest, HttpResponse, Scope, get, post, web};
 use serde::Deserialize;
 
 mod uuid;
 
-use crate::{error::Error, api::v1::auth::check_access_token, structs::{Guild, StartAmountQuery}, utils::get_auth_header, Data};
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Guild, StartAmountQuery},
+    utils::get_auth_header,
+};
 
 #[derive(Deserialize)]
 struct GuildInfo {
@@ -63,4 +69,3 @@ pub async fn get(
 
     Ok(HttpResponse::Ok().json(guilds))
 }
-

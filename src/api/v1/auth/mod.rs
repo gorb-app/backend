@@ -10,7 +10,7 @@ use regex::Regex;
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{error::Error, Conn, schema::access_tokens::dsl};
+use crate::{Conn, error::Error, schema::access_tokens::dsl};
 
 mod login;
 mod refresh;
@@ -39,10 +39,7 @@ pub fn web() -> Scope {
         .service(revoke::res)
 }
 
-pub async fn check_access_token(
-    access_token: &str,
-    conn: &mut Conn,
-) -> Result<Uuid, Error> {
+pub async fn check_access_token(access_token: &str, conn: &mut Conn) -> Result<Uuid, Error> {
     let (uuid, created_at): (Uuid, i64) = dsl::access_tokens
         .filter(dsl::token.eq(access_token))
         .select((dsl::uuid, dsl::created_at))
@@ -56,9 +53,7 @@ pub async fn check_access_token(
             }
         })?;
 
-    let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)?
-        .as_secs() as i64;
+    let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
     let lifetime = current_time - created_at;
 

@@ -1,5 +1,5 @@
-use bunny_api_tokio::edge_storage::Endpoint;
 use crate::error::Error;
+use bunny_api_tokio::edge_storage::Endpoint;
 use log::debug;
 use serde::Deserialize;
 use tokio::fs::read_to_string;

@@ -3,9 +3,9 @@ use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
 use crate::{
-    error::Error,
     Data,
     api::v1::auth::check_access_token,
+    error::Error,
     structs::{Member, Role},
     utils::get_auth_header,
 };
@@ -43,8 +43,7 @@ pub async fn get(
 
     let roles = Role::fetch_all(&mut conn, guild_uuid).await?;
 
-    data
-        .set_cache_key(format!("{}_roles", guild_uuid), roles.clone(), 1800)
+    data.set_cache_key(format!("{}_roles", guild_uuid), roles.clone(), 1800)
         .await?;
 
     Ok(HttpResponse::Ok().json(roles))

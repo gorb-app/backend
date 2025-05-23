@@ -2,24 +2,25 @@ use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
-use error::Error;
-use simple_logger::SimpleLogger;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
+use error::Error;
+use simple_logger::SimpleLogger;
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
-type Conn = deadpool::managed::Object<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>>;
+type Conn =
+    deadpool::managed::Object<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>>;
 
 mod api;
+pub mod error;
+pub mod schema;
 pub mod structs;
 pub mod utils;
-pub mod schema;
-pub mod error;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -30,7 +31,10 @@ struct Args {
 
 #[derive(Clone)]
 pub struct Data {
-    pub pool: deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
+    pub pool: deadpool::managed::Pool<
+        AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>,
+        Conn,
+    >,
     pub cache_pool: redis::Client,
     pub config: Config,
     pub argon2: Argon2<'static>,
@@ -53,27 +57,33 @@ async fn main() -> Result<(), Error> {
     let web = config.web.clone();
 
     // create a new connection pool with the default config
-    let pool_config = AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(config.database.url());
+    let pool_config =
+        AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(config.database.url());
     let pool = Pool::builder(pool_config).build()?;
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
 
     let mut bunny_cdn = bunny_api_tokio::Client::new(config.bunny.api_key.clone()).await?;
 
-    bunny_cdn.storage.init(config.bunny.endpoint.clone(), config.bunny.storage_zone.clone())?;
+    bunny_cdn.storage.init(
+        config.bunny.endpoint.clone(),
+        config.bunny.storage_zone.clone(),
+    )?;
 
     let database_url = config.database.url();
 
     tokio::task::spawn_blocking(move || {
-    use diesel::prelude::Connection;
-    use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
+        use diesel::prelude::Connection;
+        use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
 
-
-        let mut conn = AsyncConnectionWrapper::<diesel_async::AsyncPgConnection>::establish(&database_url)?;
+        let mut conn =
+            AsyncConnectionWrapper::<diesel_async::AsyncPgConnection>::establish(&database_url)?;
 
         conn.run_pending_migrations(MIGRATIONS)?;
         Ok::<_, Box<dyn std::error::Error + Send + Sync>>(())
-    }).await?.unwrap();
+    })
+    .await?
+    .unwrap();
 
     /*
     **Stored for later possible use**

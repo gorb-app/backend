@@ -5,8 +5,8 @@ use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
 
-use crate::error::Error;
 use crate::Data;
+use crate::error::Error;
 use crate::schema::users::dsl::{users, uuid};
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");

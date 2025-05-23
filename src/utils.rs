@@ -1,6 +1,7 @@
 use actix_web::{
-    cookie::{time::Duration, Cookie, SameSite},
-    http::header::HeaderMap, web::BytesMut,
+    cookie::{Cookie, SameSite, time::Duration},
+    http::header::HeaderMap,
+    web::BytesMut,
 };
 use bindet::FileType;
 use getrandom::fill;
@@ -8,29 +9,35 @@ use hex::encode;
 use redis::RedisError;
 use serde::Serialize;
 
-use crate::{error::Error, Data};
+use crate::{Data, error::Error};
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, Error> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
 
     if auth_token.is_none() {
-        return Err(Error::Unauthorized("No authorization header provided".to_string()));
+        return Err(Error::Unauthorized(
+            "No authorization header provided".to_string(),
+        ));
     }
 
     let auth_raw = auth_token.unwrap().to_str()?;
 
     let mut auth = auth_raw.split_whitespace();
 
-    let auth_type = auth.nth(0);
+    let auth_type = auth.next();
 
-    let auth_value = auth.nth(0);
+    let auth_value = auth.next();
 
     if auth_type.is_none() {
-        return Err(Error::BadRequest("Authorization header is empty".to_string()));
+        return Err(Error::BadRequest(
+            "Authorization header is empty".to_string(),
+        ));
     } else if auth_type.is_some_and(|at| at != "Bearer") {
-        return Err(Error::BadRequest("Only token auth is supported".to_string()));
+        return Err(Error::BadRequest(
+            "Only token auth is supported".to_string(),
+        ));
     }
-    
+
     if auth_value.is_none() {
         return Err(Error::BadRequest("No token provided".to_string()));
     }
@@ -67,13 +74,15 @@ pub fn image_check(icon: BytesMut) -> Result<String, Error> {
 
     if let Ok(Some(file_type)) = detect {
         if file_type.likely_to_be == vec![FileType::Jpg] {
-            return Ok(String::from("jpg"))
+            return Ok(String::from("jpg"));
         } else if file_type.likely_to_be == vec![FileType::Png] {
-            return Ok(String::from("png"))
+            return Ok(String::from("png"));
         }
     }
 
-    Err(Error::BadRequest("Uploaded file is not an image".to_string()))
+    Err(Error::BadRequest(
+        "Uploaded file is not an image".to_string(),
+    ))
 }
 
 impl Data {

@@ -1,11 +1,17 @@
 use actix_web::{HttpRequest, HttpResponse, post, web};
-use diesel::{delete, update, ExpressionMethods, QueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, delete, update};
 use diesel_async::RunQueryDsl;
 use log::error;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    error::Error, schema::{access_tokens::{self, dsl}, refresh_tokens::{self, dsl as rdsl}}, utils::{generate_access_token, generate_refresh_token, refresh_token_cookie}, Data
+    Data,
+    error::Error,
+    schema::{
+        access_tokens::{self, dsl},
+        refresh_tokens::{self, dsl as rdsl},
+    },
+    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
 };
 
 use super::Response;
@@ -20,9 +26,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
     let mut refresh_token = String::from(recv_refresh_token_cookie.unwrap().value());
 
-    let current_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)?
-        .as_secs() as i64;
+    let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
     let mut conn = data.pool.get().await?;
 
@@ -52,9 +56,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
                 .finish());
         }
 
-        let current_time = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_secs() as i64;
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
         if lifetime > 1987200 {
             let new_refresh_token = generate_refresh_token();

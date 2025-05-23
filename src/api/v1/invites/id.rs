@@ -1,9 +1,9 @@
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 
 use crate::{
-    error::Error,
     Data,
     api::v1::auth::check_access_token,
+    error::Error,
     structs::{Guild, Invite, Member},
     utils::get_auth_header,
 };
