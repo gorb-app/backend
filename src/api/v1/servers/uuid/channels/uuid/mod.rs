@@ -2,14 +2,14 @@ pub mod messages;
 pub mod socket;
 
 use crate::{
+    error::Error,
     Data,
     api::v1::auth::check_access_token,
     structs::{Channel, Member},
     utils::get_auth_header,
 };
-use ::uuid::Uuid;
-use actix_web::{Error, HttpRequest, HttpResponse, delete, get, web};
-use log::error;
+use uuid::Uuid;
+use actix_web::{HttpRequest, HttpResponse, delete, get, web};
 
 #[get("{uuid}/channels/{channel_uuid}")]
 pub async fn get(
@@ -19,52 +19,27 @@ pub async fn get(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     let (guild_uuid, channel_uuid) = path.into_inner();
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let uuid = authorized.unwrap();
+    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
-    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
-
-    if let Err(error) = member {
-        return Ok(error);
-    }
-
-    let cache_result = data.get_cache_key(format!("{}", channel_uuid)).await;
-
-    if let Ok(cache_hit) = cache_result {
+    if let Ok(cache_hit) = data.get_cache_key(format!("{}", channel_uuid)).await {
         return Ok(HttpResponse::Ok()
             .content_type("application/json")
             .body(cache_hit));
     }
 
-    let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
+    let channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
 
-    if let Err(error) = channel_result {
-        return Ok(error);
-    }
-
-    let channel = channel_result.unwrap();
-
-    let cache_result = data
+    data
         .set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
-        .await;
-
-    if let Err(error) = cache_result {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish());
-    }
+        .await?;
 
     Ok(HttpResponse::Ok().json(channel))
 }
@@ -77,55 +52,27 @@ pub async fn delete(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
-
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let auth_header = get_auth_header(headers)?;
 
     let (guild_uuid, channel_uuid) = path.into_inner();
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let mut conn = data.pool.get().await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let uuid = authorized.unwrap();
-
-    let member = Member::fetch_one(&data.pool, uuid, guild_uuid).await;
-
-    if let Err(error) = member {
-        return Ok(error);
-    }
-
-    let cache_result = data.get_cache_key(format!("{}", channel_uuid)).await;
+    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
     let channel: Channel;
 
-    if let Ok(cache_hit) = cache_result {
+    if let Ok(cache_hit) = data.get_cache_key(format!("{}", channel_uuid)).await {
         channel = serde_json::from_str(&cache_hit).unwrap();
 
-        let result = data.del_cache_key(format!("{}", channel_uuid)).await;
-
-        if let Err(error) = result {
-            error!("{}", error)
-        }
+        data.del_cache_key(format!("{}", channel_uuid)).await?;
     } else {
-        let channel_result = Channel::fetch_one(&data.pool, guild_uuid, channel_uuid).await;
-
-        if let Err(error) = channel_result {
-            return Ok(error);
-        }
-
-        channel = channel_result.unwrap();
+        channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
     }
 
-    let delete_result = channel.delete(&data.pool).await;
-
-    if let Err(error) = delete_result {
-        return Ok(error);
-    }
+    channel.delete(&mut conn).await?;
 
     Ok(HttpResponse::Ok().finish())
 }

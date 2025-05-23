@@ -1,9 +1,9 @@
-use actix_web::{get, post, web, Error, HttpRequest, HttpResponse, Scope};
+use actix_web::{get, post, web, HttpRequest, HttpResponse, Scope};
 use serde::Deserialize;
 
 mod uuid;
 
-use crate::{api::v1::auth::check_access_token, structs::{Guild, StartAmountQuery}, utils::get_auth_header, Data};
+use crate::{error::Error, api::v1::auth::check_access_token, structs::{Guild, StartAmountQuery}, utils::get_auth_header, Data};
 
 #[derive(Deserialize)]
 struct GuildInfo {
@@ -26,33 +26,21 @@ pub async fn create(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
+    let auth_header = get_auth_header(headers)?;
 
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    let mut conn = data.pool.get().await?;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
-
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
-
-    let uuid = authorized.unwrap();
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
     let guild = Guild::new(
-        &data.pool,
+        &mut conn,
         guild_info.name.clone(),
         guild_info.description.clone(),
         uuid,
     )
-    .await;
+    .await?;
 
-    if let Err(error) = guild {
-        return Ok(error);
-    }
-
-    Ok(HttpResponse::Ok().json(guild.unwrap()))
+    Ok(HttpResponse::Ok().json(guild))
 }
 
 #[get("")]
@@ -63,28 +51,16 @@ pub async fn get(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let auth_header = get_auth_header(headers);
+    let auth_header = get_auth_header(headers)?;
 
     let start = request_query.start.unwrap_or(0);
 
     let amount = request_query.amount.unwrap_or(10);
 
-    if let Err(error) = auth_header {
-        return Ok(error);
-    }
+    check_access_token(auth_header, &mut data.pool.get().await.unwrap()).await?;
 
-    let authorized = check_access_token(auth_header.unwrap(), &data.pool).await;
+    let guilds = Guild::fetch_amount(&data.pool, start, amount).await?;
 
-    if let Err(error) = authorized {
-        return Ok(error);
-    }
-
-    let guilds = Guild::fetch_amount(&data.pool, start, amount).await;
-
-    if let Err(error) = guilds {
-        return Ok(error);
-    }
-
-    Ok(HttpResponse::Ok().json(guilds.unwrap()))
+    Ok(HttpResponse::Ok().json(guilds))
 }
 
