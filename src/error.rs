@@ -8,6 +8,7 @@ use actix_web::{
         header::{ContentType, ToStrError},
     },
 };
+use bunny_api_tokio::error::Error as BunnyError;
 use deadpool::managed::{BuildError, PoolError};
 use diesel::{ConnectionError, result::Error as DieselError};
 use diesel_async::pooled_connection::PoolError as DieselPoolError;
@@ -46,7 +47,7 @@ pub enum Error {
     #[error(transparent)]
     RandomError(#[from] getrandom::Error),
     #[error(transparent)]
-    BunnyError(#[from] bunny_api_tokio::error::Error),
+    BunnyError(#[from] BunnyError),
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
     #[error(transparent)]
@@ -72,6 +73,7 @@ impl ResponseError for Error {
     fn status_code(&self) -> StatusCode {
         match *self {
             Error::SqlError(DieselError::NotFound) => StatusCode::NOT_FOUND,
+            Error::BunnyError(BunnyError::NotFound(_)) => StatusCode::NOT_FOUND,
             Error::BadRequest(_) => StatusCode::BAD_REQUEST,
             Error::Unauthorized(_) => StatusCode::UNAUTHORIZED,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
