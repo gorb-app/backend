@@ -10,7 +10,7 @@ use diesel_async::pooled_connection::PoolError as DieselPoolError;
 use tokio::task::JoinError;
 use serde_json::Error as JsonError;
 use toml::de::Error as TomlError;
-use log::error;
+use log::{debug, error};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -54,6 +54,7 @@ pub enum Error {
 
 impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
+        debug!("{:?}", self);
         error!("{}: {}", self.status_code(), self.to_string());
 
         HttpResponse::build(self.status_code())
