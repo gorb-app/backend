@@ -1,5 +1,4 @@
 use actix_web::{
-    HttpResponse,
     cookie::{Cookie, SameSite, time::Duration},
     http::header::HeaderMap,
 };
@@ -8,25 +7,31 @@ use hex::encode;
 use redis::RedisError;
 use serde::Serialize;
 
-use crate::Data;
+use crate::{error::Error, Data};
 
-pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, HttpResponse> {
+pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, Error> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
 
     if auth_token.is_none() {
-        return Err(HttpResponse::Unauthorized().finish());
+        return Err(Error::Unauthorized("No authorization header provided".to_string()));
     }
 
-    let auth = auth_token.unwrap().to_str();
+    let auth_raw = auth_token.unwrap().to_str()?;
 
-    if let Err(error) = auth {
-        return Err(HttpResponse::Unauthorized().json(format!(r#" {{ "error": "{}" }} "#, error)));
+    let mut auth = auth_raw.split_whitespace();
+
+    let auth_type = auth.nth(0);
+
+    let auth_value = auth.nth(0);
+
+    if auth_type.is_none() {
+        return Err(Error::BadRequest("Authorization header is empty".to_string()));
+    } else if auth_type.is_some_and(|at| at != "Bearer") {
+        return Err(Error::BadRequest("Only token auth is supported".to_string()));
     }
-
-    let auth_value = auth.unwrap().split_whitespace().nth(1);
-
+    
     if auth_value.is_none() {
-        return Err(HttpResponse::BadRequest().finish());
+        return Err(Error::BadRequest("No token provided".to_string()));
     }
 
     Ok(auth_value.unwrap())
@@ -60,12 +65,12 @@ impl Data {
         key: String,
         value: impl Serialize,
         expire: u32,
-    ) -> Result<(), RedisError> {
+    ) -> Result<(), Error> {
         let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
 
         let key_encoded = encode(key);
 
-        let value_json = serde_json::to_string(&value).unwrap();
+        let value_json = serde_json::to_string(&value)?;
 
         redis::cmd("SET")
             .arg(&[key_encoded.clone(), value_json])
@@ -75,7 +80,9 @@ impl Data {
         redis::cmd("EXPIRE")
             .arg(&[key_encoded, expire.to_string()])
             .exec_async(&mut conn)
-            .await
+            .await?;
+
+        Ok(())
     }
 
     pub async fn get_cache_key(&self, key: String) -> Result<String, RedisError> {

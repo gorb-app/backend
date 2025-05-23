@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::error::Error;
 use log::debug;
 use serde::Deserialize;
 use tokio::fs::read_to_string;

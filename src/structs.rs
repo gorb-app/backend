@@ -1,11 +1,17 @@
-use actix_web::HttpResponse;
 use diesel::{delete, insert_into, prelude::{Insertable, Queryable}, ExpressionMethods, QueryDsl, Selectable, SelectableHelper};
-use log::error;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, RunQueryDsl};
 
-use crate::{Conn, Data, schema::*};
+use crate::{error::Error, Conn, Data, schema::*};
+
+fn load_or_empty<T>(query_result: Result<Vec<T>, diesel::result::Error>) -> Result<Vec<T>, diesel::result::Error> {
+    match query_result {
+        Ok(vec) => Ok(vec),
+        Err(diesel::result::Error::NotFound) => Ok(Vec::new()),
+        Err(e) => Err(e),
+    }
+}
 
 #[derive(Queryable, Selectable, Insertable, Clone)]
 #[diesel(table_name = channels)]
@@ -18,13 +24,15 @@ struct ChannelBuilder {
 }
 
 impl ChannelBuilder {
-    async fn build(self, conn: &mut Conn) -> Result<Channel, crate::Error> {
+    async fn build(self, conn: &mut Conn) -> Result<Channel, Error> {
         use self::channel_permissions::dsl::*;
-        let channel_permission: Vec<ChannelPermission> = channel_permissions
-            .filter(channel_uuid.eq(self.uuid))
-            .select((role_uuid, permissions))
-            .load(conn)
-            .await?;
+        let channel_permission: Vec<ChannelPermission> = load_or_empty(
+            channel_permissions
+                .filter(channel_uuid.eq(self.uuid))
+                .select(ChannelPermission::as_select())
+                .load(conn)
+                .await
+        )?;
 
         Ok(Channel {
             uuid: self.uuid,
@@ -45,7 +53,7 @@ pub struct Channel {
     pub permissions: Vec<ChannelPermission>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Queryable)]
+#[derive(Serialize, Deserialize, Clone, Queryable, Selectable)]
 #[diesel(table_name = channel_permissions)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ChannelPermission {
@@ -57,69 +65,38 @@ impl Channel {
     pub async fn fetch_all(
         pool: &deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
         guild_uuid: Uuid,
-    ) -> Result<Vec<Self>, HttpResponse> {
-        let mut conn = pool.get().await.unwrap();
+    ) -> Result<Vec<Self>, Error> {
+        let mut conn = pool.get().await?;
 
         use channels::dsl;
-        let channel_builders_result: Result<Vec<ChannelBuilder>, diesel::result::Error> = dsl::channels
-            .filter(dsl::guild_uuid.eq(guild_uuid))
-            .select(ChannelBuilder::as_select())
-            .load(&mut conn)
-            .await;
-
-        if let Err(error) = channel_builders_result {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let channel_builders = channel_builders_result.unwrap();
+        let channel_builders: Vec<ChannelBuilder> = load_or_empty(
+            dsl::channels
+                .filter(dsl::guild_uuid.eq(guild_uuid))
+                .select(ChannelBuilder::as_select())
+                .load(&mut conn)
+                .await
+        )?;
 
         let channel_futures = channel_builders.iter().map(async move |c| {
             let mut conn = pool.get().await?;
             c.clone().build(&mut conn).await
         });
-
         
-        let channels = futures::future::try_join_all(channel_futures).await;
-
-        if let Err(error) = channels {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish())
-        }
-
-        Ok(channels.unwrap())
+        futures::future::try_join_all(channel_futures).await
     }
 
     pub async fn fetch_one(
         conn: &mut Conn,
         channel_uuid: Uuid,
-    ) -> Result<Self, HttpResponse> {
+    ) -> Result<Self, Error> {
         use channels::dsl;
-        let channel_builder_result: Result<ChannelBuilder, diesel::result::Error> = dsl::channels
+        let channel_builder: ChannelBuilder = dsl::channels
             .filter(dsl::uuid.eq(channel_uuid))
             .select(ChannelBuilder::as_select())
             .get_result(conn)
-            .await;
+            .await?;
 
-        if let Err(error) = channel_builder_result {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish())
-        }
-
-        let channel_builder = channel_builder_result.unwrap();
-
-        let channel = channel_builder.build(conn).await;
-
-        if let Err(error) = channel {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish())
-        }
-
-        Ok(channel.unwrap())
+        channel_builder.build(conn).await
     }
 
     pub async fn new(
@@ -127,8 +104,8 @@ impl Channel {
         guild_uuid: Uuid,
         name: String,
         description: Option<String>,
-    ) -> Result<Self, HttpResponse> {
-        let mut conn = data.pool.get().await.unwrap();
+    ) -> Result<Self, Error> {
+        let mut conn = data.pool.get().await?;
 
         let channel_uuid = Uuid::now_v7();
 
@@ -139,15 +116,10 @@ impl Channel {
             description: description.clone(),
         };
 
-        let insert_result = insert_into(channels::table)
+        insert_into(channels::table)
             .values(new_channel)
             .execute(&mut conn)
-            .await;
-
-        if let Err(error) = insert_result {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
+            .await?;
 
         // returns different object because there's no reason to build the channelbuilder (wastes 1 database request)
         let channel = Self {
@@ -158,37 +130,21 @@ impl Channel {
             permissions: vec![],
         };
 
-        let cache_result = data
+        data
             .set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
-            .await;
+            .await?;
 
-        if let Err(error) = cache_result {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let cache_deletion_result = data.del_cache_key(format!("{}_channels", guild_uuid)).await;
-
-        if let Err(error) = cache_deletion_result {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
+        data.del_cache_key(format!("{}_channels", guild_uuid)).await?;
 
         Ok(channel)
     }
 
-    pub async fn delete(self, conn: &mut Conn) -> Result<(), HttpResponse> {
+    pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
         use channels::dsl;
-        let result = delete(channels::table)
+        delete(channels::table)
             .filter(dsl::uuid.eq(self.uuid))
             .execute(conn)
-            .await;
-
-        if let Err(error) = result {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
+            .await?;
 
         Ok(())
     }
@@ -198,22 +154,19 @@ impl Channel {
         conn: &mut Conn,
         amount: i64,
         offset: i64,
-    ) -> Result<Vec<Message>, HttpResponse> {
+    ) -> Result<Vec<Message>, Error> {
         use messages::dsl;
-        let messages: Result<Vec<Message>, diesel::result::Error> = dsl::messages
-            .filter(dsl::channel_uuid.eq(self.uuid))
-            .select(Message::as_select())
-            .limit(amount)
-            .offset(offset)
-            .load(conn)
-            .await;
+        let messages: Vec<Message> = load_or_empty(
+            dsl::messages
+                .filter(dsl::channel_uuid.eq(self.uuid))
+                .select(Message::as_select())
+                .limit(amount)
+                .offset(offset)
+                .load(conn)
+                .await
+        )?;
 
-        if let Err(error) = messages {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        Ok(messages.unwrap())
+        Ok(messages)
     }
 
     pub async fn new_message(
@@ -221,7 +174,7 @@ impl Channel {
         conn: &mut Conn,
         user_uuid: Uuid,
         message: String,
-    ) -> Result<Message, HttpResponse> {
+    ) -> Result<Message, Error> {
         let message_uuid = Uuid::now_v7();
 
         let message = Message {
@@ -231,15 +184,10 @@ impl Channel {
             message,
         };
 
-        let insert_result = insert_into(messages::table)
+        insert_into(messages::table)
             .values(message.clone())
             .execute(conn)
-            .await;
-
-        if let Err(error) = insert_result {
-            error!("{}", error);
-            return Err(HttpResponse::InternalServerError().finish());
-        }
+            .await?;
 
         Ok(message)
     }
@@ -294,7 +242,7 @@ struct GuildBuilder {
 }
 
 impl GuildBuilder {
-    async fn build(self, conn: &mut Conn) -> Result<Guild, HttpResponse> {
+    async fn build(self, conn: &mut Conn) -> Result<Guild, Error> {
         let member_count = Member::count(conn, self.uuid).await?;
 
         let roles = Role::fetch_all(conn, self.uuid).await?;
@@ -323,49 +271,39 @@ pub struct Guild {
 }
 
 impl Guild {
-    pub async fn fetch_one(conn: &mut Conn, guild_uuid: Uuid) -> Result<Self, HttpResponse> {
+    pub async fn fetch_one(conn: &mut Conn, guild_uuid: Uuid) -> Result<Self, Error> {
         use guilds::dsl;
-        let guild_builder: Result<GuildBuilder, diesel::result::Error> = dsl::guilds
+        let guild_builder: GuildBuilder = dsl::guilds
             .filter(dsl::uuid.eq(guild_uuid))
             .select(GuildBuilder::as_select())
             .get_result(conn)
-            .await;
+            .await?;
 
-        if let Err(error) = guild_builder {
-            error!("{}", error);
-
-            return Err(HttpResponse::InternalServerError().finish());
-        }
-
-        let guild = guild_builder.unwrap().build(conn).await?;
-
-        Ok(guild)
+        guild_builder.build(conn).await
     }
 
     pub async fn fetch_amount(
         pool: &deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
         offset: i64,
         amount: i64,
-    ) -> Result<Vec<Self>, HttpResponse> {
+    ) -> Result<Vec<Self>, Error> {
         // Fetch guild data from database
-        let mut conn = pool.get().await.unwrap();
+        let mut conn = pool.get().await?;
 
         use guilds::dsl;
-        let guild_builders: Vec<GuildBuilder> = dsl::guilds
-            .select(GuildBuilder::as_select())
-            .order_by(dsl::uuid)
-            .offset(offset)
-            .limit(amount)
-            .load(&mut conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+        let guild_builders: Vec<GuildBuilder> = load_or_empty(
+            dsl::guilds
+                .select(GuildBuilder::as_select())
+                .order_by(dsl::uuid)
+                .offset(offset)
+                .limit(amount)
+                .load(&mut conn)
+                .await
+        )?;
 
         // Process each guild concurrently
         let guild_futures = guild_builders.iter().map(async move |g| {
-            let mut conn = pool.get().await.unwrap();
+            let mut conn = pool.get().await?;
             g.clone().build(&mut conn).await
         });
 
@@ -378,7 +316,7 @@ impl Guild {
         name: String,
         description: Option<String>,
         owner_uuid: Uuid,
-    ) -> Result<Self, HttpResponse> {
+    ) -> Result<Self, Error> {
         let guild_uuid = Uuid::now_v7();
 
         let guild_builder = GuildBuilder {
@@ -391,11 +329,21 @@ impl Guild {
         insert_into(guilds::table)
             .values(guild_builder)
             .execute(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+            .await?;
+
+        let member_uuid = Uuid::now_v7();
+
+        let member = Member {
+            uuid: member_uuid,
+            nickname: None,
+            user_uuid: owner_uuid,
+            guild_uuid,
+        };
+
+        insert_into(guild_members::table)
+            .values(member)
+            .execute(conn)
+            .await?;
 
         Ok(Guild {
             uuid: guild_uuid,
@@ -408,17 +356,15 @@ impl Guild {
         })
     }
 
-    pub async fn get_invites(&self, conn: &mut Conn) -> Result<Vec<Invite>, HttpResponse> {
+    pub async fn get_invites(&self, conn: &mut Conn) -> Result<Vec<Invite>, Error> {
         use invites::dsl;
-        let invites = dsl::invites
-            .filter(dsl::guild_uuid.eq(self.uuid))
-            .select(Invite::as_select())
-            .load(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+        let invites = load_or_empty(
+            dsl::invites
+                .filter(dsl::guild_uuid.eq(self.uuid))
+                .select(Invite::as_select())
+                .load(conn)
+                .await
+        )?;
 
         Ok(invites)
     }
@@ -428,13 +374,13 @@ impl Guild {
         conn: &mut Conn,
         member: &Member,
         custom_id: Option<String>,
-    ) -> Result<Invite, HttpResponse> {
+    ) -> Result<Invite, Error> {
         let invite_id;
 
         if let Some(id) = custom_id {
             invite_id = id;
             if invite_id.len() > 32 {
-                return Err(HttpResponse::BadRequest().finish());
+                return Err(Error::BadRequest("MAX LENGTH".to_string()))
             }
         } else {
             let charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -451,11 +397,7 @@ impl Guild {
         insert_into(invites::table)
             .values(invite.clone())
             .execute(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+            .await?;
 
         Ok(invite)
     }
@@ -477,17 +419,15 @@ impl Role {
     pub async fn fetch_all(
         conn: &mut Conn,
         guild_uuid: Uuid,
-    ) -> Result<Vec<Self>, HttpResponse> {
+    ) -> Result<Vec<Self>, Error> {
         use roles::dsl;
-        let roles: Vec<Role> = dsl::roles
-            .filter(dsl::guild_uuid.eq(guild_uuid))
-            .select(Role::as_select())
-            .load(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+        let roles: Vec<Role> = load_or_empty(
+            dsl::roles
+                .filter(dsl::guild_uuid.eq(guild_uuid))
+                .select(Role::as_select())
+                .load(conn)
+                .await
+        )?;
 
         Ok(roles)
     }
@@ -495,17 +435,13 @@ impl Role {
     pub async fn fetch_one(
         conn: &mut Conn,
         role_uuid: Uuid,
-    ) -> Result<Self, HttpResponse> {
+    ) -> Result<Self, Error> {
         use roles::dsl;
         let role: Role = dsl::roles
             .filter(dsl::uuid.eq(role_uuid))
             .select(Role::as_select())
             .get_result(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+            .await?;
 
         Ok(role)
     }
@@ -514,7 +450,7 @@ impl Role {
         conn: &mut Conn,
         guild_uuid: Uuid,
         name: String,
-    ) -> Result<Self, HttpResponse> {
+    ) -> Result<Self, Error> {
         let role_uuid = Uuid::now_v7();
 
         let role = Role {
@@ -529,11 +465,7 @@ impl Role {
         insert_into(roles::table)
             .values(role.clone())
             .execute(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+            .await?;
 
         Ok(role)
     }
@@ -550,17 +482,13 @@ pub struct Member {
 }
 
 impl Member {
-    async fn count(conn: &mut Conn, guild_uuid: Uuid) -> Result<i64, HttpResponse> {
+    async fn count(conn: &mut Conn, guild_uuid: Uuid) -> Result<i64, Error> {
         use guild_members::dsl;
         let count: i64 = dsl::guild_members
             .filter(dsl::guild_uuid.eq(guild_uuid))
             .count()
             .get_result(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError()
-            })?;
+            .await?;
 
         Ok(count)
     }
@@ -569,18 +497,14 @@ impl Member {
         conn: &mut Conn,
         user_uuid: Uuid,
         guild_uuid: Uuid,
-    ) -> Result<Self, HttpResponse> {
+    ) -> Result<Self, Error> {
     use guild_members::dsl;
     let member: Member = dsl::guild_members
         .filter(dsl::user_uuid.eq(user_uuid))
         .filter(dsl::guild_uuid.eq(guild_uuid))
         .select(Member::as_select())
         .get_result(conn)
-        .await
-        .map_err(|error| {
-            error!("{}", error);
-            HttpResponse::InternalServerError().finish()
-        })?;
+        .await?;
 
         Ok(member)
     }
@@ -589,7 +513,7 @@ impl Member {
         conn: &mut Conn,
         user_uuid: Uuid,
         guild_uuid: Uuid,
-    ) -> Result<Self, HttpResponse> {
+    ) -> Result<Self, Error> {
         let member_uuid = Uuid::now_v7();
 
         let member = Member {
@@ -602,11 +526,7 @@ impl Member {
         insert_into(guild_members::table)
             .values(member)
             .execute(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+            .await?;
 
         Ok(Self {
             uuid: member_uuid,
@@ -639,17 +559,13 @@ pub struct Invite {
 }
 
 impl Invite {
-    pub async fn fetch_one(conn: &mut Conn, invite_id: String) -> Result<Self, HttpResponse> {
+    pub async fn fetch_one(conn: &mut Conn, invite_id: String) -> Result<Self, Error> {
         use invites::dsl;
         let invite: Invite = dsl::invites
             .filter(dsl::id.eq(invite_id))
             .select(Invite::as_select())
             .get_result(conn)
-            .await
-            .map_err(|error| {
-                error!("{}", error);
-                HttpResponse::InternalServerError().finish()
-            })?;
+            .await?;
 
         Ok(invite)
     }
@@ -657,6 +573,6 @@ impl Invite {
 
 #[derive(Deserialize)]
 pub struct StartAmountQuery {
-    pub start: Option<i32>,
-    pub amount: Option<i32>,
+    pub start: Option<i64>,
+    pub amount: Option<i64>,
 }
