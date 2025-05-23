@@ -1,9 +1,12 @@
-use diesel::{delete, insert_into, prelude::{Insertable, Queryable}, ExpressionMethods, QueryDsl, Selectable, SelectableHelper};
+use diesel::{delete, insert_into, prelude::{Insertable, Queryable}, update, ExpressionMethods, QueryDsl, Selectable, SelectableHelper};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use diesel_async::{pooled_connection::AsyncDieselConnectionManager, RunQueryDsl};
+use tokio::task;
+use url::Url;
+use actix_web::web::BytesMut;
 
-use crate::{error::Error, Conn, Data, schema::*};
+use crate::{error::Error, schema::*, utils::image_check, Conn, Data};
 
 fn load_or_empty<T>(query_result: Result<Vec<T>, diesel::result::Error>) -> Result<Vec<T>, diesel::result::Error> {
     match query_result {
@@ -238,6 +241,7 @@ struct GuildBuilder {
     uuid: Uuid,
     name: String,
     description: Option<String>,
+    icon: Option<String>,
     owner_uuid: Uuid,
 }
 
@@ -251,7 +255,7 @@ impl GuildBuilder {
             uuid: self.uuid,
             name: self.name,
             description: self.description,
-            icon: String::from("bogus"),
+            icon: self.icon.and_then(|i| i.parse().ok()),
             owner_uuid: self.owner_uuid,
             roles: roles,
             member_count: member_count,
@@ -264,7 +268,7 @@ pub struct Guild {
     pub uuid: Uuid,
     name: String,
     description: Option<String>,
-    icon: String,
+    icon: Option<Url>,
     owner_uuid: Uuid,
     pub roles: Vec<Role>,
     member_count: i64,
@@ -323,6 +327,7 @@ impl Guild {
             uuid: guild_uuid,
             name: name.clone(),
             description: description.clone(),
+            icon: None,
             owner_uuid,
         };
 
@@ -349,7 +354,7 @@ impl Guild {
             uuid: guild_uuid,
             name,
             description,
-            icon: "bogus".to_string(),
+            icon: None,
             owner_uuid,
             roles: vec![],
             member_count: 1,
@@ -400,6 +405,37 @@ impl Guild {
             .await?;
 
         Ok(invite)
+    }
+
+    // FIXME: Horrible security
+    pub async fn set_icon(&mut self, bunny_cdn: &bunny_api_tokio::Client, conn: &mut Conn, cdn_url: Url, icon: BytesMut) -> Result<(), Error> {
+        let icon_clone = icon.clone();
+        let image_type = task::spawn_blocking(move || image_check(icon_clone)).await??;
+
+        if let Some(icon) = &self.icon {
+            let relative_url = icon
+                .path()
+                .trim_start_matches('/');
+
+            bunny_cdn.storage.delete(relative_url).await?;
+        }
+
+        let path = format!("icons/{}/icon.{}", self.uuid, image_type);
+
+        bunny_cdn.storage.upload(path.clone(), icon.into()).await?;
+
+        let icon_url = cdn_url.join(&path)?;
+
+        use guilds::dsl;
+        update(guilds::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::icon.eq(icon_url.as_str()))
+            .execute(conn)
+            .await?;
+
+        self.icon = Some(icon_url);
+
+        Ok(())
     }
 }
 
@@ -568,6 +604,100 @@ impl Invite {
             .await?;
 
         Ok(invite)
+    }
+}
+
+#[derive(Serialize, Clone, Queryable, Selectable)]
+#[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct User {
+    uuid: Uuid,
+    username: String,
+    display_name: Option<String>,
+    avatar: Option<String>,
+}
+
+impl User {
+    pub async fn fetch_one(conn: &mut Conn, user_uuid: Uuid) -> Result<Self, Error> {
+        use users::dsl;
+        let user: User = dsl::users
+            .filter(dsl::uuid.eq(user_uuid))
+            .select(User::as_select())
+            .get_result(conn)
+            .await?;
+
+        Ok(user)
+    }
+
+    pub async fn fetch_amount(conn: &mut Conn, offset: i64, amount: i64) -> Result<Vec<Self>, Error> {
+        use users::dsl;
+        let users: Vec<User> = load_or_empty(
+            dsl::users
+                .limit(amount)
+                .offset(offset)
+                .select(User::as_select())
+                .load(conn)
+                .await
+        )?;
+
+        Ok(users)
+    }
+}
+
+#[derive(Serialize, Queryable, Selectable)]
+#[diesel(table_name = users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct Me {
+    uuid: Uuid,
+    username: String,
+    display_name: Option<String>,
+    avatar: Option<String>,
+    email: String,
+    email_verified: bool,
+}
+
+impl Me {
+    pub async fn get(conn: &mut Conn, user_uuid: Uuid) -> Result<Self, Error> {
+        use users::dsl;
+        let me: Me = dsl::users
+            .filter(dsl::uuid.eq(user_uuid))
+            .select(Me::as_select())
+            .get_result(conn)
+            .await?;
+
+        Ok(me)
+    }
+
+    pub async fn set_avatar(&mut self, bunny_cdn: &bunny_api_tokio::Client, conn: &mut Conn, cdn_url: Url, avatar: BytesMut) -> Result<(), Error> {
+        let avatar_clone = avatar.clone();
+        let image_type = task::spawn_blocking(move || image_check(avatar_clone)).await??;
+
+        if let Some(avatar) = &self.avatar {
+            let avatar_url: Url = avatar.parse()?;
+
+            let relative_url = avatar_url
+                .path()
+                .trim_start_matches('/');
+
+            bunny_cdn.storage.delete(relative_url).await?;
+        }
+
+        let path = format!("avatar/{}/avatar.{}", self.uuid, image_type);
+
+        bunny_cdn.storage.upload(path.clone(), avatar.into()).await?;
+
+        let avatar_url = cdn_url.join(&path)?;
+
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::avatar.eq(avatar_url.as_str()))
+            .execute(conn)
+            .await?;
+
+        self.avatar = Some(avatar_url.to_string());
+
+        Ok(())
     }
 }
 

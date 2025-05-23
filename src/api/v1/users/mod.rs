@@ -1,28 +1,15 @@
 use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
-use diesel::{prelude::Queryable, QueryDsl, Selectable, SelectableHelper};
-use diesel_async::RunQueryDsl;
-use serde::Serialize;
-use ::uuid::Uuid;
 
-use crate::{error::Error,api::v1::auth::check_access_token, schema::users::{self, dsl}, structs::StartAmountQuery, utils::get_auth_header, Data};
+use crate::{api::v1::auth::check_access_token, error::Error, structs::{StartAmountQuery, User}, utils::get_auth_header, Data};
 
 mod me;
 mod uuid;
-
-#[derive(Serialize, Queryable, Selectable)]
-#[diesel(table_name = users)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-struct Response {
-    uuid: Uuid,
-    username: String,
-    display_name: Option<String>,
-    email: String,
-}
 
 pub fn web() -> Scope {
     web::scope("/users")
         .service(res)
         .service(me::res)
+        .service(me::update)
         .service(uuid::res)
 }
 
@@ -48,13 +35,7 @@ pub async fn res(
 
     check_access_token(auth_header, &mut conn).await?;
 
-    let users: Vec<Response> = dsl::users
-        .order_by(dsl::username)
-        .offset(start)
-        .limit(amount)
-        .select(Response::as_select())
-        .load(&mut conn)
-        .await?;
+    let users = User::fetch_amount(&mut conn, start, amount).await?;
 
     Ok(HttpResponse::Ok().json(users))
 }

@@ -1,20 +1,8 @@
-use actix_web::{HttpRequest, HttpResponse, get, web};
-use diesel::{prelude::Queryable, ExpressionMethods, QueryDsl, Selectable, SelectableHelper};
-use diesel_async::RunQueryDsl;
-use log::error;
-use serde::Serialize;
-use uuid::Uuid;
+use actix_web::{get, patch, web, HttpRequest, HttpResponse};
+use actix_multipart::form::{json::Json as MpJson, tempfile::TempFile, MultipartForm};
+use serde::Deserialize;
 
-use crate::{error::Error, api::v1::auth::check_access_token, schema::users::{self, dsl}, utils::get_auth_header, Data};
-
-#[derive(Serialize, Queryable, Selectable)]
-#[diesel(table_name = users)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-struct Response {
-    uuid: Uuid,
-    username: String,
-    display_name: Option<String>,
-}
+use crate::{error::Error, structs::Me, api::v1::auth::check_access_token, utils::get_auth_header, Data};
 
 #[get("/me")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
@@ -26,16 +14,63 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let user: Result<Response, diesel::result::Error> = dsl::users
-        .filter(dsl::uuid.eq(uuid))
-        .select(Response::as_select())
-        .get_result(&mut conn)
-        .await;
+    let me = Me::get(&mut conn, uuid).await?;
 
-    if let Err(error) = user {
-        error!("{}", error);
-        return Ok(HttpResponse::InternalServerError().finish())
+    Ok(HttpResponse::Ok().json(me))
+}
+
+#[derive(Debug, Deserialize)]
+struct NewInfo {
+    username: Option<String>,
+    display_name: Option<String>,
+    password: Option<String>,
+    email: Option<String>,
+}
+
+#[derive(Debug, MultipartForm)]
+struct UploadForm {
+    #[multipart(limit = "100MB")]
+    avatar: Option<TempFile>,
+    json: Option<MpJson<NewInfo>>,
+}
+
+#[patch("/me")]
+pub async fn update(req: HttpRequest, MultipartForm(form): MultipartForm<UploadForm>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let headers = req.headers();
+
+    let auth_header = get_auth_header(headers)?;
+
+    let mut conn = data.pool.get().await?;
+
+    let uuid = check_access_token(auth_header, &mut conn).await?;
+
+    let mut me = Me::get(&mut conn, uuid).await?;
+
+    if let Some(avatar) = form.avatar {
+        let bytes = tokio::fs::read(avatar.file).await?;
+
+        let byte_slice: &[u8] = &bytes;
+
+        me.set_avatar(&data.bunny_cdn, &mut conn, data.config.bunny.cdn_url.clone(), byte_slice.into()).await?;
     }
 
-    Ok(HttpResponse::Ok().json(user.unwrap()))
+    if let Some(new_info) = form.json {
+        if let Some(username) = &new_info.username {
+            todo!();
+        }
+
+        if let Some(display_name) = &new_info.display_name {
+            todo!();
+        }
+
+        if let Some(password) = &new_info.password {
+            todo!();
+        }
+
+        if let Some(email) = &new_info.email {
+            todo!();
+        }
+    }
+
+    Ok(HttpResponse::Ok().finish())
 }

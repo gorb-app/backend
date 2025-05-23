@@ -1,0 +1,2 @@
+-- Your SQL goes here
+ALTER TABLE guilds ADD COLUMN icon VARCHAR(100) DEFAULT NULL;

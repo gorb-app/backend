@@ -29,11 +29,14 @@ uuid = { version = "1.16", features = ["serde", "v7"] }
 random-string = "1.1"
 actix-ws = "0.3.0"
 futures-util = "0.3.31"
+bunny-api-tokio = "0.2.1"
+bindet = "0.3.2"
 deadpool = "0.12"
 diesel = { version = "2.2", features = ["uuid"] }
 diesel-async = { version = "0.5", features = ["deadpool", "postgres", "async-connection-wrapper"] }
 diesel_migrations = { version = "2.2.0", features = ["postgres"] }
 thiserror = "2.0.12"
+actix-multipart = "0.7.2"
 
 [dependencies.tokio]
 version = "1.44"

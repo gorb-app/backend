@@ -32,9 +32,10 @@ struct Args {
 pub struct Data {
     pub pool: deadpool::managed::Pool<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>, Conn>,
     pub cache_pool: redis::Client,
-    pub _config: Config,
+    pub config: Config,
     pub argon2: Argon2<'static>,
     pub start_time: SystemTime,
+    pub bunny_cdn: bunny_api_tokio::Client,
 }
 
 #[tokio::main]
@@ -56,6 +57,10 @@ async fn main() -> Result<(), Error> {
     let pool = Pool::builder(pool_config).build()?;
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
+
+    let mut bunny_cdn = bunny_api_tokio::Client::new(config.bunny.api_key.clone()).await?;
+
+    bunny_cdn.storage.init(config.bunny.endpoint.clone(), config.bunny.storage_zone.clone())?;
 
     let database_url = config.database.url();
 
@@ -90,10 +95,11 @@ async fn main() -> Result<(), Error> {
     let data = Data {
         pool,
         cache_pool,
-        _config: config,
+        config,
         // TODO: Possibly implement "pepper" into this (thinking it could generate one if it doesnt exist and store it on disk)
         argon2: Argon2::default(),
         start_time: SystemTime::now(),
+        bunny_cdn,
     };
 
     HttpServer::new(move || {

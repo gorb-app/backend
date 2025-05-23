@@ -48,6 +48,8 @@ diesel::table! {
         name -> Varchar,
         #[max_length = 300]
         description -> Nullable<Varchar>,
+        #[max_length = 100]
+        icon -> Nullable<Varchar>,
     }
 }
 
@@ -121,6 +123,8 @@ diesel::table! {
         email_verified -> Bool,
         is_deleted -> Bool,
         deleted_at -> Nullable<Int8>,
+        #[max_length = 100]
+        avatar -> Nullable<Varchar>,
     }
 }
 
