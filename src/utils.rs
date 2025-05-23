@@ -1,7 +1,8 @@
 use actix_web::{
-    cookie::{Cookie, SameSite, time::Duration},
-    http::header::HeaderMap,
+    cookie::{time::Duration, Cookie, SameSite},
+    http::header::HeaderMap, web::BytesMut,
 };
+use bindet::FileType;
 use getrandom::fill;
 use hex::encode;
 use redis::RedisError;
@@ -57,6 +58,22 @@ pub fn generate_refresh_token() -> Result<String, getrandom::Error> {
     let mut buf = [0u8; 32];
     fill(&mut buf)?;
     Ok(encode(buf))
+}
+
+pub fn image_check(icon: BytesMut) -> Result<String, Error> {
+    let buf = std::io::Cursor::new(icon);
+
+    let detect = bindet::detect(buf).map_err(|e| e.kind());
+
+    if let Ok(Some(file_type)) = detect {
+        if file_type.likely_to_be == vec![FileType::Jpg] {
+            return Ok(String::from("jpg"))
+        } else if file_type.likely_to_be == vec![FileType::Png] {
+            return Ok(String::from("png"))
+        }
+    }
+
+    Err(Error::BadRequest("Uploaded file is not an image".to_string()))
 }
 
 impl Data {

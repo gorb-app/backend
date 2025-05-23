@@ -5,9 +5,8 @@ use diesel_async::{pooled_connection::AsyncDieselConnectionManager, RunQueryDsl}
 use tokio::task;
 use url::Url;
 use actix_web::web::BytesMut;
-use bindet::FileType;
 
-use crate::{error::Error, Conn, Data, schema::*};
+use crate::{error::Error, schema::*, utils::image_check, Conn, Data};
 
 fn load_or_empty<T>(query_result: Result<Vec<T>, diesel::result::Error>) -> Result<Vec<T>, diesel::result::Error> {
     match query_result {
@@ -256,7 +255,7 @@ impl GuildBuilder {
             uuid: self.uuid,
             name: self.name,
             description: self.description,
-            icon: self.icon,
+            icon: self.icon.and_then(|i| i.parse().ok()),
             owner_uuid: self.owner_uuid,
             roles: roles,
             member_count: member_count,
@@ -269,7 +268,7 @@ pub struct Guild {
     pub uuid: Uuid,
     name: String,
     description: Option<String>,
-    icon: Option<String>,
+    icon: Option<Url>,
     owner_uuid: Uuid,
     pub roles: Vec<Role>,
     member_count: i64,
@@ -410,29 +409,13 @@ impl Guild {
 
     // FIXME: Horrible security
     pub async fn set_icon(&mut self, bunny_cdn: &bunny_api_tokio::Client, conn: &mut Conn, cdn_url: Url, icon: BytesMut) -> Result<(), Error> {
-        let ico = icon.clone();
-
-        let image_type = task::spawn_blocking(move || {
-            let buf = std::io::Cursor::new(ico.to_vec());
-
-            let detect = bindet::detect(buf).map_err(|e| e.kind());
-
-            if let Ok(Some(file_type)) = detect {
-                if file_type.likely_to_be == vec![FileType::Jpg] {
-                    return String::from("jpg")
-                } else if file_type.likely_to_be == vec![FileType::Png] {
-                    return String::from("png")
-                }
-            }
-            String::from("unknown")
-        }).await?;
-
-        if image_type == "unknown" {
-            return Err(Error::BadRequest("Not an image".to_string()))
-        }
+        let icon_clone = icon.clone();
+        let image_type = task::spawn_blocking(move || image_check(icon_clone)).await??;
 
         if let Some(icon) = &self.icon {
-            let relative_url = icon.trim_start_matches("https://cdn.gorb.app/");
+            let relative_url = icon
+                .path()
+                .trim_start_matches('/');
 
             bunny_cdn.storage.delete(relative_url).await?;
         }
@@ -450,7 +433,7 @@ impl Guild {
             .execute(conn)
             .await?;
 
-        self.icon = Some(icon_url.to_string());
+        self.icon = Some(icon_url);
 
         Ok(())
     }
