@@ -29,7 +29,7 @@ uuid = { version = "1.16", features = ["serde", "v7"] }
 random-string = "1.1"
 actix-ws = "0.3.0"
 futures-util = "0.3.31"
-bunny-api-tokio = "0.2.1"
+bunny-api-tokio = "0.3.0"
 bindet = "0.3.2"
 deadpool = "0.12"
 diesel = { version = "2.2", features = ["uuid"] }

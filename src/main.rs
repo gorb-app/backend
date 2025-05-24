@@ -63,12 +63,14 @@ async fn main() -> Result<(), Error> {
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
 
-    let mut bunny_cdn = bunny_api_tokio::Client::new(config.bunny.api_key.clone()).await?;
+    let mut bunny_cdn = bunny_api_tokio::Client::new("").await?;
 
-    bunny_cdn.storage.init(
-        config.bunny.endpoint.clone(),
-        config.bunny.storage_zone.clone(),
-    )?;
+    let bunny = config.bunny.clone();
+
+    bunny_cdn
+        .storage
+        .init(bunny.api_key, bunny.endpoint, bunny.storage_zone)
+        .await?;
 
     let database_url = config.database.url();
 
