@@ -49,4 +49,7 @@ rotate_log() {
 
 rotate_log "/gorb/logs/backend.log"
 
+# Give the DB time to start up before connecting
+sleep 5
+
 /usr/bin/gorb-backend --config /gorb/config/config.toml 2>&1 | tee /gorb/logs/backend.log

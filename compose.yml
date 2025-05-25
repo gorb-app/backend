@@ -21,10 +21,10 @@ services:
       - DATABASE=gorb
       - DATABASE_HOST=database
       - DATABASE_PORT=5432
-      - BUNNY_API_KEY="your_storage_zone_password_here"
-      - BUNNY_ENDPOINT="Frankfurt"
-      - BUNNY_ZONE="gorb"
-      - BUNNY_CDN_URL="https://cdn.gorb.app"
+      - BUNNY_API_KEY=your_storage_zone_password_here
+      - BUNNY_ENDPOINT=Frankfurt
+      - BUNNY_ZONE=gorb
+      - BUNNY_CDN_URL=https://cdn.gorb.app
   database:
     image: postgres:16
     restart: always
