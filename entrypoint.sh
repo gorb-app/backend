@@ -20,6 +20,13 @@ port = ${DATABASE_PORT}
 [cache_database]
 host = "${CACHE_DB_HOST}"
 port = ${CACHE_DB_PORT}
+
+[bunny]
+api_key = "${BUNNY_API_KEY}"
+endpoint = "${BUNNY_ENDPOINT}"
+storage_zone = "${BUNNY_ZONE}"
+cdn_url = "${BUNNY_CDN_URL}"
+
 EOF
 fi
 
