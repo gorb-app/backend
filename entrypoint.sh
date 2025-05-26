@@ -14,6 +14,9 @@ fi
 
 if [ ! -f "/gorb/config/config.toml" ]; then
 cat > /gorb/config/config.toml <<EOF
+[web]
+url = "${WEB_URL}"
+
 [database]
 username = "${DATABASE_USERNAME}"
 password = "${DATABASE_PASSWORD}"
@@ -25,6 +28,11 @@ port = ${DATABASE_PORT}
 host = "${CACHE_DB_HOST}"
 port = ${CACHE_DB_PORT}
 
+EOF
+fi
+
+if [ -n "${BUNNY_API_KEY}" ] && ! grep -q "^\[bunny\]" "/gorb/config/config.toml"; then
+    cat >> "/gorb/config/config.toml" <<EOF
 [bunny]
 api_key = "${BUNNY_API_KEY}"
 endpoint = "${BUNNY_ENDPOINT}"
