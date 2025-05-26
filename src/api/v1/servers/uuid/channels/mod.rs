@@ -1,9 +1,5 @@
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    structs::{Channel, Member},
-    utils::get_auth_header,
+    api::v1::auth::check_access_token, error::Error, structs::{Channel, Member}, utils::{get_auth_header, order_channels}, Data
 };
 use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -43,10 +39,12 @@ pub async fn get(
 
     let channels = Channel::fetch_all(&data.pool, guild_uuid).await?;
 
-    data.set_cache_key(format!("{}_channels", guild_uuid), channels.clone(), 1800)
+    let channels_ordered = order_channels(channels).await?;
+
+    data.set_cache_key(format!("{}_channels", guild_uuid), channels_ordered.clone(), 1800)
         .await?;
 
-    Ok(HttpResponse::Ok().json(channels))
+    Ok(HttpResponse::Ok().json(channels_ordered))
 }
 
 #[post("{uuid}/channels")]
@@ -76,7 +74,7 @@ pub async fn create(
         channel_info.name.clone(),
         channel_info.description.clone(),
     )
-    .await;
+    .await?;
 
-    Ok(HttpResponse::Ok().json(channel.unwrap()))
+    Ok(HttpResponse::Ok().json(channel))
 }

@@ -60,6 +60,8 @@ pub enum Error {
     BadRequest(String),
     #[error("{0}")]
     Unauthorized(String),
+    #[error("{0}")]
+    InternalServerError(String),
 }
 
 impl ResponseError for Error {

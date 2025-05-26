@@ -9,7 +9,7 @@ use hex::encode;
 use redis::RedisError;
 use serde::Serialize;
 
-use crate::{Data, error::Error};
+use crate::{Data, error::Error, structs::Channel};
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, Error> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
@@ -117,6 +117,28 @@ pub fn image_check(icon: BytesMut) -> Result<String, Error> {
     Err(Error::BadRequest(
         "Uploaded file is not an image".to_string(),
     ))
+}
+
+pub async fn order_channels(mut channels: Vec<Channel>) -> Result<Vec<Channel>, Error> {
+    let mut ordered = Vec::new();
+
+    // Find head
+    let head_pos = channels
+        .iter()
+        .position(|channel| !channels.iter().any(|i| i.is_above == Some(channel.uuid)));
+
+    if let Some(pos) = head_pos {
+        ordered.push(channels.swap_remove(pos));
+
+        while let Some(next_pos) = channels
+            .iter()
+            .position(|channel| Some(channel.uuid) == ordered.last().unwrap().is_above)
+        {
+            ordered.push(channels.swap_remove(next_pos));
+        }
+    }
+
+    Ok(ordered)
 }
 
 impl Data {

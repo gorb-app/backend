@@ -27,6 +27,7 @@ diesel::table! {
         name -> Varchar,
         #[max_length = 500]
         description -> Nullable<Varchar>,
+        is_above -> Nullable<Uuid>,
     }
 }
 

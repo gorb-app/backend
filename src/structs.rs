@@ -5,12 +5,18 @@ use diesel::{
     update,
 };
 use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use url::Url;
 use uuid::Uuid;
 
-use crate::{Conn, Data, error::Error, schema::*, utils::image_check};
+use crate::{
+    Conn, Data,
+    error::Error,
+    schema::*,
+    utils::{image_check, order_channels},
+};
 
 fn load_or_empty<T>(
     query_result: Result<Vec<T>, diesel::result::Error>,
@@ -22,7 +28,7 @@ fn load_or_empty<T>(
     }
 }
 
-#[derive(Queryable, Selectable, Insertable, Clone)]
+#[derive(Queryable, Selectable, Insertable, Clone, Debug)]
 #[diesel(table_name = channels)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct ChannelBuilder {
@@ -30,6 +36,7 @@ struct ChannelBuilder {
     guild_uuid: Uuid,
     name: String,
     description: Option<String>,
+    is_above: Option<Uuid>,
 }
 
 impl ChannelBuilder {
@@ -48,21 +55,23 @@ impl ChannelBuilder {
             guild_uuid: self.guild_uuid,
             name: self.name,
             description: self.description,
+            is_above: self.is_above,
             permissions: channel_permission,
         })
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Channel {
     pub uuid: Uuid,
     pub guild_uuid: Uuid,
     name: String,
     description: Option<String>,
+    pub is_above: Option<Uuid>,
     pub permissions: Vec<ChannelPermission>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Queryable, Selectable)]
+#[derive(Serialize, Deserialize, Clone, Queryable, Selectable, Debug)]
 #[diesel(table_name = channel_permissions)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct ChannelPermission {
@@ -118,17 +127,39 @@ impl Channel {
 
         let channel_uuid = Uuid::now_v7();
 
+        let channels = Self::fetch_all(&data.pool, guild_uuid).await?;
+
+        debug!("{:?}", channels);
+
+        let channels_ordered = order_channels(channels).await?;
+
+        debug!("{:?}", channels_ordered);
+
+        let last_channel = channels_ordered.last();
+
         let new_channel = ChannelBuilder {
             uuid: channel_uuid,
             guild_uuid,
             name: name.clone(),
             description: description.clone(),
+            is_above: None,
         };
 
+        debug!("New Channel: {:?}", new_channel);
+
         insert_into(channels::table)
-            .values(new_channel)
+            .values(new_channel.clone())
             .execute(&mut conn)
             .await?;
+
+        if let Some(old_last_channel) = last_channel {
+            use channels::dsl;
+            update(channels::table)
+                .filter(dsl::uuid.eq(old_last_channel.uuid))
+                .set(dsl::is_above.eq(new_channel.uuid))
+                .execute(&mut conn)
+                .await?;
+        }
 
         // returns different object because there's no reason to build the channelbuilder (wastes 1 database request)
         let channel = Self {
@@ -136,6 +167,7 @@ impl Channel {
             guild_uuid,
             name,
             description,
+            is_above: None,
             permissions: vec![],
         };
 
