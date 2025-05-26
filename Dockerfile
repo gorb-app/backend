@@ -18,7 +18,7 @@ RUN useradd --create-home --home-dir /gorb gorb
 
 USER gorb
 
-ENV URL=http://localhost:8080 \
+ENV WEB_URL=http://localhost:8080 \
 DATABASE_USERNAME=gorb \
 DATABASE_PASSWORD=gorb \
 DATABASE=gorb \

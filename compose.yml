@@ -17,7 +17,7 @@ services:
     environment:
       #- RUST_LOG=debug
       # This should be changed to the public URL of the server!
-      - URL=http://localhost:8080
+      - WEB_URL=http://localhost:8080
       - DATABASE_USERNAME=gorb
       - DATABASE_PASSWORD=gorb
       - DATABASE=gorb
