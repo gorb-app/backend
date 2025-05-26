@@ -45,6 +45,40 @@ pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, Error> {
     Ok(auth_value.unwrap())
 }
 
+pub fn get_ws_protocol_header(headers: &HeaderMap) -> Result<&str, Error> {
+    let auth_token = headers.get(actix_web::http::header::SEC_WEBSOCKET_PROTOCOL);
+
+    if auth_token.is_none() {
+        return Err(Error::Unauthorized(
+            "No authorization header provided".to_string(),
+        ));
+    }
+
+    let auth_raw = auth_token.unwrap().to_str()?;
+
+    let mut auth = auth_raw.split_whitespace();
+
+    let response_proto = auth.next();
+
+    let auth_value = auth.next();
+
+    if response_proto.is_none() {
+        return Err(Error::BadRequest(
+            "Sec-WebSocket-Protocol header is empty".to_string(),
+        ));
+    } else if response_proto.is_some_and(|rp| rp != "Authorization,") {
+        return Err(Error::BadRequest(
+            "First protocol should be Authorization".to_string(),
+        ));
+    }
+
+    if auth_value.is_none() {
+        return Err(Error::BadRequest("No token provided".to_string()));
+    }
+
+    Ok(auth_value.unwrap())
+}
+
 pub fn refresh_token_cookie(refresh_token: String) -> Cookie<'static> {
     Cookie::build("refresh_token", refresh_token)
         .http_only(true)

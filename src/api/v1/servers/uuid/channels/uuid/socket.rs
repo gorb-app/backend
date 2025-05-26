@@ -1,4 +1,8 @@
-use actix_web::{Error, HttpRequest, HttpResponse, get, rt, web};
+use actix_web::{
+    Error, HttpRequest, HttpResponse, get,
+    http::header::{HeaderValue, SEC_WEBSOCKET_PROTOCOL},
+    rt, web,
+};
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt as _;
 use uuid::Uuid;
@@ -7,7 +11,7 @@ use crate::{
     Data,
     api::v1::auth::check_access_token,
     structs::{Channel, Member},
-    utils::get_auth_header,
+    utils::get_ws_protocol_header,
 };
 
 #[get("{uuid}/channels/{channel_uuid}/socket")]
@@ -21,7 +25,7 @@ pub async fn echo(
     let headers = req.headers();
 
     // Retrieve auth header
-    let auth_header = get_auth_header(headers)?;
+    let auth_header = get_ws_protocol_header(headers)?;
 
     // Get uuids from path
     let (guild_uuid, channel_uuid) = path.into_inner();
@@ -46,7 +50,7 @@ pub async fn echo(
             .await?;
     }
 
-    let (res, mut session_1, stream) = actix_ws::handle(&req, stream)?;
+    let (mut res, mut session_1, stream) = actix_ws::handle(&req, stream)?;
 
     let mut stream = stream
         .aggregate_continuations()
@@ -77,10 +81,7 @@ pub async fn echo(
         while let Some(msg) = stream.next().await {
             match msg {
                 Ok(AggregatedMessage::Text(text)) => {
-                    let mut conn = data
-                        .cache_pool
-                        .get_multiplexed_tokio_connection()
-                        .await?;
+                    let mut conn = data.cache_pool.get_multiplexed_tokio_connection().await?;
 
                     redis::cmd("PUBLISH")
                         .arg(&[channel_uuid.to_string(), text.to_string()])
@@ -108,6 +109,13 @@ pub async fn echo(
 
         Ok::<(), crate::error::Error>(())
     });
+
+    let headers = res.headers_mut();
+
+    headers.append(
+        SEC_WEBSOCKET_PROTOCOL,
+        HeaderValue::from_str("Authorization")?,
+    );
 
     // respond immediately with response connected to WS session
     Ok(res)
