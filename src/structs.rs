@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use actix_web::web::BytesMut;
 use diesel::{
     ExpressionMethods, QueryDsl, Selectable, SelectableHelper, delete, insert_into,
@@ -6,11 +8,11 @@ use diesel::{
 };
 use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
 use serde::{Deserialize, Serialize};
-use tokio::task;
+use tokio::{fs::{create_dir_all, remove_file, File}, io::AsyncWriteExt, task};
 use url::Url;
 use uuid::Uuid;
 
-use crate::{Conn, Data, error::Error, schema::*, utils::image_check};
+use crate::{config::Config, error::Error, schema::*, utils::image_check, Conn, Data};
 
 fn load_or_empty<T>(
     query_result: Result<Vec<T>, diesel::result::Error>,
@@ -19,6 +21,74 @@ fn load_or_empty<T>(
         Ok(vec) => Ok(vec),
         Err(diesel::result::Error::NotFound) => Ok(Vec::new()),
         Err(e) => Err(e),
+    }
+}
+
+#[derive(Clone)]
+pub struct Storage {
+    bunny_cdn: Option<bunny_api_tokio::Client>,
+    cdn_url: Url,
+    data_dir: String,
+}
+
+impl Storage {
+    pub async fn new(config: Config, data_dir: String) -> Result<Self, Error> {
+        let mut bunny_cdn;
+        let cdn_url;
+
+        if let Some(bunny) = config.bunny {
+            bunny_cdn = Some(bunny_api_tokio::Client::new("").await?);
+        
+            bunny_cdn
+                .as_mut()
+                .unwrap()
+                .storage
+                .init(bunny.api_key, bunny.endpoint, bunny.storage_zone)
+                .await?;
+
+            cdn_url = bunny.cdn_url;
+        } else {
+            bunny_cdn = None;
+            cdn_url = config.web.url.join("api/assets/")?;
+        }
+
+        Ok(Self {
+            bunny_cdn,
+            data_dir,
+            cdn_url
+        })
+    }
+
+    pub async fn write<T: AsRef<str>>(&self, path: T, bytes: BytesMut) -> Result<Url, Error> {
+        if let Some(bunny_cdn) = &self.bunny_cdn {
+            bunny_cdn.storage.upload(&path, bytes.into()).await?;
+            Ok(self.cdn_url.join(&path.as_ref())?)
+        } else {
+            let file_path = Path::new(&self.data_dir);
+
+            let file_path = file_path.join(path.as_ref());
+
+            create_dir_all(file_path.parent().ok_or(Error::PathError("Unable to get parent directory".to_string()))?).await?;
+
+            let mut file = File::create(file_path).await?;
+
+            file.write_all(&bytes).await?;
+
+            Ok(self.cdn_url.join(path.as_ref())?)
+        }
+    }
+
+    pub async fn delete<T: AsRef<str>>(&self, path: T) -> Result<(), Error> {
+        if let Some(bunny_cdn) = &self.bunny_cdn {
+            Ok(bunny_cdn.storage.delete(&path).await?)
+        } else {
+            let file_path = Path::new(&self.data_dir);
+
+            let file_path = file_path.join(path.as_ref());
+
+            remove_file(file_path).await?;
+            Ok(())
+        }
     }
 }
 
@@ -419,9 +489,8 @@ impl Guild {
     // FIXME: Horrible security
     pub async fn set_icon(
         &mut self,
-        bunny_cdn: &bunny_api_tokio::Client,
+        storage: &Storage,
         conn: &mut Conn,
-        cdn_url: Url,
         icon: BytesMut,
     ) -> Result<(), Error> {
         let icon_clone = icon.clone();
@@ -430,14 +499,12 @@ impl Guild {
         if let Some(icon) = &self.icon {
             let relative_url = icon.path().trim_start_matches('/');
 
-            bunny_cdn.storage.delete(relative_url).await?;
+            storage.delete(relative_url).await?;
         }
 
         let path = format!("icons/{}/icon.{}", self.uuid, image_type);
 
-        bunny_cdn.storage.upload(path.clone(), icon.into()).await?;
-
-        let icon_url = cdn_url.join(&path)?;
+        let icon_url = storage.write(path.clone(), icon.into()).await?;
 
         use guilds::dsl;
         update(guilds::table)
@@ -673,9 +740,8 @@ impl Me {
 
     pub async fn set_avatar(
         &mut self,
-        bunny_cdn: &bunny_api_tokio::Client,
+        storage: &Storage,
         conn: &mut Conn,
-        cdn_url: Url,
         avatar: BytesMut,
     ) -> Result<(), Error> {
         let avatar_clone = avatar.clone();
@@ -686,17 +752,14 @@ impl Me {
 
             let relative_url = avatar_url.path().trim_start_matches('/');
 
-            bunny_cdn.storage.delete(relative_url).await?;
+            storage.delete(relative_url).await?;
         }
 
         let path = format!("avatar/{}/avatar.{}", self.uuid, image_type);
 
-        bunny_cdn
-            .storage
-            .upload(path.clone(), avatar.into())
+        let avatar_url = storage
+            .write(path.clone(), avatar.into())
             .await?;
-
-        let avatar_url = cdn_url.join(&path)?;
 
         use users::dsl;
         update(users::table)

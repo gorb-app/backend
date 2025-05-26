@@ -1,4 +1,5 @@
 use actix_cors::Cors;
+use actix_files::Files;
 use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
 use clap::Parser;
@@ -6,6 +7,7 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
 use error::Error;
 use simple_logger::SimpleLogger;
+use structs::Storage;
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
@@ -22,11 +24,13 @@ pub mod schema;
 pub mod structs;
 pub mod utils;
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long, default_value_t = String::from("/etc/gorb/config.toml"))]
     config: String,
+    #[arg(short, long, default_value_t = String::from("/var/lib/gorb/"))]
+    data_dir: String,
 }
 
 #[derive(Clone)]
@@ -39,7 +43,7 @@ pub struct Data {
     pub config: Config,
     pub argon2: Argon2<'static>,
     pub start_time: SystemTime,
-    pub bunny_cdn: bunny_api_tokio::Client,
+    pub storage: Storage,
 }
 
 #[tokio::main]
@@ -63,14 +67,7 @@ async fn main() -> Result<(), Error> {
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
 
-    let mut bunny_cdn = bunny_api_tokio::Client::new("").await?;
-
-    let bunny = config.bunny.clone();
-
-    bunny_cdn
-        .storage
-        .init(bunny.api_key, bunny.endpoint, bunny.storage_zone)
-        .await?;
+    let storage = Storage::new(config.clone(), args.data_dir.clone()).await?;
 
     let database_url = config.database.url();
 
@@ -111,8 +108,10 @@ async fn main() -> Result<(), Error> {
         // TODO: Possibly implement "pepper" into this (thinking it could generate one if it doesnt exist and store it on disk)
         argon2: Argon2::default(),
         start_time: SystemTime::now(),
-        bunny_cdn,
+        storage,
     };
+
+    let data_dir = args.data_dir.clone();
 
     HttpServer::new(move || {
         // Set CORS headers
@@ -143,9 +142,10 @@ async fn main() -> Result<(), Error> {
         App::new()
             .app_data(web::Data::new(data.clone()))
             .wrap(cors)
+            .service(Files::new("/api/assets", &data_dir))
             .service(api::web())
     })
-    .bind((web.url, web.port))?
+    .bind((web.ip, web.port))?
     .run()
     .await?;
 

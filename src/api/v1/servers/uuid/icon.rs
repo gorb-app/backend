@@ -38,9 +38,8 @@ pub async fn upload(
 
     guild
         .set_icon(
-            &data.bunny_cdn,
+            &data.storage,
             &mut conn,
-            data.config.bunny.cdn_url.clone(),
             bytes,
         )
         .await?;

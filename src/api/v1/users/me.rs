@@ -58,9 +58,8 @@ pub async fn update(
         let byte_slice: &[u8] = &bytes;
 
         me.set_avatar(
-            &data.bunny_cdn,
+            &data.storage,
             &mut conn,
-            data.config.bunny.cdn_url.clone(),
             byte_slice.into(),
         )
         .await?;

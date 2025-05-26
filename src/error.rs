@@ -55,6 +55,8 @@ pub enum Error {
     #[error("{0}")]
     PasswordHashError(String),
     #[error("{0}")]
+    PathError(String),
+    #[error("{0}")]
     BadRequest(String),
     #[error("{0}")]
     Unauthorized(String),

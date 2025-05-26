@@ -8,6 +8,10 @@ if [ ! -d "/gorb/logs" ]; then
     mkdir /gorb/logs
 fi
 
+if [ ! -d "/gorb/data" ]; then
+    mkdir /gorb/data
+fi
+
 if [ ! -f "/gorb/config/config.toml" ]; then
 cat > /gorb/config/config.toml <<EOF
 [database]
@@ -52,4 +56,4 @@ rotate_log "/gorb/logs/backend.log"
 # Give the DB time to start up before connecting
 sleep 5
 
-/usr/bin/gorb-backend --config /gorb/config/config.toml 2>&1 | tee /gorb/logs/backend.log
+/usr/bin/gorb-backend --config /gorb/config/config.toml --data-dir /gorb/data 2>&1 | tee /gorb/logs/backend.log

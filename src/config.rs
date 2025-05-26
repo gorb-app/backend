@@ -9,8 +9,8 @@ use url::Url;
 pub struct ConfigBuilder {
     database: Database,
     cache_database: CacheDatabase,
-    web: Option<WebBuilder>,
-    bunny: BunnyBuilder,
+    web: WebBuilder,
+    bunny: Option<BunnyBuilder>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -33,8 +33,9 @@ pub struct CacheDatabase {
 
 #[derive(Debug, Deserialize)]
 struct WebBuilder {
-    url: Option<String>,
+    ip: Option<String>,
     port: Option<u16>,
+    url: Url,
     _ssl: Option<bool>,
 }
 
@@ -57,37 +58,37 @@ impl ConfigBuilder {
     }
 
     pub fn build(self) -> Config {
-        let web = if let Some(web) = self.web {
-            Web {
-                url: web.url.unwrap_or(String::from("0.0.0.0")),
-                port: web.port.unwrap_or(8080),
-            }
+        let web = Web {
+                ip: self.web.ip.unwrap_or(String::from("0.0.0.0")),
+                port: self.web.port.unwrap_or(8080),
+                url: self.web.url
+            };
+
+        let bunny;
+
+        if let Some(bunny_builder) = self.bunny {
+            let endpoint = match &*bunny_builder.endpoint {
+                "Frankfurt" => Endpoint::Frankfurt,
+                "London" => Endpoint::London,
+                "New York" => Endpoint::NewYork,
+                "Los Angeles" => Endpoint::LosAngeles,
+                "Singapore" => Endpoint::Singapore,
+                "Stockholm" => Endpoint::Stockholm,
+                "Sao Paulo" => Endpoint::SaoPaulo,
+                "Johannesburg" => Endpoint::Johannesburg,
+                "Sydney" => Endpoint::Sydney,
+                url => Endpoint::Custom(url.to_string()),
+            };
+
+            bunny = Some(Bunny {
+                api_key: bunny_builder.api_key,
+                endpoint,
+                storage_zone: bunny_builder.storage_zone,
+                cdn_url: bunny_builder.cdn_url,
+            });
         } else {
-            Web {
-                url: String::from("0.0.0.0"),
-                port: 8080,
-            }
-        };
-
-        let endpoint = match &*self.bunny.endpoint {
-            "Frankfurt" => Endpoint::Frankfurt,
-            "London" => Endpoint::London,
-            "New York" => Endpoint::NewYork,
-            "Los Angeles" => Endpoint::LosAngeles,
-            "Singapore" => Endpoint::Singapore,
-            "Stockholm" => Endpoint::Stockholm,
-            "Sao Paulo" => Endpoint::SaoPaulo,
-            "Johannesburg" => Endpoint::Johannesburg,
-            "Sydney" => Endpoint::Sydney,
-            url => Endpoint::Custom(url.to_string()),
-        };
-
-        let bunny = Bunny {
-            api_key: self.bunny.api_key,
-            endpoint,
-            storage_zone: self.bunny.storage_zone,
-            cdn_url: self.bunny.cdn_url,
-        };
+            bunny = None;
+        }
 
         Config {
             database: self.database,
@@ -103,13 +104,14 @@ pub struct Config {
     pub database: Database,
     pub cache_database: CacheDatabase,
     pub web: Web,
-    pub bunny: Bunny,
+    pub bunny: Option<Bunny>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Web {
-    pub url: String,
+    pub ip: String,
     pub port: u16,
+    pub url: Url,
 }
 
 #[derive(Debug, Clone)]
