@@ -83,13 +83,13 @@ pub async fn echo(
                 Ok(AggregatedMessage::Text(text)) => {
                     let mut conn = data.cache_pool.get_multiplexed_tokio_connection().await?;
 
-                    redis::cmd("PUBLISH")
-                        .arg(&[channel_uuid.to_string(), text.to_string()])
-                        .exec_async(&mut conn)
+                    let message = channel
+                        .new_message(&mut data.pool.get().await?, uuid, text.to_string())
                         .await?;
 
-                    channel
-                        .new_message(&mut data.pool.get().await.unwrap(), uuid, text.to_string())
+                    redis::cmd("PUBLISH")
+                        .arg(&[channel_uuid.to_string(), serde_json::to_string(&message)?])
+                        .exec_async(&mut conn)
                         .await?;
                 }
 
