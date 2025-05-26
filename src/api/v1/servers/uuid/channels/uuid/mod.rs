@@ -64,7 +64,7 @@ pub async fn delete(
     let channel: Channel;
 
     if let Ok(cache_hit) = data.get_cache_key(format!("{}", channel_uuid)).await {
-        channel = serde_json::from_str(&cache_hit).unwrap();
+        channel = serde_json::from_str(&cache_hit)?;
 
         data.del_cache_key(format!("{}", channel_uuid)).await?;
     } else {

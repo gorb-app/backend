@@ -42,7 +42,7 @@ pub async fn echo(
 
     // Return channel cache or result from psql as `channel` variable
     if let Ok(cache_hit) = data.get_cache_key(format!("{}", channel_uuid)).await {
-        channel = serde_json::from_str(&cache_hit).unwrap()
+        channel = serde_json::from_str(&cache_hit)?
     } else {
         channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
 

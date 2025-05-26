@@ -59,14 +59,9 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
         if lifetime > 1987200 {
-            let new_refresh_token = generate_refresh_token();
+            let new_refresh_token = generate_refresh_token()?;
 
-            if new_refresh_token.is_err() {
-                error!("{}", new_refresh_token.unwrap_err());
-                return Ok(HttpResponse::InternalServerError().finish());
-            }
-
-            let new_refresh_token = new_refresh_token.unwrap();
+            let new_refresh_token = new_refresh_token;
 
             match update(refresh_tokens::table)
                 .filter(rdsl::token.eq(&refresh_token))

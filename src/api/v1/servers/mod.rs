@@ -63,7 +63,7 @@ pub async fn get(
 
     let amount = request_query.amount.unwrap_or(10);
 
-    check_access_token(auth_header, &mut data.pool.get().await.unwrap()).await?;
+    check_access_token(auth_header, &mut data.pool.get().await?).await?;
 
     let guilds = Guild::fetch_amount(&data.pool, start, amount).await?;
 

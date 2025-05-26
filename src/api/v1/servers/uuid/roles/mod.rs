@@ -62,7 +62,7 @@ pub async fn create(
 
     let guild_uuid = path.into_inner().0;
 
-    let mut conn = data.pool.get().await.unwrap();
+    let mut conn = data.pool.get().await?;
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
