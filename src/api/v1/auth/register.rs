@@ -67,6 +67,10 @@ pub async fn res(
     account_information: web::Json<AccountInformation>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
+    if !data.config.instance.registration {
+        return Err(Error::Forbidden("registration is disabled on this instance".to_string()))
+    }
+    
     let uuid = Uuid::now_v7();
 
     if !EMAIL_REGEX.is_match(&account_information.email) {

@@ -61,6 +61,8 @@ pub enum Error {
     #[error("{0}")]
     Unauthorized(String),
     #[error("{0}")]
+    Forbidden(String),
+    #[error("{0}")]
     InternalServerError(String),
 }
 

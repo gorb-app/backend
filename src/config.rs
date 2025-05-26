@@ -10,6 +10,7 @@ pub struct ConfigBuilder {
     database: Database,
     cache_database: CacheDatabase,
     web: Option<WebBuilder>,
+    instance: Option<Instance>,
     bunny: BunnyBuilder,
 }
 
@@ -36,6 +37,11 @@ struct WebBuilder {
     url: Option<String>,
     port: Option<u16>,
     _ssl: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Instance {
+    pub registration: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -93,6 +99,7 @@ impl ConfigBuilder {
             database: self.database,
             cache_database: self.cache_database,
             web,
+            instance: self.instance.unwrap_or(Instance { registration: true }),
             bunny,
         }
     }
@@ -103,6 +110,7 @@ pub struct Config {
     pub database: Database,
     pub cache_database: CacheDatabase,
     pub web: Web,
+    pub instance: Instance,
     pub bunny: Bunny,
 }
 
