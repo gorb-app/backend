@@ -62,49 +62,51 @@ pub async fn echo(
     let mut session_2 = session_1.clone();
 
     rt::spawn(async move {
-        pubsub.subscribe(channel_uuid.to_string()).await.unwrap();
+        pubsub.subscribe(channel_uuid.to_string()).await?;
         while let Some(msg) = pubsub.on_message().next().await {
-            let payload: String = msg.get_payload().unwrap();
-            session_1.text(payload).await.unwrap();
+            let payload: String = msg.get_payload()?;
+            session_1.text(payload).await?;
         }
+
+        Ok::<(), crate::error::Error>(())
     });
 
     // start task but don't wait for it
     rt::spawn(async move {
-        let mut conn = data
-            .cache_pool
-            .get_multiplexed_tokio_connection()
-            .await
-            .unwrap();
         // receive messages from websocket
         while let Some(msg) = stream.next().await {
             match msg {
                 Ok(AggregatedMessage::Text(text)) => {
-                    // echo text message
+                    let mut conn = data
+                        .cache_pool
+                        .get_multiplexed_tokio_connection()
+                        .await?;
+
                     redis::cmd("PUBLISH")
                         .arg(&[channel_uuid.to_string(), text.to_string()])
                         .exec_async(&mut conn)
-                        .await
-                        .unwrap();
+                        .await?;
+
                     channel
                         .new_message(&mut data.pool.get().await.unwrap(), uuid, text.to_string())
-                        .await
-                        .unwrap();
+                        .await?;
                 }
 
                 Ok(AggregatedMessage::Binary(bin)) => {
                     // echo binary message
-                    session_2.binary(bin).await.unwrap();
+                    session_2.binary(bin).await?;
                 }
 
                 Ok(AggregatedMessage::Ping(msg)) => {
                     // respond to PING frame with PONG frame
-                    session_2.pong(&msg).await.unwrap();
+                    session_2.pong(&msg).await?;
                 }
 
                 _ => {}
             }
         }
+
+        Ok::<(), crate::error::Error>(())
     });
 
     // respond immediately with response connected to WS session

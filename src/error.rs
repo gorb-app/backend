@@ -52,6 +52,8 @@ pub enum Error {
     UrlParseError(#[from] url::ParseError),
     #[error(transparent)]
     PayloadError(#[from] PayloadError),
+    #[error(transparent)]
+    WsClosed(#[from] actix_ws::Closed),
     #[error("{0}")]
     PasswordHashError(String),
     #[error("{0}")]
