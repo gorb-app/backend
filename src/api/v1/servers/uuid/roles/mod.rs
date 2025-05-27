@@ -3,11 +3,7 @@ use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    structs::{Member, Role},
-    utils::get_auth_header,
+    api::v1::auth::check_access_token, error::Error, structs::{Member, Role}, utils::{get_auth_header, order_by_is_above}, Data
 };
 
 pub mod uuid;
@@ -43,10 +39,12 @@ pub async fn get(
 
     let roles = Role::fetch_all(&mut conn, guild_uuid).await?;
 
-    data.set_cache_key(format!("{}_roles", guild_uuid), roles.clone(), 1800)
+    let roles_ordered = order_by_is_above(roles).await?;
+
+    data.set_cache_key(format!("{}_roles", guild_uuid), roles_ordered.clone(), 1800)
         .await?;
 
-    Ok(HttpResponse::Ok().json(roles))
+    Ok(HttpResponse::Ok().json(roles_ordered))
 }
 
 #[post("{uuid}/roles")]

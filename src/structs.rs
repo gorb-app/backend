@@ -5,7 +5,6 @@ use diesel::{
     update,
 };
 use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
-use log::debug;
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use url::Url;
@@ -15,8 +14,16 @@ use crate::{
     Conn, Data,
     error::Error,
     schema::*,
-    utils::{image_check, order_channels},
+    utils::{image_check, order_by_is_above},
 };
+
+pub trait HasUuid {
+    fn uuid(&self) -> &Uuid;
+}
+
+pub trait HasIsAbove {
+    fn is_above(&self) -> Option<&Uuid>;
+}
 
 fn load_or_empty<T>(
     query_result: Result<Vec<T>, diesel::result::Error>,
@@ -79,6 +86,18 @@ pub struct ChannelPermission {
     pub permissions: i64,
 }
 
+impl HasUuid for Channel {
+    fn uuid(&self) -> &Uuid {
+        self.uuid.as_ref()
+    }
+}
+
+impl HasIsAbove for Channel {
+    fn is_above(&self) -> Option<&Uuid> {
+        self.is_above.as_ref()
+    }
+}
+
 impl Channel {
     pub async fn fetch_all(
         pool: &deadpool::managed::Pool<
@@ -129,11 +148,7 @@ impl Channel {
 
         let channels = Self::fetch_all(&data.pool, guild_uuid).await?;
 
-        debug!("{:?}", channels);
-
-        let channels_ordered = order_channels(channels).await?;
-
-        debug!("{:?}", channels_ordered);
+        let channels_ordered = order_by_is_above(channels).await?;
 
         let last_channel = channels_ordered.last();
 
@@ -144,8 +159,6 @@ impl Channel {
             description: description.clone(),
             is_above: None,
         };
-
-        debug!("New Channel: {:?}", new_channel);
 
         insert_into(channels::table)
             .values(new_channel.clone())
@@ -359,7 +372,6 @@ impl Guild {
     pub async fn new(
         conn: &mut Conn,
         name: String,
-        description: Option<String>,
         owner_uuid: Uuid,
     ) -> Result<Self, Error> {
         let guild_uuid = Uuid::now_v7();
@@ -367,7 +379,7 @@ impl Guild {
         let guild_builder = GuildBuilder {
             uuid: guild_uuid,
             name: name.clone(),
-            description: description.clone(),
+            description: None,
             icon: None,
             owner_uuid,
         };
@@ -394,7 +406,7 @@ impl Guild {
         Ok(Guild {
             uuid: guild_uuid,
             name,
-            description,
+            description: None,
             icon: None,
             owner_uuid,
             roles: vec![],
@@ -492,8 +504,20 @@ pub struct Role {
     guild_uuid: Uuid,
     name: String,
     color: i32,
-    position: i32,
+    is_above: Option<Uuid>,
     permissions: i64,
+}
+
+impl HasUuid for Role {
+    fn uuid(&self) -> &Uuid {
+        self.uuid.as_ref()
+    }
+}
+
+impl HasIsAbove for Role {
+    fn is_above(&self) -> Option<&Uuid> {
+        self.is_above.as_ref()
+    }
 }
 
 impl Role {
@@ -524,21 +548,36 @@ impl Role {
     pub async fn new(conn: &mut Conn, guild_uuid: Uuid, name: String) -> Result<Self, Error> {
         let role_uuid = Uuid::now_v7();
 
-        let role = Role {
+        let roles = Self::fetch_all(conn, guild_uuid).await?;
+
+        let roles_ordered = order_by_is_above(roles).await?;
+
+        let last_role = roles_ordered.last();
+
+        let new_role = Role {
             uuid: role_uuid,
             guild_uuid,
             name,
             color: 16777215,
-            position: 0,
+            is_above: None,
             permissions: 0,
         };
 
         insert_into(roles::table)
-            .values(role.clone())
+            .values(new_role.clone())
             .execute(conn)
             .await?;
 
-        Ok(role)
+        if let Some(old_last_role) = last_role {
+            use roles::dsl;
+            update(roles::table)
+                .filter(dsl::uuid.eq(old_last_role.uuid))
+                .set(dsl::is_above.eq(new_role.uuid))
+                .execute(conn)
+                .await?;
+        }
+
+        Ok(new_role)
     }
 }
 

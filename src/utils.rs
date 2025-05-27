@@ -9,7 +9,7 @@ use hex::encode;
 use redis::RedisError;
 use serde::Serialize;
 
-use crate::{Data, error::Error, structs::Channel};
+use crate::{error::Error, structs::{HasIsAbove, HasUuid}, Data};
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, Error> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
@@ -119,22 +119,25 @@ pub fn image_check(icon: BytesMut) -> Result<String, Error> {
     ))
 }
 
-pub async fn order_channels(mut channels: Vec<Channel>) -> Result<Vec<Channel>, Error> {
+pub async fn order_by_is_above<T>(mut items: Vec<T>) -> Result<Vec<T>, Error>
+where
+    T: HasUuid + HasIsAbove,
+{
     let mut ordered = Vec::new();
 
     // Find head
-    let head_pos = channels
+    let head_pos = items
         .iter()
-        .position(|channel| !channels.iter().any(|i| i.is_above == Some(channel.uuid)));
+        .position(|item| !items.iter().any(|i| i.is_above() == Some(item.uuid())));
 
     if let Some(pos) = head_pos {
-        ordered.push(channels.swap_remove(pos));
+        ordered.push(items.swap_remove(pos));
 
-        while let Some(next_pos) = channels
+        while let Some(next_pos) = items
             .iter()
-            .position(|channel| Some(channel.uuid) == ordered.last().unwrap().is_above)
+            .position(|item| Some(item.uuid()) == ordered.last().unwrap().is_above())
         {
-            ordered.push(channels.swap_remove(next_pos));
+            ordered.push(items.swap_remove(next_pos));
         }
     }
 

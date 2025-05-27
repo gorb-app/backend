@@ -1,9 +1,5 @@
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    structs::{Channel, Member},
-    utils::{get_auth_header, order_channels},
+    api::v1::auth::check_access_token, error::Error, structs::{Channel, Member}, utils::{get_auth_header, order_by_is_above}, Data
 };
 use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -43,7 +39,7 @@ pub async fn get(
 
     let channels = Channel::fetch_all(&data.pool, guild_uuid).await?;
 
-    let channels_ordered = order_channels(channels).await?;
+    let channels_ordered = order_by_is_above(channels).await?;
 
     data.set_cache_key(
         format!("{}_channels", guild_uuid),

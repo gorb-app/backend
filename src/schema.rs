@@ -105,8 +105,8 @@ diesel::table! {
         #[max_length = 50]
         name -> Varchar,
         color -> Int4,
-        position -> Int4,
         permissions -> Int8,
+        is_above -> Nullable<Uuid>,
     }
 }
 

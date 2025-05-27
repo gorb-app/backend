@@ -14,7 +14,6 @@ use crate::{
 #[derive(Deserialize)]
 struct GuildInfo {
     name: String,
-    description: Option<String>,
 }
 
 pub fn web() -> Scope {
@@ -41,7 +40,6 @@ pub async fn create(
     let guild = Guild::new(
         &mut conn,
         guild_info.name.clone(),
-        guild_info.description.clone(),
         uuid,
     )
     .await?;
