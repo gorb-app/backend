@@ -1,0 +1,19 @@
+when:
+  - event: push
+    branch: main
+
+steps:
+  - name: build-docs
+    image: rust:bookworm
+    commands:
+      - cargo doc --release --no-deps
+
+  - name: publish-docs
+    image: debian:12
+    commands:
+      - apt update -y && apt install -y rsync openssh-client
+      - printf "Host *\n  StrictHostKeyChecking no" >> /etc/ssh/ssh_config
+      - ssh-agent bash -c "ssh-add <(echo '$KEY' | base64 -d) && rsync --archive --verbose --compress --hard-links --delete-during --partial --progress ./target/doc/ root@gorb.app:/var/www/docs.gorb.app/api && ssh root@gorb.app systemctl reload caddy.service"
+    environment:
+      KEY:
+        from_secret: ssh_key
