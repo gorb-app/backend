@@ -6,6 +6,7 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
 use error::Error;
 use simple_logger::SimpleLogger;
+use structs::MailClient;
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
@@ -40,6 +41,7 @@ pub struct Data {
     pub argon2: Argon2<'static>,
     pub start_time: SystemTime,
     pub bunny_cdn: bunny_api_tokio::Client,
+    pub mail_client: MailClient,
 }
 
 #[tokio::main]
@@ -71,6 +73,10 @@ async fn main() -> Result<(), Error> {
         .storage
         .init(bunny.api_key, bunny.endpoint, bunny.storage_zone)
         .await?;
+
+    let mail = config.mail.clone();
+
+    let mail_client = MailClient::new(mail.smtp.credentials(), mail.smtp.server, mail.from, mail.tls)?;
 
     let database_url = config.database.url();
 
@@ -112,6 +118,7 @@ async fn main() -> Result<(), Error> {
         argon2: Argon2::default(),
         start_time: SystemTime::now(),
         bunny_cdn,
+        mail_client,
     };
 
     HttpServer::new(move || {

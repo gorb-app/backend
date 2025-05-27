@@ -5,6 +5,8 @@ use diesel::{
     update,
 };
 use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
+use lettre::{message::{Mailbox, MessageBuilder as EmailBuilder}, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message as Email, Tokio1Executor};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use url::Url;
@@ -32,6 +34,62 @@ fn load_or_empty<T>(
         Ok(vec) => Ok(vec),
         Err(diesel::result::Error::NotFound) => Ok(Vec::new()),
         Err(e) => Err(e),
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
+pub enum MailTls {
+    StartTls,
+    Tls,
+}
+
+impl From<String> for MailTls {
+    fn from(value: String) -> Self {
+        match &*value.to_lowercase() {
+            "starttls" => Self::StartTls,
+            _ => Self::Tls,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct MailClient {
+    creds: Credentials,
+    smtp_server: String,
+    mbox: Mailbox,
+    tls: MailTls,
+}
+
+impl MailClient {
+    pub fn new<T: Into<MailTls>>(creds: Credentials, smtp_server: String, mbox: String, tls: T) -> Result<Self, Error> {
+        Ok(Self {
+            creds,
+            smtp_server,
+            mbox: mbox.parse()?,
+            tls: tls.into(),
+        })
+    }
+
+    pub async fn message_builder(&self) -> EmailBuilder {
+        Email::builder()
+            .from(self.mbox.clone())
+    }
+
+    pub async fn send_mail(&self, email: Email) -> Result<(), Error> {
+        let mailer: AsyncSmtpTransport<Tokio1Executor> = match self.tls {
+            MailTls::StartTls => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.smtp_server)?
+                .credentials(self.creds.clone())
+                .build(),
+            MailTls::Tls => AsyncSmtpTransport::<Tokio1Executor>::relay(&self.smtp_server)?
+                .credentials(self.creds.clone())
+                .build(),
+        };
+
+        let response = mailer.send(email).await?;
+
+        debug!("mail sending response: {:?}", response);
+
+        Ok(())
     }
 }
 

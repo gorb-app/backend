@@ -19,6 +19,7 @@ use serde_json::Error as JsonError;
 use thiserror::Error;
 use tokio::task::JoinError;
 use toml::de::Error as TomlError;
+use lettre::{address::AddressError, transport::smtp::Error as SmtpError};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -54,6 +55,10 @@ pub enum Error {
     PayloadError(#[from] PayloadError),
     #[error(transparent)]
     WsClosed(#[from] actix_ws::Closed),
+    #[error(transparent)]
+    SmtpError(#[from] SmtpError),
+    #[error(transparent)]
+    SmtpAddressError(#[from] AddressError),
     #[error("{0}")]
     PasswordHashError(String),
     #[error("{0}")]

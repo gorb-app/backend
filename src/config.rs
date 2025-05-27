@@ -1,5 +1,6 @@
 use crate::error::Error;
 use bunny_api_tokio::edge_storage::Endpoint;
+use lettre::transport::smtp::authentication::Credentials;
 use log::debug;
 use serde::Deserialize;
 use tokio::fs::read_to_string;
@@ -12,6 +13,7 @@ pub struct ConfigBuilder {
     web: Option<WebBuilder>,
     instance: Option<Instance>,
     bunny: BunnyBuilder,
+    mail: Mail,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -50,6 +52,20 @@ struct BunnyBuilder {
     endpoint: String,
     storage_zone: String,
     cdn_url: Url,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Mail {
+    pub smtp: Smtp,
+    pub from: String,
+    pub tls: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Smtp {
+    pub server: String,
+    username: String,
+    password: String,
 }
 
 impl ConfigBuilder {
@@ -101,6 +117,7 @@ impl ConfigBuilder {
             web,
             instance: self.instance.unwrap_or(Instance { registration: true }),
             bunny,
+            mail: self.mail,
         }
     }
 }
@@ -112,6 +129,7 @@ pub struct Config {
     pub web: Web,
     pub instance: Instance,
     pub bunny: Bunny,
+    pub mail: Mail,
 }
 
 #[derive(Debug, Clone)]
@@ -177,5 +195,11 @@ impl CacheDatabase {
         }
 
         url
+    }
+}
+
+impl Smtp {
+    pub fn credentials(&self) -> Credentials {
+        Credentials::new(self.username.clone(), self.password.clone())
     }
 }

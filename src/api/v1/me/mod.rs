@@ -33,7 +33,7 @@ pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 struct NewInfo {
     username: Option<String>,
     display_name: Option<String>,
-    password: Option<String>,
+    //password: Option<String>, will probably be handled through a reset password link
     email: Option<String>,
 }
 
@@ -80,10 +80,6 @@ pub async fn update(
         }
 
         if let Some(display_name) = &new_info.display_name {
-            todo!();
-        }
-
-        if let Some(password) = &new_info.password {
             todo!();
         }
 
