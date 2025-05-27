@@ -10,7 +10,7 @@ use url::Url;
 pub struct ConfigBuilder {
     database: Database,
     cache_database: CacheDatabase,
-    web: Option<WebBuilder>,
+    web: WebBuilder,
     instance: Option<Instance>,
     bunny: BunnyBuilder,
     mail: Mail,
@@ -36,8 +36,9 @@ pub struct CacheDatabase {
 
 #[derive(Debug, Deserialize)]
 struct WebBuilder {
-    url: Option<String>,
+    ip: Option<String>,
     port: Option<u16>,
+    url: Url,
     _ssl: Option<bool>,
 }
 
@@ -57,7 +58,7 @@ struct BunnyBuilder {
 #[derive(Debug, Deserialize, Clone)]
 pub struct Mail {
     pub smtp: Smtp,
-    pub from: String,
+    pub address: String,
     pub tls: String,
 }
 
@@ -79,16 +80,10 @@ impl ConfigBuilder {
     }
 
     pub fn build(self) -> Config {
-        let web = if let Some(web) = self.web {
-            Web {
-                url: web.url.unwrap_or(String::from("0.0.0.0")),
-                port: web.port.unwrap_or(8080),
-            }
-        } else {
-            Web {
-                url: String::from("0.0.0.0"),
-                port: 8080,
-            }
+        let web = Web {
+            ip: self.web.ip.unwrap_or(String::from("0.0.0.0")),
+            port: self.web.port.unwrap_or(8080),
+            url: self.web.url,
         };
 
         let endpoint = match &*self.bunny.endpoint {
@@ -134,8 +129,9 @@ pub struct Config {
 
 #[derive(Debug, Clone)]
 pub struct Web {
-    pub url: String,
+    pub ip: String,
     pub port: u16,
+    pub url: Url,
 }
 
 #[derive(Debug, Clone)]

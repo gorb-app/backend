@@ -76,7 +76,7 @@ async fn main() -> Result<(), Error> {
 
     let mail = config.mail.clone();
 
-    let mail_client = MailClient::new(mail.smtp.credentials(), mail.smtp.server, mail.from, mail.tls)?;
+    let mail_client = MailClient::new(mail.smtp.credentials(), mail.smtp.server, mail.address, mail.tls)?;
 
     let database_url = config.database.url();
 
@@ -152,7 +152,7 @@ async fn main() -> Result<(), Error> {
             .wrap(cors)
             .service(api::web())
     })
-    .bind((web.url, web.port))?
+    .bind((web.ip, web.port))?
     .run()
     .await?;
 

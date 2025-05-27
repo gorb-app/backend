@@ -1,11 +1,10 @@
 use actix_web::web::BytesMut;
+use chrono::Utc;
 use diesel::{
-    ExpressionMethods, QueryDsl, Selectable, SelectableHelper, delete, insert_into,
-    prelude::{Insertable, Queryable},
-    update,
+    delete, dsl::now, insert_into, prelude::{Insertable, Queryable}, update, ExpressionMethods, QueryDsl, Selectable, SelectableHelper
 };
 use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
-use lettre::{message::{Mailbox, MessageBuilder as EmailBuilder}, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message as Email, Tokio1Executor};
+use lettre::{message::{Mailbox, MessageBuilder as EmailBuilder, MultiPart}, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message as Email, Tokio1Executor};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use tokio::task;
@@ -13,10 +12,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
-    error::Error,
-    schema::*,
-    utils::{image_check, order_by_is_above},
+    error::Error, schema::*, utils::{generate_refresh_token, image_check, order_by_is_above}, Conn, Data
 };
 
 pub trait HasUuid {
@@ -70,7 +66,7 @@ impl MailClient {
         })
     }
 
-    pub async fn message_builder(&self) -> EmailBuilder {
+    pub fn message_builder(&self) -> EmailBuilder {
         Email::builder()
             .from(self.mbox.clone())
     }
@@ -780,12 +776,12 @@ impl User {
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Me {
-    uuid: Uuid,
+    pub uuid: Uuid,
     username: String,
     display_name: Option<String>,
     avatar: Option<String>,
     email: String,
-    email_verified: bool,
+    pub email_verified: bool,
 }
 
 impl Me {
@@ -849,10 +845,87 @@ impl Me {
 
         Ok(())
     }
+
+    pub async fn verify_email(&self, conn: &mut Conn) -> Result<(), Error> {
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::email_verified.eq(true))
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
 }
 
 #[derive(Deserialize)]
 pub struct StartAmountQuery {
     pub start: Option<i64>,
     pub amount: Option<i64>,
+}
+
+#[derive(Selectable, Queryable)]
+#[diesel(table_name = email_tokens)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct EmailToken {
+    user_uuid: Uuid,
+    pub token: String,
+    pub created_at: chrono::DateTime<Utc>,
+}
+
+impl EmailToken {
+    pub async fn get(conn: &mut Conn, user_uuid: Uuid) -> Result<EmailToken, Error> {
+        use email_tokens::dsl;
+        let email_token = dsl::email_tokens
+            .filter(dsl::user_uuid.eq(user_uuid))
+            .select(EmailToken::as_select())
+            .get_result(conn)
+            .await?;
+
+        Ok(email_token)
+    }
+
+    pub async fn new(data: &Data, me: Me) -> Result<(), Error> {
+        let token = generate_refresh_token()?;
+
+        let mut conn = data.pool.get().await?;
+
+        use email_tokens::dsl;
+        insert_into(email_tokens::table)
+            .values((dsl::user_uuid.eq(me.uuid), dsl::token.eq(&token), dsl::created_at.eq(now)))
+            .execute(&mut conn)
+            .await?;
+
+        let mut verify_endpoint = data.config.web.url.join("verify-email")?;
+
+        verify_endpoint.set_query(Some(&format!("token={}", token)));
+
+        let email = data
+            .mail_client
+            .message_builder()
+            .to(me.email.parse()?)
+            .subject("Gorb E-mail Verification")
+            .multipart(MultiPart::alternative_plain_html(
+                format!("Verify your gorb.app account\n\nHello, {}!\nThanks for creating a new account on Gorb.\nThe final step to create your account is to verify your email address by visiting the page, within 24 hours.\n\n{}\n\nIf you didn't ask to verify this address, you can safely ignore this email\n\nThanks, The gorb team.", me.username, verify_endpoint), 
+                format!(r#"<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>:root{{--header-text-colour: #ffffff;--footer-text-colour: #7f7f7f;--button-text-colour: #170e08;--text-colour: #170e08;--background-colour: #fbf6f2;--primary-colour: #df5f0b;--secondary-colour: #e8ac84;--accent-colour: #e68b4e;}}@media (prefers-color-scheme: dark){{:root{{--header-text-colour: #ffffff;--footer-text-colour: #585858;--button-text-colour: #ffffff;--text-colour: #f7eee8;--background-colour: #0c0704;--primary-colour: #f4741f;--secondary-colour: #7c4018;--accent-colour: #b35719;}}}}@media (max-width: 600px){{.container{{width: 100%;}}}}body{{font-family: Arial, sans-serif;align-content: center;text-align: center;margin: 0;padding: 0;background-color: var(--background-colour);color: var(--text-colour);width: 100%;max-width: 600px;margin: 0 auto;border-radius: 5px;}}.header{{background-color: var(--primary-colour);color: var(--header-text-colour);padding: 20px;}}.verify-button{{background-color: var(--accent-colour);color: var(--button-text-colour);padding: 12px 30px;margin: 16px;font-size: 20px;transition: background-color 0.3s;cursor: pointer;border: none;border-radius: 14px;text-decoration: none;display: inline-block;}}.verify-button:hover{{background-color: var(--secondary-colour);}}.content{{padding: 20px 30px;}}.footer{{padding: 10px;font-size: 12px;color: var(--footer-text-colour);}}</style></head><body><div class="container"><div class="header"><h1>Verify your {} Account</h1></div><div class="content"><h2>Hello, {}!</h2><p>Thanks for creating a new account on Gorb.</p><p>The final step to create your account is to verify your email address by clicking the button below, within 24 hours.</p><a href="{}" class="verify-button">VERIFY ACCOUNT</a><p>If you didn't ask to verify this address, you can safely ignore this email.</p><div class="footer"><p>Thanks<br>The gorb team.</p></div></div></div></body></html>"#, data.config.web.url.domain().unwrap(), me.username, verify_endpoint)
+            ))?;
+
+        data
+            .mail_client
+            .send_mail(email)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn delete(&self, conn: &mut Conn) -> Result<(), Error> {
+        use email_tokens::dsl;
+        delete(email_tokens::table)
+            .filter(dsl::user_uuid.eq(self.user_uuid))
+            .filter(dsl::token.eq(&self.token))
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
 }

@@ -16,6 +16,7 @@ mod login;
 mod refresh;
 mod register;
 mod revoke;
+mod verify_email;
 
 #[derive(Serialize)]
 struct Response {
@@ -37,6 +38,8 @@ pub fn web() -> Scope {
         .service(login::response)
         .service(refresh::res)
         .service(revoke::res)
+        .service(verify_email::get)
+        .service(verify_email::post)
 }
 
 pub async fn check_access_token(access_token: &str, conn: &mut Conn) -> Result<Uuid, Error> {

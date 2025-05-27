@@ -32,6 +32,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    email_tokens (token, user_uuid) {
+        #[max_length = 64]
+        token -> Varchar,
+        user_uuid -> Uuid,
+        created_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     guild_members (uuid) {
         uuid -> Uuid,
         guild_uuid -> Uuid,
@@ -133,6 +142,7 @@ diesel::joinable!(access_tokens -> refresh_tokens (refresh_token));
 diesel::joinable!(access_tokens -> users (uuid));
 diesel::joinable!(channel_permissions -> channels (channel_uuid));
 diesel::joinable!(channels -> guilds (guild_uuid));
+diesel::joinable!(email_tokens -> users (user_uuid));
 diesel::joinable!(guild_members -> guilds (guild_uuid));
 diesel::joinable!(guild_members -> users (user_uuid));
 diesel::joinable!(guilds -> users (owner_uuid));
@@ -149,6 +159,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     access_tokens,
     channel_permissions,
     channels,
+    email_tokens,
     guild_members,
     guilds,
     instance_permissions,
