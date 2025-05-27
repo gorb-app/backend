@@ -5,6 +5,7 @@ mod invites;
 mod servers;
 mod stats;
 mod users;
+mod me;
 
 pub fn web() -> Scope {
     web::scope("/v1")
@@ -13,4 +14,5 @@ pub fn web() -> Scope {
         .service(users::web())
         .service(servers::web())
         .service(invites::web())
+        .service(me::web())
 }

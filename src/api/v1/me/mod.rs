@@ -1,13 +1,21 @@
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile};
-use actix_web::{HttpRequest, HttpResponse, get, patch, web};
+use actix_web::{get, patch, web, HttpRequest, HttpResponse, Scope};
 use serde::Deserialize;
 
 use crate::{
     Data, api::v1::auth::check_access_token, error::Error, structs::Me, utils::get_auth_header,
 };
 
-#[get("/me")]
-pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+mod servers;
+
+pub fn web() -> Scope {
+    web::scope("/me")
+        .service(get)
+        .service(update)
+}
+
+#[get("")]
+pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers)?;
@@ -36,7 +44,7 @@ struct UploadForm {
     json: Option<MpJson<NewInfo>>,
 }
 
-#[patch("/me")]
+#[patch("")]
 pub async fn update(
     req: HttpRequest,
     MultipartForm(form): MultipartForm<UploadForm>,

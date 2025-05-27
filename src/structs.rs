@@ -542,7 +542,7 @@ impl Role {
     }
 }
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Serialize, Queryable, Selectable, Insertable)]
 #[diesel(table_name = guild_members)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Member {
@@ -701,6 +701,17 @@ impl Me {
             .await?;
 
         Ok(me)
+    }
+
+    pub async fn fetch_memberships(&self, conn: &mut Conn) -> Result<Vec<Member>, Error> {
+        use guild_members::dsl;
+        let memberships: Vec<Member> = dsl::guild_members
+            .filter(dsl::user_uuid.eq(self.uuid))
+            .select(Member::as_select())
+            .load(conn)
+            .await?;
+
+        Ok(memberships)
     }
 
     pub async fn set_avatar(

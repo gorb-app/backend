@@ -8,14 +8,11 @@ use crate::{
     utils::get_auth_header,
 };
 
-mod me;
 mod uuid;
 
 pub fn web() -> Scope {
     web::scope("/users")
         .service(res)
-        .service(me::res)
-        .service(me::update)
         .service(uuid::res)
 }
 
