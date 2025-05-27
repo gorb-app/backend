@@ -1,3 +1,5 @@
+//! `/api/v1` Contains version 1 of the api
+
 use actix_web::{Scope, web};
 
 mod auth;

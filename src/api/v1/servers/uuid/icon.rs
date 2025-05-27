@@ -1,3 +1,5 @@
+//! `/api/v1/servers/{uuid}/icon` icon related endpoints, will probably be replaced by a multipart post to above endpoint
+
 use actix_web::{HttpRequest, HttpResponse, put, web};
 use futures_util::StreamExt as _;
 use uuid::Uuid;
@@ -10,6 +12,11 @@ use crate::{
     utils::get_auth_header,
 };
 
+/// `PUT /api/v1/servers/{uuid}/icon` Icon upload
+/// 
+/// requires auth: no
+/// 
+/// put request expects a file and nothing else
 #[put("{uuid}/icon")]
 pub async fn upload(
     req: HttpRequest,

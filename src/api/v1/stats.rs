@@ -1,3 +1,5 @@
+//! `/api/v1/stats` Returns stats about the server
+
 use std::time::SystemTime;
 
 use actix_web::{HttpResponse, get, web};
@@ -19,6 +21,19 @@ struct Response {
     build_number: String,
 }
 
+/// `GET /api/v1/` Returns stats about the server
+/// 
+/// requires auth: no
+/// 
+/// ### Response Example
+/// ```
+/// json!({
+///     "accounts": 3,
+///     "uptime": 50000,
+///     "version": "0.1.0",
+///     "build_number": "39d01bb"
+/// });
+/// ```
 #[get("/stats")]
 pub async fn res(data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let accounts: i64 = users

@@ -1,3 +1,5 @@
+//! `/api/v1/servers/{uuid}` Specific server endpoints
+
 use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
 use uuid::Uuid;
 
@@ -17,7 +19,7 @@ use crate::{
 pub fn web() -> Scope {
     web::scope("")
         // Servers
-        .service(res)
+        .service(get)
         // Channels
         .service(channels::get)
         .service(channels::create)
@@ -36,8 +38,41 @@ pub fn web() -> Scope {
         .service(icon::upload)
 }
 
+/// `GET /api/v1/servers/{uuid}` DESCRIPTION
+/// 
+/// requires auth: yes
+/// 
+/// ### Response Example
+/// ```
+/// json!({
+///         "uuid": "5ba61ec7-5f97-43e1-89a5-d4693c155612",
+///         "name": "My first server!",
+///         "description": "This is a cool and nullable description!",
+///         "icon": "https://nullable-url/path/to/icon.png",
+///         "owner_uuid": "155d2291-fb23-46bd-a656-ae7c5d8218e6",
+///         "roles": [
+///             {
+///                 "uuid": "be0e4da4-cf73-4f45-98f8-bb1c73d1ab8b",
+///                 "guild_uuid": "5ba61ec7-5f97-43e1-89a5-d4693c155612",
+///                 "name": "Cool people",
+///                 "color": 15650773,
+///                 "is_above": c7432f1c-f4ad-4ad3-8216-51388b6abb5b,
+///                 "permissions": 0
+///             }
+///             {
+///                 "uuid": "c7432f1c-f4ad-4ad3-8216-51388b6abb5b",
+///                 "guild_uuid": "5ba61ec7-5f97-43e1-89a5-d4693c155612",
+///                 "name": "Equally cool people",
+///                 "color": 16777215,
+///                 "is_above": null,
+///                 "permissions": 0
+///             }
+///         ],
+///         "member_count": 20
+/// });
+/// ``` 
 #[get("/{uuid}")]
-pub async fn res(
+pub async fn get(
     req: HttpRequest,
     path: web::Path<(Uuid,)>,
     data: web::Data<Data>,
