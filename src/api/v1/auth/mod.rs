@@ -1,12 +1,8 @@
-use std::{
-    sync::LazyLock,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use actix_web::{Scope, web};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use regex::Regex;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -17,6 +13,7 @@ mod refresh;
 mod register;
 mod revoke;
 mod verify_email;
+mod reset_password;
 
 #[derive(Serialize)]
 struct Response {
@@ -31,6 +28,8 @@ pub fn web() -> Scope {
         .service(revoke::res)
         .service(verify_email::get)
         .service(verify_email::post)
+        .service(reset_password::get)
+        .service(reset_password::post)
 }
 
 pub async fn check_access_token(access_token: &str, conn: &mut Conn) -> Result<Uuid, Error> {

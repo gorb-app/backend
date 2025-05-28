@@ -6,16 +6,17 @@ use actix_web::{
     web::BytesMut,
 };
 use bindet::FileType;
+use diesel::{ExpressionMethods, QueryDsl};
+use diesel_async::RunQueryDsl;
 use getrandom::fill;
 use hex::encode;
 use redis::RedisError;
 use regex::Regex;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::{
-    Data,
-    error::Error,
-    structs::{HasIsAbove, HasUuid},
+    error::Error, schema::users, structs::{HasIsAbove, HasUuid}, Conn, Data
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -134,6 +135,30 @@ pub fn image_check(icon: BytesMut) -> Result<String, Error> {
     Err(Error::BadRequest(
         "Uploaded file is not an image".to_string(),
     ))
+}
+
+pub async fn user_uuid_from_identifier(conn: &mut Conn, identifier: &String) -> Result<Uuid, Error> {
+    if EMAIL_REGEX.is_match(identifier) {
+            use users::dsl;
+            let user_uuid = dsl::users
+                .filter(dsl::email.eq(identifier))
+                .select(dsl::uuid)
+                .get_result(conn)
+                .await?;
+
+            Ok(user_uuid)
+    } else if USERNAME_REGEX.is_match(identifier) {
+            use users::dsl;
+            let user_uuid = dsl::users
+                .filter(dsl::username.eq(identifier))
+                .select(dsl::uuid)
+                .get_result(conn)
+                .await?;
+
+            Ok(user_uuid)
+    } else {
+        Err(Error::BadRequest("Please provide a valid username or email".to_string()))
+    }
 }
 
 pub async fn order_by_is_above<T>(mut items: Vec<T>) -> Result<Vec<T>, Error>
