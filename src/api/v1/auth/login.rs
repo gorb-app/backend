@@ -9,10 +9,12 @@ use uuid::Uuid;
 
 use crate::{
     Data,
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
     error::Error,
     schema::*,
-    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
+    utils::{
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_access_token, generate_refresh_token,
+        refresh_token_cookie,
+    },
 };
 
 use super::Response;
