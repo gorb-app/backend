@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use actix_web::{
     cookie::{Cookie, SameSite, time::Duration},
     http::header::HeaderMap,
@@ -7,9 +9,24 @@ use bindet::FileType;
 use getrandom::fill;
 use hex::encode;
 use redis::RedisError;
+use regex::Regex;
 use serde::Serialize;
 
-use crate::{error::Error, structs::{HasIsAbove, HasUuid}, Data};
+use crate::{
+    Data,
+    error::Error,
+    structs::{HasIsAbove, HasUuid},
+};
+
+pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+(?:\.[-A-Za-z0-9!#$%&'*+/=?^_`{|}~]+)*@(?:[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?\.)+[A-Za-z0-9](?:[-A-Za-z0-9]*[A-Za-z0-9])?").unwrap()
+});
+
+pub static USERNAME_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-z0-9_.-]+$").unwrap());
+
+// Password is expected to be hashed using SHA3-384
+pub static PASSWORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-f]{96}").unwrap());
 
 pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, Error> {
     let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);

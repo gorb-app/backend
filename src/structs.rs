@@ -12,7 +12,10 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    error::Error, schema::*, utils::{generate_refresh_token, image_check, order_by_is_above}, Conn, Data
+    Conn, Data,
+    error::Error,
+    schema::*,
+    utils::{EMAIL_REGEX, USERNAME_REGEX, generate_refresh_token, image_check, order_by_is_above},
 };
 
 pub trait HasUuid {
@@ -423,11 +426,7 @@ impl Guild {
         futures::future::try_join_all(guild_futures).await
     }
 
-    pub async fn new(
-        conn: &mut Conn,
-        name: String,
-        owner_uuid: Uuid,
-    ) -> Result<Self, Error> {
+    pub async fn new(conn: &mut Conn, name: String, owner_uuid: Uuid) -> Result<Self, Error> {
         let guild_uuid = Uuid::now_v7();
 
         let guild_builder = GuildBuilder {
@@ -853,6 +852,64 @@ impl Me {
             .set(dsl::email_verified.eq(true))
             .execute(conn)
             .await?;
+
+        Ok(())
+    }
+
+    pub async fn set_username(
+        &mut self,
+        conn: &mut Conn,
+        new_username: String,
+    ) -> Result<(), Error> {
+        if !USERNAME_REGEX.is_match(&new_username) {
+            return Err(Error::BadRequest("Invalid username".to_string()));
+        }
+
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::username.eq(new_username.as_str()))
+            .execute(conn)
+            .await?;
+
+        self.username = new_username;
+
+        Ok(())
+    }
+
+    pub async fn set_display_name(
+        &mut self,
+        conn: &mut Conn,
+        new_display_name: String,
+    ) -> Result<(), Error> {
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::display_name.eq(new_display_name.as_str()))
+            .execute(conn)
+            .await?;
+
+        self.display_name = Some(new_display_name);
+
+        Ok(())
+    }
+
+    pub async fn set_email(&mut self, conn: &mut Conn, new_email: String) -> Result<(), Error> {
+        if !EMAIL_REGEX.is_match(&new_email) {
+            return Err(Error::BadRequest("Invalid username".to_string()));
+        }
+
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set((
+                dsl::email.eq(new_email.as_str()),
+                dsl::email_verified.eq(false),
+            ))
+            .execute(conn)
+            .await?;
+
+        self.email = new_email;
 
         Ok(())
     }

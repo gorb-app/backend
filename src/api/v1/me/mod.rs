@@ -1,5 +1,5 @@
 use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile};
-use actix_web::{get, patch, web, HttpRequest, HttpResponse, Scope};
+use actix_web::{HttpRequest, HttpResponse, Scope, get, patch, web};
 use serde::Deserialize;
 
 use crate::{
@@ -9,9 +9,7 @@ use crate::{
 mod servers;
 
 pub fn web() -> Scope {
-    web::scope("/me")
-        .service(get)
-        .service(update)
+    web::scope("/me").service(get).service(update)
 }
 
 #[get("")]
@@ -76,15 +74,15 @@ pub async fn update(
 
     if let Some(new_info) = form.json {
         if let Some(username) = &new_info.username {
-            todo!();
+            me.set_username(&mut conn, username.clone()).await?;
         }
 
         if let Some(display_name) = &new_info.display_name {
-            todo!();
+            me.set_display_name(&mut conn, display_name.clone()).await?;
         }
 
         if let Some(email) = &new_info.email {
-            todo!();
+            me.set_email(&mut conn, email.to_string()).await?;
         }
     }
 

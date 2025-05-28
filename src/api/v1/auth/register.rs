@@ -13,14 +13,16 @@ use uuid::Uuid;
 use super::Response;
 use crate::{
     Data,
-    api::v1::auth::{EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX},
     error::Error,
     schema::{
         access_tokens::{self, dsl as adsl},
         refresh_tokens::{self, dsl as rdsl},
         users::{self, dsl as udsl},
     },
-    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
+    utils::{
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_access_token, generate_refresh_token,
+        refresh_token_cookie,
+    },
 };
 
 #[derive(Deserialize)]
@@ -68,9 +70,11 @@ pub async fn res(
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
     if !data.config.instance.registration {
-        return Err(Error::Forbidden("registration is disabled on this instance".to_string()))
+        return Err(Error::Forbidden(
+            "registration is disabled on this instance".to_string(),
+        ));
     }
-    
+
     let uuid = Uuid::now_v7();
 
     if !EMAIL_REGEX.is_match(&account_information.email) {
