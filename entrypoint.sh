@@ -10,6 +10,9 @@ fi
 
 if [ ! -f "/gorb/config/config.toml" ]; then
 cat > /gorb/config/config.toml <<EOF
+[web]
+url = "${WEB_URL}"
+
 [database]
 username = "${DATABASE_USERNAME}"
 password = "${DATABASE_PASSWORD}"
@@ -26,6 +29,15 @@ api_key = "${BUNNY_API_KEY}"
 endpoint = "${BUNNY_ENDPOINT}"
 storage_zone = "${BUNNY_ZONE}"
 cdn_url = "${BUNNY_CDN_URL}"
+
+[mail]
+address = "${MAIL_ADDRESS}"
+tls = "${MAIL_TLS}"
+
+[mail.smtp]
+server = "${SMTP_SERVER}"
+username = "${SMTP_USERNAME}"
+password = "${SMTP_PASSWORD}"
 
 EOF
 fi

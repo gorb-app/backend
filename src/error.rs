@@ -19,6 +19,7 @@ use serde_json::Error as JsonError;
 use thiserror::Error;
 use tokio::task::JoinError;
 use toml::de::Error as TomlError;
+use lettre::{error::Error as EmailError, address::AddressError, transport::smtp::Error as SmtpError};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -54,6 +55,12 @@ pub enum Error {
     PayloadError(#[from] PayloadError),
     #[error(transparent)]
     WsClosed(#[from] actix_ws::Closed),
+    #[error(transparent)]
+    EmailError(#[from] EmailError),
+    #[error(transparent)]
+    SmtpError(#[from] SmtpError),
+    #[error(transparent)]
+    SmtpAddressError(#[from] AddressError),
     #[error("{0}")]
     PasswordHashError(String),
     #[error("{0}")]
@@ -62,6 +69,8 @@ pub enum Error {
     Unauthorized(String),
     #[error("{0}")]
     Forbidden(String),
+    #[error("{0}")]
+    TooManyRequests(String),
     #[error("{0}")]
     InternalServerError(String),
 }
@@ -82,6 +91,8 @@ impl ResponseError for Error {
             Error::BunnyError(BunnyError::NotFound(_)) => StatusCode::NOT_FOUND,
             Error::BadRequest(_) => StatusCode::BAD_REQUEST,
             Error::Unauthorized(_) => StatusCode::UNAUTHORIZED,
+            Error::Forbidden(_) => StatusCode::FORBIDDEN,
+            Error::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }

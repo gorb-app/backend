@@ -1,5 +1,6 @@
 use crate::error::Error;
 use bunny_api_tokio::edge_storage::Endpoint;
+use lettre::transport::smtp::authentication::Credentials;
 use log::debug;
 use serde::Deserialize;
 use tokio::fs::read_to_string;
@@ -9,9 +10,10 @@ use url::Url;
 pub struct ConfigBuilder {
     database: Database,
     cache_database: CacheDatabase,
-    web: Option<WebBuilder>,
+    web: WebBuilder,
     instance: Option<Instance>,
     bunny: BunnyBuilder,
+    mail: Mail,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -34,8 +36,9 @@ pub struct CacheDatabase {
 
 #[derive(Debug, Deserialize)]
 struct WebBuilder {
-    url: Option<String>,
+    ip: Option<String>,
     port: Option<u16>,
+    url: Url,
     _ssl: Option<bool>,
 }
 
@@ -52,6 +55,20 @@ struct BunnyBuilder {
     cdn_url: Url,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct Mail {
+    pub smtp: Smtp,
+    pub address: String,
+    pub tls: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct Smtp {
+    pub server: String,
+    username: String,
+    password: String,
+}
+
 impl ConfigBuilder {
     pub async fn load(path: String) -> Result<Self, Error> {
         debug!("loading config from: {}", path);
@@ -63,16 +80,10 @@ impl ConfigBuilder {
     }
 
     pub fn build(self) -> Config {
-        let web = if let Some(web) = self.web {
-            Web {
-                url: web.url.unwrap_or(String::from("0.0.0.0")),
-                port: web.port.unwrap_or(8080),
-            }
-        } else {
-            Web {
-                url: String::from("0.0.0.0"),
-                port: 8080,
-            }
+        let web = Web {
+            ip: self.web.ip.unwrap_or(String::from("0.0.0.0")),
+            port: self.web.port.unwrap_or(8080),
+            url: self.web.url,
         };
 
         let endpoint = match &*self.bunny.endpoint {
@@ -101,6 +112,7 @@ impl ConfigBuilder {
             web,
             instance: self.instance.unwrap_or(Instance { registration: true }),
             bunny,
+            mail: self.mail,
         }
     }
 }
@@ -112,12 +124,14 @@ pub struct Config {
     pub web: Web,
     pub instance: Instance,
     pub bunny: Bunny,
+    pub mail: Mail,
 }
 
 #[derive(Debug, Clone)]
 pub struct Web {
-    pub url: String,
+    pub ip: String,
     pub port: u16,
+    pub url: Url,
 }
 
 #[derive(Debug, Clone)]
@@ -177,5 +191,11 @@ impl CacheDatabase {
         }
 
         url
+    }
+}
+
+impl Smtp {
+    pub fn credentials(&self) -> Credentials {
+        Credentials::new(self.username.clone(), self.password.clone())
     }
 }

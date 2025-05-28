@@ -1,20 +1,22 @@
 use actix_web::web::BytesMut;
+use chrono::Utc;
 use diesel::{
-    ExpressionMethods, QueryDsl, Selectable, SelectableHelper, delete, insert_into,
-    prelude::{Insertable, Queryable},
-    update,
+    delete, dsl::now, insert_into, prelude::{Insertable, Queryable}, update, ExpressionMethods, QueryDsl, Selectable, SelectableHelper
 };
 use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
+use lettre::{message::{Mailbox, MessageBuilder as EmailBuilder, MultiPart}, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message as Email, Tokio1Executor};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use url::Url;
 use uuid::Uuid;
+use argon2::{
+    PasswordHasher,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 
 use crate::{
-    Conn, Data,
-    error::Error,
-    schema::*,
-    utils::{EMAIL_REGEX, USERNAME_REGEX, image_check, order_by_is_above},
+    error::Error, schema::*, utils::{generate_refresh_token, image_check, order_by_is_above, user_uuid_from_identifier, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, Conn, Data
 };
 
 pub trait HasUuid {
@@ -32,6 +34,62 @@ fn load_or_empty<T>(
         Ok(vec) => Ok(vec),
         Err(diesel::result::Error::NotFound) => Ok(Vec::new()),
         Err(e) => Err(e),
+    }
+}
+
+#[derive(PartialEq, Eq, Clone)]
+pub enum MailTls {
+    StartTls,
+    Tls,
+}
+
+impl From<String> for MailTls {
+    fn from(value: String) -> Self {
+        match &*value.to_lowercase() {
+            "starttls" => Self::StartTls,
+            _ => Self::Tls,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct MailClient {
+    creds: Credentials,
+    smtp_server: String,
+    mbox: Mailbox,
+    tls: MailTls,
+}
+
+impl MailClient {
+    pub fn new<T: Into<MailTls>>(creds: Credentials, smtp_server: String, mbox: String, tls: T) -> Result<Self, Error> {
+        Ok(Self {
+            creds,
+            smtp_server,
+            mbox: mbox.parse()?,
+            tls: tls.into(),
+        })
+    }
+
+    pub fn message_builder(&self) -> EmailBuilder {
+        Email::builder()
+            .from(self.mbox.clone())
+    }
+
+    pub async fn send_mail(&self, email: Email) -> Result<(), Error> {
+        let mailer: AsyncSmtpTransport<Tokio1Executor> = match self.tls {
+            MailTls::StartTls => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.smtp_server)?
+                .credentials(self.creds.clone())
+                .build(),
+            MailTls::Tls => AsyncSmtpTransport::<Tokio1Executor>::relay(&self.smtp_server)?
+                .credentials(self.creds.clone())
+                .build(),
+        };
+
+        let response = mailer.send(email).await?;
+
+        debug!("mail sending response: {:?}", response);
+
+        Ok(())
     }
 }
 
@@ -718,12 +776,12 @@ impl User {
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Me {
-    uuid: Uuid,
+    pub uuid: Uuid,
     username: String,
     display_name: Option<String>,
     avatar: Option<String>,
     email: String,
-    email_verified: bool,
+    pub email_verified: bool,
 }
 
 impl Me {
@@ -784,6 +842,17 @@ impl Me {
             .await?;
 
         self.avatar = Some(avatar_url.to_string());
+
+        Ok(())
+    }
+
+    pub async fn verify_email(&self, conn: &mut Conn) -> Result<(), Error> {
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::email_verified.eq(true))
+            .execute(conn)
+            .await?;
 
         Ok(())
     }
@@ -852,3 +921,205 @@ pub struct StartAmountQuery {
     pub start: Option<i64>,
     pub amount: Option<i64>,
 }
+
+#[derive(Selectable, Queryable)]
+#[diesel(table_name = email_tokens)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct EmailToken {
+    user_uuid: Uuid,
+    pub token: String,
+    pub created_at: chrono::DateTime<Utc>,
+}
+
+impl EmailToken {
+    pub async fn get(conn: &mut Conn, user_uuid: Uuid) -> Result<EmailToken, Error> {
+        use email_tokens::dsl;
+        let email_token = dsl::email_tokens
+            .filter(dsl::user_uuid.eq(user_uuid))
+            .select(EmailToken::as_select())
+            .get_result(conn)
+            .await?;
+
+        Ok(email_token)
+    }
+
+    pub async fn new(data: &Data, me: Me) -> Result<(), Error> {
+        let token = generate_refresh_token()?;
+
+        let mut conn = data.pool.get().await?;
+
+        use email_tokens::dsl;
+        insert_into(email_tokens::table)
+            .values((dsl::user_uuid.eq(me.uuid), dsl::token.eq(&token), dsl::created_at.eq(now)))
+            .execute(&mut conn)
+            .await?;
+
+        let mut verify_endpoint = data.config.web.url.join("verify-email")?;
+
+        verify_endpoint.set_query(Some(&format!("token={}", token)));
+
+        let email = data
+            .mail_client
+            .message_builder()
+            .to(me.email.parse()?)
+            .subject(format!("{} E-mail Verification", data.config.web.url.domain().unwrap()))
+            .multipart(MultiPart::alternative_plain_html(
+                format!("Verify your {} account\n\nHello, {}!\nThanks for creating a new account on Gorb.\nThe final step to create your account is to verify your email address by visiting the page, within 24 hours.\n\n{}\n\nIf you didn't ask to verify this address, you can safely ignore this email\n\nThanks, The gorb team.", data.config.web.url.domain().unwrap(), me.username, verify_endpoint), 
+                format!(r#"<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>:root{{--header-text-colour: #ffffff;--footer-text-colour: #7f7f7f;--button-text-colour: #170e08;--text-colour: #170e08;--background-colour: #fbf6f2;--primary-colour: #df5f0b;--secondary-colour: #e8ac84;--accent-colour: #e68b4e;}}@media (prefers-color-scheme: dark){{:root{{--header-text-colour: #ffffff;--footer-text-colour: #585858;--button-text-colour: #ffffff;--text-colour: #f7eee8;--background-colour: #0c0704;--primary-colour: #f4741f;--secondary-colour: #7c4018;--accent-colour: #b35719;}}}}@media (max-width: 600px){{.container{{width: 100%;}}}}body{{font-family: Arial, sans-serif;align-content: center;text-align: center;margin: 0;padding: 0;background-color: var(--background-colour);color: var(--text-colour);width: 100%;max-width: 600px;margin: 0 auto;border-radius: 5px;}}.header{{background-color: var(--primary-colour);color: var(--header-text-colour);padding: 20px;}}.verify-button{{background-color: var(--accent-colour);color: var(--button-text-colour);padding: 12px 30px;margin: 16px;font-size: 20px;transition: background-color 0.3s;cursor: pointer;border: none;border-radius: 14px;text-decoration: none;display: inline-block;}}.verify-button:hover{{background-color: var(--secondary-colour);}}.content{{padding: 20px 30px;}}.footer{{padding: 10px;font-size: 12px;color: var(--footer-text-colour);}}</style></head><body><div class="container"><div class="header"><h1>Verify your {} Account</h1></div><div class="content"><h2>Hello, {}!</h2><p>Thanks for creating a new account on Gorb.</p><p>The final step to create your account is to verify your email address by clicking the button below, within 24 hours.</p><a href="{}" class="verify-button">VERIFY ACCOUNT</a><p>If you didn't ask to verify this address, you can safely ignore this email.</p><div class="footer"><p>Thanks<br>The gorb team.</p></div></div></div></body></html>"#, data.config.web.url.domain().unwrap(), me.username, verify_endpoint)
+            ))?;
+
+        data
+            .mail_client
+            .send_mail(email)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn delete(&self, conn: &mut Conn) -> Result<(), Error> {
+        use email_tokens::dsl;
+        delete(email_tokens::table)
+            .filter(dsl::user_uuid.eq(self.user_uuid))
+            .filter(dsl::token.eq(&self.token))
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}
+
+#[derive(Selectable, Queryable)]
+#[diesel(table_name = password_reset_tokens)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct PasswordResetToken {
+    user_uuid: Uuid,
+    pub token: String,
+    pub created_at: chrono::DateTime<Utc>,
+}
+
+impl PasswordResetToken {
+    pub async fn get(conn: &mut Conn, token: String) -> Result<PasswordResetToken, Error> {
+        use password_reset_tokens::dsl;
+        let password_reset_token = dsl::password_reset_tokens
+            .filter(dsl::token.eq(token))
+            .select(PasswordResetToken::as_select())
+            .get_result(conn)
+            .await?;
+
+        Ok(password_reset_token)
+    }
+
+    pub async fn get_with_identifier(conn: &mut Conn, identifier: String) -> Result<PasswordResetToken, Error> {
+        let user_uuid = user_uuid_from_identifier(conn, &identifier).await?;
+
+        use password_reset_tokens::dsl;
+        let password_reset_token = dsl::password_reset_tokens
+            .filter(dsl::user_uuid.eq(user_uuid))
+            .select(PasswordResetToken::as_select())
+            .get_result(conn)
+            .await?;
+
+        Ok(password_reset_token)
+    }
+
+    pub async fn new(data: &Data, identifier: String) -> Result<(), Error> {
+        let token = generate_refresh_token()?;
+
+        let mut conn = data.pool.get().await?;
+
+        let user_uuid = user_uuid_from_identifier(&mut conn, &identifier).await?;
+
+        use users::dsl as udsl;
+        let (username, email_address): (String, String) = udsl::users
+            .filter(udsl::uuid.eq(user_uuid))
+            .select((udsl::username, udsl::email))
+            .get_result(&mut conn)
+            .await?;
+
+        use password_reset_tokens::dsl;
+        insert_into(password_reset_tokens::table)
+            .values((dsl::user_uuid.eq(user_uuid), dsl::token.eq(&token), dsl::created_at.eq(now)))
+            .execute(&mut conn)
+            .await?;
+
+        let mut reset_endpoint = data.config.web.url.join("reset-password")?;
+
+        reset_endpoint.set_query(Some(&format!("token={}", token)));
+
+        let email = data
+            .mail_client
+            .message_builder()
+            .to(email_address.parse()?)
+            .subject(format!("{} Password Reset", data.config.web.url.domain().unwrap()))
+            .multipart(MultiPart::alternative_plain_html(
+                format!("{} Password Reset\n\nHello, {}!\nSomeone requested a password reset for your Gorb account.\nClick the button below within 24 hours to reset your password.\n\n{}\n\nIf you didn't request a password reset, don't worry, your account is safe and you can safely ignore this email.\n\nThanks, The gorb team.", data.config.web.url.domain().unwrap(), username, reset_endpoint), 
+                format!(r#"<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>:root {{--header-text-colour: #ffffff;--footer-text-colour: #7f7f7f;--button-text-colour: #170e08;--text-colour: #170e08;--background-colour: #fbf6f2;--primary-colour: #df5f0b;--secondary-colour: #e8ac84;--accent-colour: #e68b4e;}}@media (prefers-color-scheme: dark) {{:root {{--header-text-colour: #ffffff;--footer-text-colour: #585858;--button-text-colour: #ffffff;--text-colour: #f7eee8;--background-colour: #0c0704;--primary-colour: #f4741f;--secondary-colour: #7c4018;--accent-colour: #b35719;}}}}@media (max-width: 600px) {{.container {{width: 100%;}}}}body {{font-family: Arial, sans-serif;align-content: center;text-align: center;margin: 0;padding: 0;background-color: var(--background-colour);color: var(--text-colour);width: 100%;max-width: 600px;margin: 0 auto;border-radius: 5px;}}.header {{background-color: var(--primary-colour);color: var(--header-text-colour);padding: 20px;}}.verify-button {{background-color: var(--accent-colour);color: var(--button-text-colour);padding: 12px 30px;margin: 16px;font-size: 20px;transition: background-color 0.3s;cursor: pointer;border: none;border-radius: 14px;text-decoration: none;display: inline-block;}}.verify-button:hover {{background-color: var(--secondary-colour);}}.content {{padding: 20px 30px;}}.footer {{padding: 10px;font-size: 12px;color: var(--footer-text-colour);}}</style></head><body><div class="container"><div class="header"><h1>{} Password Reset</h1></div><div class="content"><h2>Hello, {}!</h2><p>Someone requested a password reset for your Gorb account.</p><p>Click the button below within 24 hours to reset your password.</p><a href="{}" class="verify-button">RESET PASSWORD</a><p>If you didn't request a password reset, don't worry, your account is safe and you can safely ignore this email.</p><div class="footer"><p>Thanks<br>The gorb team.</p></div></div></div></body></html>"#, data.config.web.url.domain().unwrap(), username, reset_endpoint)
+            ))?;
+
+        data
+            .mail_client
+            .send_mail(email)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn set_password(&self, data: &Data, password: String) -> Result<(), Error> {
+        if !PASSWORD_REGEX.is_match(&password) {
+            return Err(Error::BadRequest("Please provide a valid password".to_string()))
+        }
+
+        let salt = SaltString::generate(&mut OsRng);
+
+        let hashed_password = data
+            .argon2
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|e| Error::PasswordHashError(e.to_string()))?;
+    
+        let mut conn = data.pool.get().await?;
+
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.user_uuid))
+            .set(dsl::password.eq(hashed_password.to_string()))
+            .execute(&mut conn)
+            .await?;
+
+        let (username, email_address): (String, String) = dsl::users
+            .filter(dsl::uuid.eq(self.user_uuid))
+            .select((dsl::username, dsl::email))
+            .get_result(&mut conn)
+            .await?;
+
+        let login_page = data.config.web.url.join("login")?;
+
+        let email = data
+            .mail_client
+            .message_builder()
+            .to(email_address.parse()?)
+            .subject(format!("Your {} Password has been Reset", data.config.web.url.domain().unwrap()))
+            .multipart(MultiPart::alternative_plain_html(
+                format!("{} Password Reset Confirmation\n\nHello, {}!\nYour password has been successfully reset for your Gorb account.\nIf you did not initiate this change, please click the link below to reset your password <strong>immediately</strong>.\n\n{}\n\nThanks, The gorb team.", data.config.web.url.domain().unwrap(), username, login_page), 
+                format!(r#"<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>:root {{--header-text-colour: #ffffff;--footer-text-colour: #7f7f7f;--button-text-colour: #170e08;--text-colour: #170e08;--background-colour: #fbf6f2;--primary-colour: #df5f0b;--secondary-colour: #e8ac84;--accent-colour: #e68b4e;}}@media (prefers-color-scheme: dark) {{:root {{--header-text-colour: #ffffff;--footer-text-colour: #585858;--button-text-colour: #ffffff;--text-colour: #f7eee8;--background-colour: #0c0704;--primary-colour: #f4741f;--secondary-colour: #7c4018;--accent-colour: #b35719;}}}}@media (max-width: 600px) {{.container {{width: 100%;}}}}body {{font-family: Arial, sans-serif;align-content: center;text-align: center;margin: 0;padding: 0;background-color: var(--background-colour);color: var(--text-colour);width: 100%;max-width: 600px;margin: 0 auto;border-radius: 5px;}}.header {{background-color: var(--primary-colour);color: var(--header-text-colour);padding: 20px;}}.verify-button {{background-color: var(--accent-colour);color: var(--button-text-colour);padding: 12px 30px;margin: 16px;font-size: 20px;transition: background-color 0.3s;cursor: pointer;border: none;border-radius: 14px;text-decoration: none;display: inline-block;}}.verify-button:hover {{background-color: var(--secondary-colour);}}.content {{padding: 20px 30px;}}.footer {{padding: 10px;font-size: 12px;color: var(--footer-text-colour);}}</style></head><body><div class="container"><div class="header"><h1>{} Password Reset Confirmation</h1></div><div class="content"><h2>Hello, {}!</h2><p>Your password has been successfully reset for your Gorb account.</p><p>If you did not initiate this change, please click the button below to reset your password <strong>immediately</strong>.</p><a href="{}" class="verify-button">RESET PASSWORD</a><div class="footer"><p>Thanks<br>The gorb team.</p></div></div></div></body></html>"#, data.config.web.url.domain().unwrap(), username, login_page)
+            ))?;
+
+        data
+            .mail_client
+            .send_mail(email)
+            .await?;
+
+        self.delete(&mut conn).await
+    }
+
+    pub async fn delete(&self, conn: &mut Conn) -> Result<(), Error> {
+        use password_reset_tokens::dsl;
+        delete(password_reset_tokens::table)
+            .filter(dsl::user_uuid.eq(self.user_uuid))
+            .filter(dsl::token.eq(&self.token))
+            .execute(conn)
+            .await?;
+
+        Ok(())
+    }
+}
+

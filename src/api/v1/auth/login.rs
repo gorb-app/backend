@@ -5,15 +5,14 @@ use argon2::{PasswordHash, PasswordVerifier};
 use diesel::{ExpressionMethods, QueryDsl, dsl::insert_into};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
-use uuid::Uuid;
 
 use crate::{
     Data,
     error::Error,
     schema::*,
     utils::{
-        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_access_token, generate_refresh_token,
-        refresh_token_cookie,
+        PASSWORD_REGEX, generate_access_token, generate_refresh_token,
+        refresh_token_cookie, user_uuid_from_identifier
     },
 };
 
@@ -39,58 +38,20 @@ pub async fn response(
 
     let mut conn = data.pool.get().await?;
 
-    if EMAIL_REGEX.is_match(&login_information.username) {
-        // FIXME: error handling, right now i just want this to work
-        let (uuid, password): (Uuid, String) = dsl::users
-            .filter(dsl::email.eq(&login_information.username))
-            .select((dsl::uuid, dsl::password))
-            .get_result(&mut conn)
-            .await?;
+    let uuid = user_uuid_from_identifier(&mut conn, &login_information.username).await?;
 
-        return login(
-            data.clone(),
-            uuid,
-            login_information.password.clone(),
-            password,
-            login_information.device_name.clone(),
-        )
-        .await;
-    } else if USERNAME_REGEX.is_match(&login_information.username) {
-        // FIXME: error handling, right now i just want this to work
-        let (uuid, password): (Uuid, String) = dsl::users
-            .filter(dsl::username.eq(&login_information.username))
-            .select((dsl::uuid, dsl::password))
-            .get_result(&mut conn)
-            .await?;
-
-        return login(
-            data.clone(),
-            uuid,
-            login_information.password.clone(),
-            password,
-            login_information.device_name.clone(),
-        )
-        .await;
-    }
-
-    Ok(HttpResponse::Unauthorized().finish())
-}
-
-async fn login(
-    data: actix_web::web::Data<Data>,
-    uuid: Uuid,
-    request_password: String,
-    database_password: String,
-    device_name: String,
-) -> Result<HttpResponse, Error> {
-    let mut conn = data.pool.get().await?;
+    let database_password: String = dsl::users
+        .filter(dsl::uuid.eq(uuid))
+        .select(dsl::password)
+        .get_result(&mut conn)
+        .await?;
 
     let parsed_hash = PasswordHash::new(&database_password)
         .map_err(|e| Error::PasswordHashError(e.to_string()))?;
 
     if data
         .argon2
-        .verify_password(request_password.as_bytes(), &parsed_hash)
+        .verify_password(login_information.password.as_bytes(), &parsed_hash)
         .is_err()
     {
         return Err(Error::Unauthorized(
@@ -110,7 +71,7 @@ async fn login(
             rdsl::token.eq(&refresh_token),
             rdsl::uuid.eq(uuid),
             rdsl::created_at.eq(current_time),
-            rdsl::device_name.eq(device_name),
+            rdsl::device_name.eq(&login_information.device_name),
         ))
         .execute(&mut conn)
         .await?;

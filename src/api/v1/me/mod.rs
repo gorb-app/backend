@@ -31,7 +31,7 @@ pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 struct NewInfo {
     username: Option<String>,
     display_name: Option<String>,
-    password: Option<String>,
+    //password: Option<String>, will probably be handled through a reset password link
     email: Option<String>,
 }
 
@@ -79,10 +79,6 @@ pub async fn update(
 
         if let Some(display_name) = &new_info.display_name {
             me.set_display_name(&mut conn, display_name.clone()).await?;
-        }
-
-        if let Some(password) = &new_info.password {
-            todo!();
         }
 
         if let Some(email) = &new_info.email {

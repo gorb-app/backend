@@ -25,19 +25,21 @@ redis = { version = "0.31.0", features= ["tokio-comp"] }
 tokio-tungstenite = { version = "0.26", features = ["native-tls", "url"] }
 toml = "0.8"
 url = { version = "2.5", features = ["serde"] }
-uuid = { version = "1.16", features = ["serde", "v7"] }
+uuid = { version = "1.17", features = ["serde", "v7"] }
 random-string = "1.1"
 actix-ws = "0.3.0"
 futures-util = "0.3.31"
 bunny-api-tokio = "0.3.0"
 bindet = "0.3.2"
 deadpool = "0.12"
-diesel = { version = "2.2", features = ["uuid"] }
+diesel = { version = "2.2", features = ["uuid", "chrono"] }
 diesel-async = { version = "0.5", features = ["deadpool", "postgres", "async-connection-wrapper"] }
 diesel_migrations = { version = "2.2.0", features = ["postgres"] }
 thiserror = "2.0.12"
 actix-multipart = "0.7.2"
+lettre = { version = "0.11.16", features = ["tokio1", "tokio1-native-tls"] }
+chrono = { version = "0.4.41", features = ["serde"] }
 
 [dependencies.tokio]
-version = "1.44"
+version = "1.45"
 features = ["full"]
