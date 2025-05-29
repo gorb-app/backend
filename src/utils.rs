@@ -161,6 +161,26 @@ pub async fn user_uuid_from_identifier(conn: &mut Conn, identifier: &String) -> 
     }
 }
 
+pub async fn global_checks(data: &Data, user_uuid: Uuid) -> Result<(), Error> {
+    if data.config.instance.require_email_verification {
+        let mut conn = data.pool.get().await?;
+
+        use users::dsl;
+        let email_verified: bool = dsl::users
+            .filter(dsl::uuid.eq(user_uuid))
+            .select(dsl::email_verified)
+            .get_result(&mut conn)
+            .await?;
+
+        if !email_verified {
+            return Err(Error::Forbidden("server requires email verification".to_string()))
+        }
+    }
+
+
+    Ok(())
+}
+
 pub async fn order_by_is_above<T>(mut items: Vec<T>) -> Result<Vec<T>, Error>
 where
     T: HasUuid + HasIsAbove,

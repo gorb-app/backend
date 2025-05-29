@@ -1,5 +1,5 @@
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Channel, Member}, utils::{get_auth_header, order_by_is_above}, Data
+    api::v1::auth::check_access_token, error::Error, structs::{Channel, Member}, utils::{get_auth_header, global_checks, order_by_is_above}, Data
 };
 use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -28,6 +28,8 @@ pub async fn get(
     let mut conn = data.pool.get().await?;
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
+
+    global_checks(&data, uuid).await?;
 
     Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 
@@ -67,6 +69,8 @@ pub async fn create(
     let mut conn = data.pool.get().await?;
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
+
+    global_checks(&data, uuid).await?;
 
     Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
 

@@ -4,7 +4,7 @@ use actix_web::{HttpRequest, HttpResponse, get, web};
 use uuid::Uuid;
 
 use crate::{
-    Data, api::v1::auth::check_access_token, error::Error, structs::User, utils::get_auth_header,
+    api::v1::auth::check_access_token, error::Error, structs::User, utils::{get_auth_header, global_checks}, Data
 };
 
 /// `GET /api/v1/users/{uuid}` Returns user with the given UUID
@@ -31,15 +31,17 @@ pub async fn get(
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
-    let uuid = path.into_inner().0;
+    let user_uuid = path.into_inner().0;
 
     let auth_header = get_auth_header(headers)?;
 
     let mut conn = data.pool.get().await?;
 
-    check_access_token(auth_header, &mut conn).await?;
+    let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let user = User::fetch_one(&data, uuid).await?;
+    global_checks(&data, uuid).await?;
+
+    let user = User::fetch_one(&data, user_uuid).await?;
 
     Ok(HttpResponse::Ok().json(user))
 }

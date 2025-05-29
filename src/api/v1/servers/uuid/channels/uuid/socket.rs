@@ -8,10 +8,7 @@ use futures_util::StreamExt as _;
 use uuid::Uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    structs::{Channel, Member},
-    utils::get_ws_protocol_header,
+    api::v1::auth::check_access_token, structs::{Channel, Member}, utils::{get_ws_protocol_header, global_checks}, Data
 };
 
 #[get("{uuid}/channels/{channel_uuid}/socket")]
@@ -34,6 +31,8 @@ pub async fn ws(
 
     // Authorize client using auth header
     let uuid = check_access_token(auth_header, &mut conn).await?;
+
+    global_checks(&data, uuid).await?;
 
     // Get server member from psql
     Member::fetch_one(&mut conn, uuid, guild_uuid).await?;

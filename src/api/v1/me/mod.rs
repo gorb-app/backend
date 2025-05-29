@@ -3,7 +3,7 @@ use actix_web::{HttpRequest, HttpResponse, Scope, get, patch, web};
 use serde::Deserialize;
 
 use crate::{
-    Data, api::v1::auth::check_access_token, error::Error, structs::Me, utils::get_auth_header,
+    api::v1::auth::check_access_token, error::Error, structs::Me, utils::{get_auth_header, global_checks}, Data
 };
 
 mod servers;
@@ -27,7 +27,7 @@ pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
     Ok(HttpResponse::Ok().json(me))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct NewInfo {
     username: Option<String>,
     display_name: Option<String>,
@@ -39,7 +39,7 @@ struct NewInfo {
 struct UploadForm {
     #[multipart(limit = "100MB")]
     avatar: Option<TempFile>,
-    json: Option<MpJson<NewInfo>>,
+    json: MpJson<Option<NewInfo>>,
 }
 
 #[patch("")]
@@ -55,6 +55,10 @@ pub async fn update(
     let mut conn = data.pool.get().await?;
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
+
+    if form.avatar.is_some() || form.json.0.clone().is_some_and(|ni| ni.username.is_some() || ni.display_name.is_some()) {
+        global_checks(&data, uuid).await?;
+    }
 
     let mut me = Me::get(&mut conn, uuid).await?;
 
@@ -72,7 +76,7 @@ pub async fn update(
         .await?;
     }
 
-    if let Some(new_info) = form.json {
+    if let Some(new_info) = form.json.0 {
         if let Some(username) = &new_info.username {
             me.set_username(&mut conn, username.clone()).await?;
         }

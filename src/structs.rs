@@ -16,7 +16,7 @@ use argon2::{
 };
 
 use crate::{
-    error::Error, schema::*, utils::{generate_refresh_token, image_check, order_by_is_above, user_uuid_from_identifier, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, Conn, Data
+    error::Error, schema::*, utils::{generate_refresh_token, global_checks, image_check, order_by_is_above, user_uuid_from_identifier, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, Conn, Data
 };
 
 pub trait HasUuid {
@@ -1069,6 +1069,8 @@ impl PasswordResetToken {
         let mut conn = data.pool.get().await?;
 
         let user_uuid = user_uuid_from_identifier(&mut conn, &identifier).await?;
+
+        global_checks(&data, user_uuid).await?;
 
         use users::dsl as udsl;
         let (username, email_address): (String, String) = udsl::users

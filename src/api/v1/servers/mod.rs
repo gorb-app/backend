@@ -6,11 +6,7 @@ use serde::Deserialize;
 mod uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    structs::{Guild, StartAmountQuery},
-    utils::get_auth_header,
+    api::v1::auth::check_access_token, error::Error, structs::{Guild, StartAmountQuery}, utils::{get_auth_header, global_checks}, Data
 };
 
 #[derive(Deserialize)]
@@ -134,7 +130,9 @@ pub async fn get(
 
     let amount = request_query.amount.unwrap_or(10);
 
-    check_access_token(auth_header, &mut data.pool.get().await?).await?;
+    let uuid = check_access_token(auth_header, &mut data.pool.get().await?).await?;
+
+    global_checks(&data, uuid).await?;
 
     let guilds = Guild::fetch_amount(&data.pool, start, amount).await?;
 

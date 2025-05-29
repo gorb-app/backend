@@ -11,7 +11,7 @@ pub struct ConfigBuilder {
     database: Database,
     cache_database: CacheDatabase,
     web: WebBuilder,
-    instance: Option<Instance>,
+    instance: Option<InstanceBuilder>,
     bunny: BunnyBuilder,
     mail: Mail,
 }
@@ -42,9 +42,10 @@ struct WebBuilder {
     _ssl: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
-pub struct Instance {
-    pub registration: bool,
+#[derive(Debug, Deserialize)]
+struct InstanceBuilder {
+    registration: Option<bool>,
+    require_email_verification: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -106,11 +107,22 @@ impl ConfigBuilder {
             cdn_url: self.bunny.cdn_url,
         };
 
+        let instance = match self.instance {
+            Some(instance) => Instance {
+                registration: instance.registration.unwrap_or(true),
+                require_email_verification: instance.require_email_verification.unwrap_or(false),
+            },
+            None => Instance {
+                registration: true,
+                require_email_verification: false,
+            },
+        };
+
         Config {
             database: self.database,
             cache_database: self.cache_database,
             web,
-            instance: self.instance.unwrap_or(Instance { registration: true }),
+            instance,
             bunny,
             mail: self.mail,
         }
@@ -132,6 +144,12 @@ pub struct Web {
     pub ip: String,
     pub port: u16,
     pub url: Url,
+}
+
+#[derive(Debug, Clone)]
+pub struct Instance {
+    pub registration: bool,
+    pub require_email_verification: bool,
 }
 
 #[derive(Debug, Clone)]

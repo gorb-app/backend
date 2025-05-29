@@ -36,6 +36,8 @@ pub async fn join(
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
+    global_checks(&data, uuid).await?;
+
     let invite = Invite::fetch_one(&mut conn, invite_id).await?;
 
     let guild = Guild::fetch_one(&mut conn, invite.guild_uuid).await?;

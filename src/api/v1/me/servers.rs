@@ -2,7 +2,7 @@
 
 use actix_web::{get, web, HttpRequest, HttpResponse};
 
-use crate::{api::v1::auth::check_access_token, error::Error, structs::Me, utils::get_auth_header, Data};
+use crate::{api::v1::auth::check_access_token, error::Error, structs::Me, utils::{get_auth_header, global_checks}, Data};
 
 
 /// `GET /api/v1/me/servers` Returns all guild memberships in a list
@@ -36,6 +36,8 @@ pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
     let mut conn = data.pool.get().await?;
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
+
+    global_checks(&data, uuid).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 

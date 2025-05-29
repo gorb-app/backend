@@ -3,11 +3,7 @@
 use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    structs::{StartAmountQuery, User},
-    utils::get_auth_header,
+    api::v1::auth::check_access_token, error::Error, structs::{StartAmountQuery, User}, utils::{get_auth_header, global_checks}, Data
 };
 
 mod uuid;
@@ -68,7 +64,9 @@ pub async fn get(
 
     let mut conn = data.pool.get().await?;
 
-    check_access_token(auth_header, &mut conn).await?;
+    let uuid = check_access_token(auth_header, &mut conn).await?;
+
+    global_checks(&data, uuid).await?;
 
     let users = User::fetch_amount(&mut conn, start, amount).await?;
 
