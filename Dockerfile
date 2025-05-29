@@ -30,10 +30,10 @@ BUNNY_API_KEY=your_storage_zone_password_here \
 BUNNY_ENDPOINT=Frankfurt \
 BUNNY_ZONE=gorb \
 BUNNY_CDN_URL=https://cdn.gorb.app \
-MAIL_ADDRESS=Gorb <noreply@gorb.app> \
+MAIL_ADDRESS=noreply@gorb.app \
 MAIL_TLS=tls \
 SMTP_SERVER=mail.gorb.app \
 SMTP_USERNAME=your_smtp_username \
-SMTP_PASSWORD=your_smtp_password \
+SMTP_PASSWORD=your_smtp_password
 
 ENTRYPOINT ["/usr/bin/entrypoint.sh"]
