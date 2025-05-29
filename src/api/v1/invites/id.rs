@@ -1,26 +1,15 @@
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    structs::{Guild, Invite, Member},
-    utils::get_auth_header,
+    api::v1::auth::check_access_token, error::Error, structs::{Guild, Invite, Member}, utils::{get_auth_header, global_checks}, Data
 };
 
 #[get("{id}")]
 pub async fn get(
-    req: HttpRequest,
     path: web::Path<(String,)>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
-
-    let auth_header = get_auth_header(headers)?;
-
     let mut conn = data.pool.get().await?;
-
-    check_access_token(auth_header, &mut conn).await?;
 
     let invite_id = path.into_inner().0;
 
