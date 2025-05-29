@@ -44,6 +44,7 @@ struct WebBuilder {
 
 #[derive(Debug, Deserialize)]
 struct InstanceBuilder {
+    name: Option<String>,
     registration: Option<bool>,
     require_email_verification: Option<bool>,
 }
@@ -109,10 +110,12 @@ impl ConfigBuilder {
 
         let instance = match self.instance {
             Some(instance) => Instance {
+                name: instance.name.unwrap_or("Gorb".to_string()),
                 registration: instance.registration.unwrap_or(true),
                 require_email_verification: instance.require_email_verification.unwrap_or(false),
             },
             None => Instance {
+                name: "Gorb".to_string(),
                 registration: true,
                 require_email_verification: false,
             },
@@ -148,6 +151,7 @@ pub struct Web {
 
 #[derive(Debug, Clone)]
 pub struct Instance {
+    pub name: String,
     pub registration: bool,
     pub require_email_verification: bool,
 }
