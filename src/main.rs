@@ -150,7 +150,7 @@ async fn main() -> Result<(), Error> {
         App::new()
             .app_data(web::Data::new(data.clone()))
             .wrap(cors)
-            .service(api::web())
+            .service(api::web(&data.config.web.base_path))
     })
     .bind((web.ip, web.port))?
     .run()
