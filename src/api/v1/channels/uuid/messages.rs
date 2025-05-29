@@ -1,4 +1,4 @@
-//! `/api/v1/servers/{uuid}/channels/{uuid}/messages` Endpoints related to channel messages
+//! `/api/v1/channels/{uuid}/messages` Endpoints related to channel messages
 
 use crate::{
     api::v1::auth::check_access_token, error::Error, structs::{Channel, Member}, utils::{get_auth_header, global_checks}, Data
@@ -13,7 +13,7 @@ struct MessageRequest {
     offset: i64,
 }
 
-/// `GET /api/v1/servers/{uuid}/channels/{uuid}/messages` Returns user with the given UUID
+/// `GET /api/v1/channels/{uuid}/messages` Returns user with the given UUID
 /// 
 /// requires auth: yes
 /// 
