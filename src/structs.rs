@@ -183,15 +183,26 @@ impl Channel {
         futures::future::try_join_all(channel_futures).await
     }
 
-    pub async fn fetch_one(conn: &mut Conn, channel_uuid: Uuid) -> Result<Self, Error> {
+    pub async fn fetch_one(data: &Data, channel_uuid: Uuid) -> Result<Self, Error> {
+        if let Ok(cache_hit) = data.get_cache_key(channel_uuid.to_string()).await {
+            return Ok(serde_json::from_str(&cache_hit)?);
+        }
+
+        let mut conn = data.pool.get().await?;
+
         use channels::dsl;
         let channel_builder: ChannelBuilder = dsl::channels
             .filter(dsl::uuid.eq(channel_uuid))
             .select(ChannelBuilder::as_select())
-            .get_result(conn)
+            .get_result(&mut conn)
             .await?;
 
-        channel_builder.build(conn).await
+        let channel = channel_builder.build(&mut conn).await?;
+
+        data.set_cache_key(channel_uuid.to_string(), channel.clone(), 60)
+            .await?;
+
+        Ok(channel)
     }
 
     pub async fn new(
@@ -245,18 +256,26 @@ impl Channel {
         data.set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
             .await?;
 
-        data.del_cache_key(format!("{}_channels", guild_uuid))
-            .await?;
+        if let Ok(_) = data.get_cache_key(format!("{}_channels", guild_uuid)).await {
+            data.del_cache_key(format!("{}_channels", guild_uuid))
+                .await?;
+        }
 
         Ok(channel)
     }
 
-    pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
+    pub async fn delete(self, data: &Data) -> Result<(), Error> {
+        let mut conn = data.pool.get().await?;
+
         use channels::dsl;
         delete(channels::table)
             .filter(dsl::uuid.eq(self.uuid))
-            .execute(conn)
+            .execute(&mut conn)
             .await?;
+
+        if let Ok(_) = data.get_cache_key(self.uuid.to_string()).await {
+            data.del_cache_key(self.uuid.to_string()).await?;
+        }
 
         Ok(())
     }

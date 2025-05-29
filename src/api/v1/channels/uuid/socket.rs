@@ -11,10 +11,10 @@ use crate::{
     api::v1::auth::check_access_token, structs::{Channel, Member}, utils::{get_ws_protocol_header, global_checks}, Data
 };
 
-#[get("{uuid}/channels/{channel_uuid}/socket")]
+#[get("/{uuid}/socket")]
 pub async fn ws(
     req: HttpRequest,
-    path: web::Path<(Uuid, Uuid)>,
+    path: web::Path<(Uuid,)>,
     stream: web::Payload,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
@@ -24,8 +24,8 @@ pub async fn ws(
     // Retrieve auth header
     let auth_header = get_ws_protocol_header(headers)?;
 
-    // Get uuids from path
-    let (guild_uuid, channel_uuid) = path.into_inner();
+    // Get uuid from path
+    let channel_uuid = path.into_inner().0;
 
     let mut conn = data.pool.get().await.map_err(crate::error::Error::from)?;
 
@@ -34,20 +34,10 @@ pub async fn ws(
 
     global_checks(&data, uuid).await?;
 
+    let channel = Channel::fetch_one(&data, channel_uuid).await?;
+
     // Get server member from psql
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
-
-    let channel: Channel;
-
-    // Return channel cache or result from psql as `channel` variable
-    if let Ok(cache_hit) = data.get_cache_key(format!("{}", channel_uuid)).await {
-        channel = serde_json::from_str(&cache_hit)?
-    } else {
-        channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
-
-        data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
-            .await?;
-    }
+    Member::fetch_one(&mut conn, uuid, channel.guild_uuid).await?;
 
     let (mut res, mut session_1, stream) = actix_ws::handle(&req, stream)?;
 

@@ -43,10 +43,10 @@ struct MessageRequest {
 /// });
 /// ```
 /// 
-#[get("{uuid}/channels/{channel_uuid}/messages")]
+#[get("/{uuid}/messages")]
 pub async fn get(
     req: HttpRequest,
-    path: web::Path<(Uuid, Uuid)>,
+    path: web::Path<(Uuid,)>,
     message_request: web::Query<MessageRequest>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
@@ -54,7 +54,7 @@ pub async fn get(
 
     let auth_header = get_auth_header(headers)?;
 
-    let (guild_uuid, channel_uuid) = path.into_inner();
+    let channel_uuid = path.into_inner().0;
 
     let mut conn = data.pool.get().await?;
 
@@ -62,18 +62,9 @@ pub async fn get(
 
     global_checks(&data, uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    let channel = Channel::fetch_one(&data, channel_uuid).await?;
 
-    let channel: Channel;
-
-    if let Ok(cache_hit) = data.get_cache_key(format!("{}", channel_uuid)).await {
-        channel = serde_json::from_str(&cache_hit)?
-    } else {
-        channel = Channel::fetch_one(&mut conn, channel_uuid).await?;
-
-        data.set_cache_key(format!("{}", channel_uuid), channel.clone(), 60)
-            .await?;
-    }
+    Member::fetch_one(&mut conn, uuid, channel.guild_uuid).await?;
 
     let messages = channel
         .fetch_messages(&data, message_request.amount, message_request.offset)
