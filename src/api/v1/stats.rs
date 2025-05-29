@@ -18,6 +18,8 @@ struct Response {
     accounts: i64,
     uptime: u64,
     version: String,
+    registration_enabled: bool,
+    email_verification_required: bool,
     build_number: String,
 }
 
@@ -31,6 +33,8 @@ struct Response {
 ///     "accounts": 3,
 ///     "uptime": 50000,
 ///     "version": "0.1.0",
+///     "registration_enabled": true,
+///     "email_verification_required": true,
 ///     "build_number": "39d01bb"
 /// });
 /// ```
@@ -50,6 +54,8 @@ pub async fn res(data: web::Data<Data>) -> Result<HttpResponse, Error> {
             .expect("Seriously why dont you have time??")
             .as_secs(),
         version: String::from(VERSION.unwrap_or("UNKNOWN")),
+        registration_enabled: data.config.instance.registration,
+        email_verification_required: data.config.instance.require_email_verification,
         // TODO: Get build number from git hash or remove this from the spec
         build_number: String::from("how do i implement this?"),
     };
