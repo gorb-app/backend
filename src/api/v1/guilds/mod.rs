@@ -15,7 +15,7 @@ struct GuildInfo {
 }
 
 pub fn web() -> Scope {
-    web::scope("/servers")
+    web::scope("/guilds")
         .service(post)
         .service(get)
         .service(uuid::web())

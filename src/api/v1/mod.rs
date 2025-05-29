@@ -5,7 +5,7 @@ use actix_web::{Scope, web};
 mod auth;
 mod channels;
 mod invites;
-mod servers;
+mod guilds;
 mod stats;
 mod users;
 mod me;
@@ -16,7 +16,7 @@ pub fn web() -> Scope {
         .service(auth::web())
         .service(users::web())
         .service(channels::web())
-        .service(servers::web())
+        .service(guilds::web())
         .service(invites::web())
         .service(me::web())
 }
