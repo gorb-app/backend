@@ -1014,7 +1014,7 @@ impl EmailToken {
             .execute(&mut conn)
             .await?;
 
-        let mut verify_endpoint = data.config.web.url.join("verify-email")?;
+        let mut verify_endpoint = data.config.web.frontend_url.join("verify-email")?;
 
         verify_endpoint.set_query(Some(&format!("token={}", token)));
 
@@ -1104,7 +1104,7 @@ impl PasswordResetToken {
             .execute(&mut conn)
             .await?;
 
-        let mut reset_endpoint = data.config.web.url.join("reset-password")?;
+        let mut reset_endpoint = data.config.web.frontend_url.join("reset-password")?;
 
         reset_endpoint.set_query(Some(&format!("token={}", token)));
 
@@ -1153,7 +1153,7 @@ impl PasswordResetToken {
             .get_result(&mut conn)
             .await?;
 
-        let login_page = data.config.web.url.join("login")?;
+        let login_page = data.config.web.frontend_url.join("login")?;
 
         let email = data
             .mail_client

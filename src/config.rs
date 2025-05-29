@@ -38,7 +38,7 @@ pub struct CacheDatabase {
 struct WebBuilder {
     ip: Option<String>,
     port: Option<u16>,
-    url: Url,
+    frontend_url: Url,
     _ssl: Option<bool>,
 }
 
@@ -85,7 +85,7 @@ impl ConfigBuilder {
         let web = Web {
             ip: self.web.ip.unwrap_or(String::from("0.0.0.0")),
             port: self.web.port.unwrap_or(8080),
-            url: self.web.url,
+            frontend_url: self.web.frontend_url,
         };
 
         let endpoint = match &*self.bunny.endpoint {
@@ -146,7 +146,7 @@ pub struct Config {
 pub struct Web {
     pub ip: String,
     pub port: u16,
-    pub url: Url,
+    pub frontend_url: Url,
 }
 
 #[derive(Debug, Clone)]

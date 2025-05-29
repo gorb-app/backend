@@ -18,7 +18,7 @@ services:
       - gorb-backend:/gorb
     environment:
       #- RUST_LOG=debug
-      - WEB_URL=https://gorb.app/web/
+      - WEB_FRONTEND_URL=https://gorb.app/web/
       - DATABASE_USERNAME=gorb
       - DATABASE_PASSWORD=gorb
       - DATABASE=gorb

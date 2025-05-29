@@ -18,7 +18,8 @@ RUN useradd --create-home --home-dir /gorb gorb
 
 USER gorb
 
-ENV WEB_URL=https://gorb.app/web/ \
+ENV WEB_FRONTEND_URL=https://gorb.app/web/ \
+WEB_BASE_PATH=/api \
 DATABASE_USERNAME=gorb \
 DATABASE_PASSWORD=gorb \
 DATABASE=gorb \
