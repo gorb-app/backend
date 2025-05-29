@@ -1,4 +1,4 @@
-//! `/api/v1/servers/{uuid}/icon` icon related endpoints, will probably be replaced by a multipart post to above endpoint
+//! `/api/v1/guilds/{uuid}/icon` icon related endpoints, will probably be replaced by a multipart post to above endpoint
 
 use actix_web::{HttpRequest, HttpResponse, put, web};
 use futures_util::StreamExt as _;
@@ -8,7 +8,7 @@ use crate::{
     api::v1::auth::check_access_token, error::Error, structs::{Guild, Member}, utils::{get_auth_header, global_checks}, Data
 };
 
-/// `PUT /api/v1/servers/{uuid}/icon` Icon upload
+/// `PUT /api/v1/guilds/{uuid}/icon` Icon upload
 /// 
 /// requires auth: no
 /// 

@@ -1,4 +1,4 @@
-//! `/api/v1/servers/{uuid}` Specific server endpoints
+//! `/api/v1/guilds/{uuid}` Specific server endpoints
 
 use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
 use uuid::Uuid;
@@ -30,7 +30,7 @@ pub fn web() -> Scope {
         .service(icon::upload)
 }
 
-/// `GET /api/v1/servers/{uuid}` DESCRIPTION
+/// `GET /api/v1/guilds/{uuid}` DESCRIPTION
 /// 
 /// requires auth: yes
 /// 
