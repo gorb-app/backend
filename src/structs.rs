@@ -274,6 +274,7 @@ impl Channel {
             dsl::messages
                 .filter(dsl::channel_uuid.eq(self.uuid))
                 .select(MessageBuilder::as_select())
+                .order(dsl::uuid.desc())
                 .limit(amount)
                 .offset(offset)
                 .load(&mut conn)
