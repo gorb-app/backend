@@ -15,7 +15,7 @@ use crate::{
 };
 
 #[get("{uuid}/channels/{channel_uuid}/socket")]
-pub async fn echo(
+pub async fn ws(
     req: HttpRequest,
     path: web::Path<(Uuid, Uuid)>,
     stream: web::Payload,
@@ -84,7 +84,7 @@ pub async fn echo(
                     let mut conn = data.cache_pool.get_multiplexed_tokio_connection().await?;
 
                     let message = channel
-                        .new_message(&mut data.pool.get().await?, uuid, text.to_string())
+                        .new_message(&data, uuid, text.to_string())
                         .await?;
 
                     redis::cmd("PUBLISH")

@@ -263,45 +263,53 @@ impl Channel {
 
     pub async fn fetch_messages(
         &self,
-        conn: &mut Conn,
+        data: &Data,
         amount: i64,
         offset: i64,
     ) -> Result<Vec<Message>, Error> {
+        let mut conn = data.pool.get().await?;
+
         use messages::dsl;
-        let messages: Vec<Message> = load_or_empty(
+        let messages: Vec<MessageBuilder> = load_or_empty(
             dsl::messages
                 .filter(dsl::channel_uuid.eq(self.uuid))
-                .select(Message::as_select())
+                .select(MessageBuilder::as_select())
                 .limit(amount)
                 .offset(offset)
-                .load(conn)
+                .load(&mut conn)
                 .await,
         )?;
 
-        Ok(messages)
+        let message_futures = messages.iter().map(async move |b| {
+            b.build(data).await
+        });
+
+        futures::future::try_join_all(message_futures).await
     }
 
     pub async fn new_message(
         &self,
-        conn: &mut Conn,
+        data: &Data,
         user_uuid: Uuid,
         message: String,
     ) -> Result<Message, Error> {
         let message_uuid = Uuid::now_v7();
 
-        let message = Message {
+        let message = MessageBuilder {
             uuid: message_uuid,
             channel_uuid: self.uuid,
             user_uuid,
             message,
         };
 
+        let mut conn = data.pool.get().await?;
+
         insert_into(messages::table)
             .values(message.clone())
-            .execute(conn)
+            .execute(&mut conn)
             .await?;
 
-        Ok(message)
+        message.build(data).await
     }
 }
 
@@ -697,14 +705,37 @@ impl Member {
     }
 }
 
-#[derive(Clone, Serialize, Queryable, Selectable, Insertable)]
+#[derive(Clone, Queryable, Selectable, Insertable)]
 #[diesel(table_name = messages)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct MessageBuilder {
+    uuid: Uuid,
+    channel_uuid: Uuid,
+    user_uuid: Uuid,
+    message: String,
+}
+
+impl MessageBuilder {
+    pub async fn build(&self, data: &Data) -> Result<Message, Error> {
+        let user = User::fetch_one(data, self.user_uuid).await?;
+
+        Ok(Message {
+            uuid: self.uuid,
+            channel_uuid: self.channel_uuid,
+            user_uuid: self.user_uuid,
+            message: self.message.clone(),
+            user,
+        })
+    }
+}
+
+#[derive(Clone, Serialize)]
 pub struct Message {
     uuid: Uuid,
     channel_uuid: Uuid,
     user_uuid: Uuid,
     message: String,
+    user: User,
 }
 
 /// Server invite struct
@@ -731,7 +762,7 @@ impl Invite {
     }
 }
 
-#[derive(Serialize, Clone, Queryable, Selectable)]
+#[derive(Deserialize, Serialize, Clone, Queryable, Selectable)]
 #[diesel(table_name = users)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -742,12 +773,21 @@ pub struct User {
 }
 
 impl User {
-    pub async fn fetch_one(conn: &mut Conn, user_uuid: Uuid) -> Result<Self, Error> {
+    pub async fn fetch_one(data: &Data, user_uuid: Uuid) -> Result<Self, Error> {
+        let mut conn = data.pool.get().await?;
+
+        if let Ok(cache_hit) = data.get_cache_key(user_uuid.to_string()).await {
+            return Ok(serde_json::from_str(&cache_hit)?);
+        }
+
         use users::dsl;
         let user: User = dsl::users
             .filter(dsl::uuid.eq(user_uuid))
             .select(User::as_select())
-            .get_result(conn)
+            .get_result(&mut conn)
+            .await?;
+
+        data.set_cache_key(user_uuid.to_string(), user.clone(), 1800)
             .await?;
 
         Ok(user)

@@ -39,16 +39,7 @@ pub async fn get(
 
     check_access_token(auth_header, &mut conn).await?;
 
-    if let Ok(cache_hit) = data.get_cache_key(uuid.to_string()).await {
-        return Ok(HttpResponse::Ok()
-            .content_type("application/json")
-            .body(cache_hit));
-    }
-
-    let user = User::fetch_one(&mut conn, uuid).await?;
-
-    data.set_cache_key(uuid.to_string(), user.clone(), 1800)
-        .await?;
+    let user = User::fetch_one(&data, uuid).await?;
 
     Ok(HttpResponse::Ok().json(user))
 }
