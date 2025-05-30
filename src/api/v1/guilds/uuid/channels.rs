@@ -5,8 +5,6 @@ use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
-pub mod uuid;
-
 #[derive(Deserialize)]
 struct ChannelInfo {
     name: String,

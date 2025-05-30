@@ -1,4 +1,4 @@
-//! `/api/v1/servers` Guild related endpoints
+//! `/api/v1/guilds` Guild related endpoints
 
 use actix_web::{HttpRequest, HttpResponse, Scope, get, post, web};
 use serde::Deserialize;
@@ -15,13 +15,13 @@ struct GuildInfo {
 }
 
 pub fn web() -> Scope {
-    web::scope("/servers")
+    web::scope("/guilds")
         .service(post)
         .service(get)
         .service(uuid::web())
 }
 
-/// `POST /api/v1/servers` Creates a new guild
+/// `POST /api/v1/guilds` Creates a new guild
 /// 
 /// requires auth: yes
 /// 

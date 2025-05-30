@@ -11,7 +11,8 @@ fi
 if [ ! -f "/gorb/config/config.toml" ]; then
 cat > /gorb/config/config.toml <<EOF
 [web]
-url = "${WEB_URL}"
+frontend_url = "${WEB_FRONTEND_URL}"
+base_path = "${WEB_BASE_PATH}"
 
 [database]
 username = "${DATABASE_USERNAME}"
