@@ -5,7 +5,11 @@ use chrono::{Duration, Utc};
 use serde::Deserialize;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{EmailToken, Me}, utils::get_auth_header, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{EmailToken, Me},
+    utils::get_auth_header,
 };
 
 #[derive(Deserialize)]
@@ -14,18 +18,18 @@ struct Query {
 }
 
 /// `GET /api/v1/auth/verify-email` Verifies user email address
-/// 
+///
 /// requires auth? yes
-/// 
+///
 /// ### Query Parameters
 /// token
-/// 
+///
 /// ### Responses
 /// 200 Success
 /// 410 Token Expired
 /// 404 Not Found
 /// 401 Unauthorized
-/// 
+///
 #[get("/verify-email")]
 pub async fn get(
     req: HttpRequest,
@@ -61,20 +65,17 @@ pub async fn get(
 }
 
 /// `POST /api/v1/auth/verify-email` Sends user verification email
-/// 
+///
 /// requires auth? yes
-/// 
+///
 /// ### Responses
 /// 200 Email sent
 /// 204 Already verified
 /// 429 Too Many Requests
 /// 401 Unauthorized
-/// 
+///
 #[post("/verify-email")]
-pub async fn post(
-    req: HttpRequest,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
+pub async fn post(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers)?;
@@ -86,14 +87,16 @@ pub async fn post(
     let me = Me::get(&mut conn, uuid).await?;
 
     if me.email_verified {
-        return Ok(HttpResponse::NoContent().finish())
+        return Ok(HttpResponse::NoContent().finish());
     }
 
     if let Ok(email_token) = EmailToken::get(&mut conn, me.uuid).await {
         if Utc::now().signed_duration_since(email_token.created_at) > Duration::hours(1) {
             email_token.delete(&mut conn).await?;
         } else {
-            return Err(Error::TooManyRequests("Please allow 1 hour before sending a new email".to_string()))
+            return Err(Error::TooManyRequests(
+                "Please allow 1 hour before sending a new email".to_string(),
+            ));
         }
     }
 

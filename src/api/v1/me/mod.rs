@@ -3,7 +3,11 @@ use actix_web::{HttpRequest, HttpResponse, Scope, get, patch, web};
 use serde::Deserialize;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::Me, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::Me,
+    utils::{get_auth_header, global_checks},
 };
 
 mod guilds;
@@ -59,7 +63,13 @@ pub async fn update(
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    if form.avatar.is_some() || form.json.0.clone().is_some_and(|ni| ni.username.is_some() || ni.display_name.is_some()) {
+    if form.avatar.is_some()
+        || form
+            .json
+            .0
+            .clone()
+            .is_some_and(|ni| ni.username.is_some() || ni.display_name.is_some())
+    {
         global_checks(&data, uuid).await?;
     }
 

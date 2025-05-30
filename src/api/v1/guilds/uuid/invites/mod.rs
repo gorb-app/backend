@@ -3,7 +3,11 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Guild, Member}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Guild, Member},
+    utils::{get_auth_header, global_checks},
 };
 
 #[derive(Deserialize)]

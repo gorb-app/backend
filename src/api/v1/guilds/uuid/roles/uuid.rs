@@ -1,5 +1,9 @@
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Member, Role}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Member, Role},
+    utils::{get_auth_header, global_checks},
 };
 use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, web};

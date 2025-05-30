@@ -12,6 +12,9 @@ use bunny_api_tokio::error::Error as BunnyError;
 use deadpool::managed::{BuildError, PoolError};
 use diesel::{ConnectionError, result::Error as DieselError};
 use diesel_async::pooled_connection::PoolError as DieselPoolError;
+use lettre::{
+    address::AddressError, error::Error as EmailError, transport::smtp::Error as SmtpError,
+};
 use log::{debug, error};
 use redis::RedisError;
 use serde::Serialize;
@@ -19,7 +22,6 @@ use serde_json::Error as JsonError;
 use thiserror::Error;
 use tokio::task::JoinError;
 use toml::de::Error as TomlError;
-use lettre::{error::Error as EmailError, address::AddressError, transport::smtp::Error as SmtpError};
 
 #[derive(Debug, Error)]
 pub enum Error {

@@ -4,11 +4,11 @@ use actix_web::{Scope, web};
 
 mod auth;
 mod channels;
-mod invites;
 mod guilds;
+mod invites;
+mod me;
 mod stats;
 mod users;
-mod me;
 
 pub fn web() -> Scope {
     web::scope("/v1")

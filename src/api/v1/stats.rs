@@ -25,9 +25,9 @@ struct Response {
 }
 
 /// `GET /api/v1/` Returns stats about the server
-/// 
+///
 /// requires auth: no
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!({

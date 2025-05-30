@@ -2,7 +2,11 @@ pub mod messages;
 pub mod socket;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Channel, Member}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Channel, Member},
+    utils::{get_auth_header, global_checks},
 };
 use actix_web::{HttpRequest, HttpResponse, delete, get, web};
 use uuid::Uuid;

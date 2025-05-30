@@ -1,14 +1,19 @@
 //! `/api/v1/me/guilds` Contains endpoint related to guild memberships
 
-use actix_web::{get, web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, get, web};
 
-use crate::{api::v1::auth::check_access_token, error::Error, structs::Me, utils::{get_auth_header, global_checks}, Data};
-
+use crate::{
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::Me,
+    utils::{get_auth_header, global_checks},
+};
 
 /// `GET /api/v1/me/guilds` Returns all guild memberships in a list
-/// 
+///
 /// requires auth: yes
-/// 
+///
 /// ### Example Response
 /// ```
 /// json!([

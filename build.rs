@@ -8,7 +8,7 @@ fn main() {
         .output()
         .ok()
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|s| s.trim().to_string())  // Trim newline
+        .map(|s| s.trim().to_string()) // Trim newline
         .unwrap_or_else(|| "UNKNOWN".to_string());
 
     // Tell Cargo to set `GIT_SHORT_HASH` for the main compilation

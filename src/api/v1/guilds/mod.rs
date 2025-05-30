@@ -6,7 +6,11 @@ use serde::Deserialize;
 mod uuid;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Guild, StartAmountQuery}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Guild, StartAmountQuery},
+    utils::{get_auth_header, global_checks},
 };
 
 #[derive(Deserialize)]
@@ -22,16 +26,16 @@ pub fn web() -> Scope {
 }
 
 /// `POST /api/v1/guilds` Creates a new guild
-/// 
+///
 /// requires auth: yes
-/// 
+///
 /// ### Request Example
 /// ```
 /// json!({
 ///     "name": "My new server!"
 /// });
 /// ```
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!({
@@ -59,22 +63,17 @@ pub async fn post(
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    let guild = Guild::new(
-        &mut conn,
-        guild_info.name.clone(),
-        uuid,
-    )
-    .await?;
+    let guild = Guild::new(&mut conn, guild_info.name.clone(), uuid).await?;
 
     Ok(HttpResponse::Ok().json(guild))
 }
 
 /// `GET /api/v1/servers` Fetches all guilds
-/// 
+///
 /// requires auth: yes
-/// 
+///
 /// requires admin: yes
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!([

@@ -6,11 +6,15 @@ use uuid::Uuid;
 mod channels;
 mod icon;
 mod invites;
-mod roles;
 mod members;
+mod roles;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Guild, Member}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Guild, Member},
+    utils::{get_auth_header, global_checks},
 };
 
 pub fn web() -> Scope {
@@ -34,9 +38,9 @@ pub fn web() -> Scope {
 }
 
 /// `GET /api/v1/guilds/{uuid}` DESCRIPTION
-/// 
+///
 /// requires auth: yes
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!({
@@ -65,7 +69,7 @@ pub fn web() -> Scope {
 ///         ],
 ///         "member_count": 20
 /// });
-/// ``` 
+/// ```
 #[get("/{uuid}")]
 pub async fn get(
     req: HttpRequest,

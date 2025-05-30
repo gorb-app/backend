@@ -1,7 +1,11 @@
 //! `/api/v1/channels/{uuid}/messages` Endpoints related to channel messages
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Channel, Member}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Channel, Member},
+    utils::{get_auth_header, global_checks},
 };
 use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, web};
@@ -14,11 +18,11 @@ struct MessageRequest {
 }
 
 /// `GET /api/v1/channels/{uuid}/messages` Returns user with the given UUID
-/// 
+///
 /// requires auth: yes
-/// 
+///
 /// requires relation: yes
-/// 
+///
 /// ### Request Example
 /// ```
 /// json!({
@@ -26,7 +30,7 @@ struct MessageRequest {
 ///     "offset": 0
 /// })
 /// ```
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!({
@@ -42,7 +46,7 @@ struct MessageRequest {
 ///     }
 /// });
 /// ```
-/// 
+///
 #[get("/{uuid}/messages")]
 pub async fn get(
     req: HttpRequest,

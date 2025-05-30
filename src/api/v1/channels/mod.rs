@@ -1,4 +1,4 @@
-use actix_web::{web, Scope};
+use actix_web::{Scope, web};
 
 mod uuid;
 

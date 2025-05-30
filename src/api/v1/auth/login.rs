@@ -11,8 +11,8 @@ use crate::{
     error::Error,
     schema::*,
     utils::{
-        PASSWORD_REGEX, generate_access_token, generate_refresh_token,
-        refresh_token_cookie, user_uuid_from_identifier
+        PASSWORD_REGEX, generate_access_token, generate_refresh_token, refresh_token_cookie,
+        user_uuid_from_identifier,
     },
 };
 

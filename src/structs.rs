@@ -1,22 +1,36 @@
 use actix_web::web::BytesMut;
+use argon2::{
+    PasswordHasher,
+    password_hash::{SaltString, rand_core::OsRng},
+};
 use chrono::Utc;
 use diesel::{
-    delete, dsl::now, insert_into, prelude::{Insertable, Queryable}, update, ExpressionMethods, QueryDsl, Selectable, SelectableHelper
+    ExpressionMethods, QueryDsl, Selectable, SelectableHelper, delete,
+    dsl::now,
+    insert_into,
+    prelude::{Insertable, Queryable},
+    update,
 };
 use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
-use lettre::{message::{Mailbox, MessageBuilder as EmailBuilder, MultiPart}, transport::smtp::authentication::Credentials, AsyncSmtpTransport, AsyncTransport, Message as Email, Tokio1Executor};
+use lettre::{
+    AsyncSmtpTransport, AsyncTransport, Message as Email, Tokio1Executor,
+    message::{Mailbox, MessageBuilder as EmailBuilder, MultiPart},
+    transport::smtp::authentication::Credentials,
+};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use tokio::task;
 use url::Url;
 use uuid::Uuid;
-use argon2::{
-    PasswordHasher,
-    password_hash::{SaltString, rand_core::OsRng},
-};
 
 use crate::{
-    error::Error, schema::*, utils::{generate_refresh_token, global_checks, image_check, order_by_is_above, user_uuid_from_identifier, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX}, Conn, Data
+    Conn, Data,
+    error::Error,
+    schema::*,
+    utils::{
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_refresh_token, global_checks,
+        image_check, order_by_is_above, user_uuid_from_identifier,
+    },
 };
 
 pub trait HasUuid {
@@ -61,7 +75,12 @@ pub struct MailClient {
 }
 
 impl MailClient {
-    pub fn new<T: Into<MailTls>>(creds: Credentials, smtp_server: String, mbox: String, tls: T) -> Result<Self, Error> {
+    pub fn new<T: Into<MailTls>>(
+        creds: Credentials,
+        smtp_server: String,
+        mbox: String,
+        tls: T,
+    ) -> Result<Self, Error> {
         Ok(Self {
             creds,
             smtp_server,
@@ -71,15 +90,16 @@ impl MailClient {
     }
 
     pub fn message_builder(&self) -> EmailBuilder {
-        Email::builder()
-            .from(self.mbox.clone())
+        Email::builder().from(self.mbox.clone())
     }
 
     pub async fn send_mail(&self, email: Email) -> Result<(), Error> {
         let mailer: AsyncSmtpTransport<Tokio1Executor> = match self.tls {
-            MailTls::StartTls => AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.smtp_server)?
-                .credentials(self.creds.clone())
-                .build(),
+            MailTls::StartTls => {
+                AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.smtp_server)?
+                    .credentials(self.creds.clone())
+                    .build()
+            }
             MailTls::Tls => AsyncSmtpTransport::<Tokio1Executor>::relay(&self.smtp_server)?
                 .credentials(self.creds.clone())
                 .build(),
@@ -256,7 +276,11 @@ impl Channel {
         data.set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
             .await?;
 
-        if let Ok(_) = data.get_cache_key(format!("{}_channels", guild_uuid)).await {
+        if data
+            .get_cache_key(format!("{}_channels", guild_uuid))
+            .await
+            .is_ok()
+        {
             data.del_cache_key(format!("{}_channels", guild_uuid))
                 .await?;
         }
@@ -273,7 +297,7 @@ impl Channel {
             .execute(&mut conn)
             .await?;
 
-        if let Ok(_) = data.get_cache_key(self.uuid.to_string()).await {
+        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
             data.del_cache_key(self.uuid.to_string()).await?;
         }
 
@@ -300,9 +324,7 @@ impl Channel {
                 .await,
         )?;
 
-        let message_futures = messages.iter().map(async move |b| {
-            b.build(data).await
-        });
+        let message_futures = messages.iter().map(async move |b| b.build(data).await);
 
         futures::future::try_join_all(message_futures).await
     }
@@ -708,7 +730,11 @@ impl Member {
         Ok(count)
     }
 
-    pub async fn check_membership(conn: &mut Conn, user_uuid: Uuid, guild_uuid: Uuid) -> Result<(), Error> {
+    pub async fn check_membership(
+        conn: &mut Conn,
+        user_uuid: Uuid,
+        guild_uuid: Uuid,
+    ) -> Result<(), Error> {
         use guild_members::dsl;
         dsl::guild_members
             .filter(dsl::user_uuid.eq(user_uuid))
@@ -720,11 +746,7 @@ impl Member {
         Ok(())
     }
 
-    pub async fn fetch_one(
-        data: &Data,
-        user_uuid: Uuid,
-        guild_uuid: Uuid,
-    ) -> Result<Self, Error> {
+    pub async fn fetch_one(data: &Data, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {
         let mut conn = data.pool.get().await?;
 
         use guild_members::dsl;
@@ -747,12 +769,12 @@ impl Member {
                 .filter(dsl::guild_uuid.eq(guild_uuid))
                 .select(MemberBuilder::as_select())
                 .load(&mut conn)
-                .await
+                .await,
         )?;
 
-        let member_futures = member_builders.iter().map(async move |m| {
-            m.build(data).await
-        });
+        let member_futures = member_builders
+            .iter()
+            .map(async move |m| m.build(data).await);
 
         futures::future::try_join_all(member_futures).await
     }
@@ -921,15 +943,16 @@ impl Me {
 
         let user = User::fetch_one(data, self.uuid).await?;
 
-        let memberships = member_builders.iter().map(|m| {
-            Member {
+        let memberships = member_builders
+            .iter()
+            .map(|m| Member {
                 uuid: m.uuid,
                 nickname: m.nickname.clone(),
                 user_uuid: m.user_uuid,
                 guild_uuid: m.guild_uuid,
                 user: user.clone(),
-            }
-        }).collect();
+            })
+            .collect();
 
         Ok(memberships)
     }
@@ -1070,6 +1093,7 @@ impl EmailToken {
         Ok(email_token)
     }
 
+    #[allow(clippy::new_ret_no_self)]
     pub async fn new(data: &Data, me: Me) -> Result<(), Error> {
         let token = generate_refresh_token()?;
 
@@ -1077,7 +1101,11 @@ impl EmailToken {
 
         use email_tokens::dsl;
         insert_into(email_tokens::table)
-            .values((dsl::user_uuid.eq(me.uuid), dsl::token.eq(&token), dsl::created_at.eq(now)))
+            .values((
+                dsl::user_uuid.eq(me.uuid),
+                dsl::token.eq(&token),
+                dsl::created_at.eq(now),
+            ))
             .execute(&mut conn)
             .await?;
 
@@ -1095,10 +1123,7 @@ impl EmailToken {
                 format!(r#"<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>:root{{--header-text-colour: #ffffff;--footer-text-colour: #7f7f7f;--button-text-colour: #170e08;--text-colour: #170e08;--background-colour: #fbf6f2;--primary-colour: #df5f0b;--secondary-colour: #e8ac84;--accent-colour: #e68b4e;}}@media (prefers-color-scheme: dark){{:root{{--header-text-colour: #ffffff;--footer-text-colour: #585858;--button-text-colour: #ffffff;--text-colour: #f7eee8;--background-colour: #0c0704;--primary-colour: #f4741f;--secondary-colour: #7c4018;--accent-colour: #b35719;}}}}@media (max-width: 600px){{.container{{width: 100%;}}}}body{{font-family: Arial, sans-serif;align-content: center;text-align: center;margin: 0;padding: 0;background-color: var(--background-colour);color: var(--text-colour);width: 100%;max-width: 600px;margin: 0 auto;border-radius: 5px;}}.header{{background-color: var(--primary-colour);color: var(--header-text-colour);padding: 20px;}}.verify-button{{background-color: var(--accent-colour);color: var(--button-text-colour);padding: 12px 30px;margin: 16px;font-size: 20px;transition: background-color 0.3s;cursor: pointer;border: none;border-radius: 14px;text-decoration: none;display: inline-block;}}.verify-button:hover{{background-color: var(--secondary-colour);}}.content{{padding: 20px 30px;}}.footer{{padding: 10px;font-size: 12px;color: var(--footer-text-colour);}}</style></head><body><div class="container"><div class="header"><h1>Verify your {} Account</h1></div><div class="content"><h2>Hello, {}!</h2><p>Thanks for creating a new account on Gorb.</p><p>The final step to create your account is to verify your email address by clicking the button below, within 24 hours.</p><a href="{}" class="verify-button">VERIFY ACCOUNT</a><p>If you didn't ask to verify this address, you can safely ignore this email.</p><div class="footer"><p>Thanks<br>The gorb team.</p></div></div></div></body></html>"#, data.config.instance.name, me.username, verify_endpoint)
             ))?;
 
-        data
-            .mail_client
-            .send_mail(email)
-            .await?;
+        data.mail_client.send_mail(email).await?;
 
         Ok(())
     }
@@ -1136,7 +1161,10 @@ impl PasswordResetToken {
         Ok(password_reset_token)
     }
 
-    pub async fn get_with_identifier(conn: &mut Conn, identifier: String) -> Result<PasswordResetToken, Error> {
+    pub async fn get_with_identifier(
+        conn: &mut Conn,
+        identifier: String,
+    ) -> Result<PasswordResetToken, Error> {
         let user_uuid = user_uuid_from_identifier(conn, &identifier).await?;
 
         use password_reset_tokens::dsl;
@@ -1149,6 +1177,7 @@ impl PasswordResetToken {
         Ok(password_reset_token)
     }
 
+    #[allow(clippy::new_ret_no_self)]
     pub async fn new(data: &Data, identifier: String) -> Result<(), Error> {
         let token = generate_refresh_token()?;
 
@@ -1156,7 +1185,7 @@ impl PasswordResetToken {
 
         let user_uuid = user_uuid_from_identifier(&mut conn, &identifier).await?;
 
-        global_checks(&data, user_uuid).await?;
+        global_checks(data, user_uuid).await?;
 
         use users::dsl as udsl;
         let (username, email_address): (String, String) = udsl::users
@@ -1167,7 +1196,11 @@ impl PasswordResetToken {
 
         use password_reset_tokens::dsl;
         insert_into(password_reset_tokens::table)
-            .values((dsl::user_uuid.eq(user_uuid), dsl::token.eq(&token), dsl::created_at.eq(now)))
+            .values((
+                dsl::user_uuid.eq(user_uuid),
+                dsl::token.eq(&token),
+                dsl::created_at.eq(now),
+            ))
             .execute(&mut conn)
             .await?;
 
@@ -1185,17 +1218,16 @@ impl PasswordResetToken {
                 format!(r#"<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>:root {{--header-text-colour: #ffffff;--footer-text-colour: #7f7f7f;--button-text-colour: #170e08;--text-colour: #170e08;--background-colour: #fbf6f2;--primary-colour: #df5f0b;--secondary-colour: #e8ac84;--accent-colour: #e68b4e;}}@media (prefers-color-scheme: dark) {{:root {{--header-text-colour: #ffffff;--footer-text-colour: #585858;--button-text-colour: #ffffff;--text-colour: #f7eee8;--background-colour: #0c0704;--primary-colour: #f4741f;--secondary-colour: #7c4018;--accent-colour: #b35719;}}}}@media (max-width: 600px) {{.container {{width: 100%;}}}}body {{font-family: Arial, sans-serif;align-content: center;text-align: center;margin: 0;padding: 0;background-color: var(--background-colour);color: var(--text-colour);width: 100%;max-width: 600px;margin: 0 auto;border-radius: 5px;}}.header {{background-color: var(--primary-colour);color: var(--header-text-colour);padding: 20px;}}.verify-button {{background-color: var(--accent-colour);color: var(--button-text-colour);padding: 12px 30px;margin: 16px;font-size: 20px;transition: background-color 0.3s;cursor: pointer;border: none;border-radius: 14px;text-decoration: none;display: inline-block;}}.verify-button:hover {{background-color: var(--secondary-colour);}}.content {{padding: 20px 30px;}}.footer {{padding: 10px;font-size: 12px;color: var(--footer-text-colour);}}</style></head><body><div class="container"><div class="header"><h1>{} Password Reset</h1></div><div class="content"><h2>Hello, {}!</h2><p>Someone requested a password reset for your Gorb account.</p><p>Click the button below within 24 hours to reset your password.</p><a href="{}" class="verify-button">RESET PASSWORD</a><p>If you didn't request a password reset, don't worry, your account is safe and you can safely ignore this email.</p><div class="footer"><p>Thanks<br>The gorb team.</p></div></div></div></body></html>"#, data.config.instance.name, username, reset_endpoint)
             ))?;
 
-        data
-            .mail_client
-            .send_mail(email)
-            .await?;
+        data.mail_client.send_mail(email).await?;
 
         Ok(())
     }
 
     pub async fn set_password(&self, data: &Data, password: String) -> Result<(), Error> {
         if !PASSWORD_REGEX.is_match(&password) {
-            return Err(Error::BadRequest("Please provide a valid password".to_string()))
+            return Err(Error::BadRequest(
+                "Please provide a valid password".to_string(),
+            ));
         }
 
         let salt = SaltString::generate(&mut OsRng);
@@ -1204,7 +1236,7 @@ impl PasswordResetToken {
             .argon2
             .hash_password(password.as_bytes(), &salt)
             .map_err(|e| Error::PasswordHashError(e.to_string()))?;
-    
+
         let mut conn = data.pool.get().await?;
 
         use users::dsl;
@@ -1232,10 +1264,7 @@ impl PasswordResetToken {
                 format!(r#"<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><style>:root {{--header-text-colour: #ffffff;--footer-text-colour: #7f7f7f;--button-text-colour: #170e08;--text-colour: #170e08;--background-colour: #fbf6f2;--primary-colour: #df5f0b;--secondary-colour: #e8ac84;--accent-colour: #e68b4e;}}@media (prefers-color-scheme: dark) {{:root {{--header-text-colour: #ffffff;--footer-text-colour: #585858;--button-text-colour: #ffffff;--text-colour: #f7eee8;--background-colour: #0c0704;--primary-colour: #f4741f;--secondary-colour: #7c4018;--accent-colour: #b35719;}}}}@media (max-width: 600px) {{.container {{width: 100%;}}}}body {{font-family: Arial, sans-serif;align-content: center;text-align: center;margin: 0;padding: 0;background-color: var(--background-colour);color: var(--text-colour);width: 100%;max-width: 600px;margin: 0 auto;border-radius: 5px;}}.header {{background-color: var(--primary-colour);color: var(--header-text-colour);padding: 20px;}}.verify-button {{background-color: var(--accent-colour);color: var(--button-text-colour);padding: 12px 30px;margin: 16px;font-size: 20px;transition: background-color 0.3s;cursor: pointer;border: none;border-radius: 14px;text-decoration: none;display: inline-block;}}.verify-button:hover {{background-color: var(--secondary-colour);}}.content {{padding: 20px 30px;}}.footer {{padding: 10px;font-size: 12px;color: var(--footer-text-colour);}}</style></head><body><div class="container"><div class="header"><h1>{} Password Reset Confirmation</h1></div><div class="content"><h2>Hello, {}!</h2><p>Your password has been successfully reset for your Gorb account.</p><p>If you did not initiate this change, please click the button below to reset your password <strong>immediately</strong>.</p><a href="{}" class="verify-button">RESET PASSWORD</a><div class="footer"><p>Thanks<br>The gorb team.</p></div></div></div></body></html>"#, data.config.instance.name, username, login_page)
             ))?;
 
-        data
-            .mail_client
-            .send_mail(email)
-            .await?;
+        data.mail_client.send_mail(email).await?;
 
         self.delete(&mut conn).await
     }
@@ -1251,4 +1280,3 @@ impl PasswordResetToken {
         Ok(())
     }
 }
-

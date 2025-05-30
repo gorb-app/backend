@@ -61,8 +61,6 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         if lifetime > 1987200 {
             let new_refresh_token = generate_refresh_token()?;
 
-            let new_refresh_token = new_refresh_token;
-
             match update(refresh_tokens::table)
                 .filter(rdsl::token.eq(&refresh_token))
                 .set((

@@ -11,9 +11,9 @@ use crate::{Conn, error::Error, schema::access_tokens::dsl};
 mod login;
 mod refresh;
 mod register;
+mod reset_password;
 mod revoke;
 mod verify_email;
-mod reset_password;
 
 #[derive(Serialize)]
 struct Response {

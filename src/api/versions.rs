@@ -12,9 +12,9 @@ struct Response {
 struct UnstableFeatures;
 
 /// `GET /api/versions` Returns info about api versions.
-/// 
+///
 /// requires auth: no
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!({

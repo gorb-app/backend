@@ -8,7 +8,10 @@ use futures_util::StreamExt as _;
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::check_access_token, structs::{Channel, Member}, utils::{get_ws_protocol_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    structs::{Channel, Member},
+    utils::{get_ws_protocol_header, global_checks},
 };
 
 #[get("/{uuid}/socket")]
@@ -71,9 +74,7 @@ pub async fn ws(
                 Ok(AggregatedMessage::Text(text)) => {
                     let mut conn = data.cache_pool.get_multiplexed_tokio_connection().await?;
 
-                    let message = channel
-                        .new_message(&data, uuid, text.to_string())
-                        .await?;
+                    let message = channel.new_message(&data, uuid, text.to_string()).await?;
 
                     redis::cmd("PUBLISH")
                         .arg(&[channel_uuid.to_string(), serde_json::to_string(&message)?])

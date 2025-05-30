@@ -3,23 +3,25 @@
 use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{StartAmountQuery, User}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{StartAmountQuery, User},
+    utils::{get_auth_header, global_checks},
 };
 
 mod uuid;
 
 pub fn web() -> Scope {
-    web::scope("/users")
-        .service(get)
-        .service(uuid::get)
+    web::scope("/users").service(get).service(uuid::get)
 }
 
 /// `GET /api/v1/users` Returns all users on this instance
-/// 
+///
 /// requires auth: yes
-/// 
+///
 /// requires admin: yes
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!([

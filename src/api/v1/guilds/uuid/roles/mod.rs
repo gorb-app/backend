@@ -3,7 +3,11 @@ use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Member, Role}, utils::{get_auth_header, global_checks, order_by_is_above}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Member, Role},
+    utils::{get_auth_header, global_checks, order_by_is_above},
 };
 
 pub mod uuid;

@@ -5,13 +5,17 @@ use futures_util::StreamExt as _;
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, structs::{Guild, Member}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    structs::{Guild, Member},
+    utils::{get_auth_header, global_checks},
 };
 
 /// `PUT /api/v1/guilds/{uuid}/icon` Icon upload
-/// 
+///
 /// requires auth: no
-/// 
+///
 /// put request expects a file and nothing else
 #[put("{uuid}/icon")]
 pub async fn upload(

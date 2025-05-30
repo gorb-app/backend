@@ -6,8 +6,8 @@ use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
 use error::Error;
 use simple_logger::SimpleLogger;
-use structs::MailClient;
 use std::time::SystemTime;
+use structs::MailClient;
 mod config;
 use config::{Config, ConfigBuilder};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
@@ -76,7 +76,12 @@ async fn main() -> Result<(), Error> {
 
     let mail = config.mail.clone();
 
-    let mail_client = MailClient::new(mail.smtp.credentials(), mail.smtp.server, mail.address, mail.tls)?;
+    let mail_client = MailClient::new(
+        mail.smtp.credentials(),
+        mail.smtp.server,
+        mail.address,
+        mail.tls,
+    )?;
 
     let database_url = config.database.url();
 

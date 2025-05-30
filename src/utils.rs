@@ -16,7 +16,10 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    error::Error, schema::users, structs::{HasIsAbove, HasUuid}, Conn, Data
+    Conn, Data,
+    error::Error,
+    schema::users,
+    structs::{HasIsAbove, HasUuid},
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -137,27 +140,32 @@ pub fn image_check(icon: BytesMut) -> Result<String, Error> {
     ))
 }
 
-pub async fn user_uuid_from_identifier(conn: &mut Conn, identifier: &String) -> Result<Uuid, Error> {
+pub async fn user_uuid_from_identifier(
+    conn: &mut Conn,
+    identifier: &String,
+) -> Result<Uuid, Error> {
     if EMAIL_REGEX.is_match(identifier) {
-            use users::dsl;
-            let user_uuid = dsl::users
-                .filter(dsl::email.eq(identifier))
-                .select(dsl::uuid)
-                .get_result(conn)
-                .await?;
+        use users::dsl;
+        let user_uuid = dsl::users
+            .filter(dsl::email.eq(identifier))
+            .select(dsl::uuid)
+            .get_result(conn)
+            .await?;
 
-            Ok(user_uuid)
+        Ok(user_uuid)
     } else if USERNAME_REGEX.is_match(identifier) {
-            use users::dsl;
-            let user_uuid = dsl::users
-                .filter(dsl::username.eq(identifier))
-                .select(dsl::uuid)
-                .get_result(conn)
-                .await?;
+        use users::dsl;
+        let user_uuid = dsl::users
+            .filter(dsl::username.eq(identifier))
+            .select(dsl::uuid)
+            .get_result(conn)
+            .await?;
 
-            Ok(user_uuid)
+        Ok(user_uuid)
     } else {
-        Err(Error::BadRequest("Please provide a valid username or email".to_string()))
+        Err(Error::BadRequest(
+            "Please provide a valid username or email".to_string(),
+        ))
     }
 }
 
@@ -173,10 +181,11 @@ pub async fn global_checks(data: &Data, user_uuid: Uuid) -> Result<(), Error> {
             .await?;
 
         if !email_verified {
-            return Err(Error::Forbidden("server requires email verification".to_string()))
+            return Err(Error::Forbidden(
+                "server requires email verification".to_string(),
+            ));
         }
     }
-
 
     Ok(())
 }
