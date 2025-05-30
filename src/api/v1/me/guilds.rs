@@ -41,7 +41,7 @@ pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let memberships = me.fetch_memberships(&mut conn).await?;
+    let memberships = me.fetch_memberships(&data).await?;
 
     Ok(HttpResponse::Ok().json(memberships))
 }

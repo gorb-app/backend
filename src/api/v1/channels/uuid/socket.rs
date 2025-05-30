@@ -36,8 +36,7 @@ pub async fn ws(
 
     let channel = Channel::fetch_one(&data, channel_uuid).await?;
 
-    // Get server member from psql
-    Member::fetch_one(&mut conn, uuid, channel.guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     let (mut res, mut session_1, stream) = actix_ws::handle(&req, stream)?;
 

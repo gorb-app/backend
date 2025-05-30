@@ -22,7 +22,7 @@ pub async fn get(
 
     global_checks(&data, uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     if let Ok(cache_hit) = data.get_cache_key(format!("{}", role_uuid)).await {
         return Ok(HttpResponse::Ok()

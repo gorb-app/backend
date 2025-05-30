@@ -42,7 +42,7 @@ pub async fn join(
 
     let guild = Guild::fetch_one(&mut conn, invite.guild_uuid).await?;
 
-    Member::new(&mut conn, uuid, guild.uuid).await?;
+    Member::new(&data, uuid, guild.uuid).await?;
 
     Ok(HttpResponse::Ok().json(guild))
 }

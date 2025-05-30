@@ -64,7 +64,7 @@ pub async fn get(
 
     let channel = Channel::fetch_one(&data, channel_uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, channel.guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     let messages = channel
         .fetch_messages(&data, message_request.amount, message_request.offset)

@@ -32,7 +32,7 @@ pub async fn upload(
 
     global_checks(&data, uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     let mut guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 

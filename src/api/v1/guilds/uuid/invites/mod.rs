@@ -29,7 +29,7 @@ pub async fn get(
 
     global_checks(&data, uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 
@@ -57,13 +57,13 @@ pub async fn create(
 
     global_checks(&data, uuid).await?;
 
-    let member = Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 
     let custom_id = invite_request.as_ref().map(|ir| ir.custom_id.clone());
 
-    let invite = guild.create_invite(&mut conn, &member, custom_id).await?;
+    let invite = guild.create_invite(&mut conn, uuid, custom_id).await?;
 
     Ok(HttpResponse::Ok().json(invite))
 }

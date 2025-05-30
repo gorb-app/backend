@@ -7,6 +7,7 @@ mod channels;
 mod icon;
 mod invites;
 mod roles;
+mod members;
 
 use crate::{
     api::v1::auth::check_access_token, error::Error, structs::{Guild, Member}, utils::{get_auth_header, global_checks}, Data
@@ -28,6 +29,8 @@ pub fn web() -> Scope {
         .service(invites::create)
         // Icon
         .service(icon::upload)
+        // Members
+        .service(members::get)
 }
 
 /// `GET /api/v1/guilds/{uuid}` DESCRIPTION
@@ -81,7 +84,7 @@ pub async fn get(
 
     global_checks(&data, uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 

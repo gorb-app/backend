@@ -29,7 +29,7 @@ pub async fn get(
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     if let Ok(cache_hit) = data.get_cache_key(format!("{}_roles", guild_uuid)).await {
         return Ok(HttpResponse::Ok()
@@ -66,7 +66,7 @@ pub async fn create(
 
     global_checks(&data, uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     // FIXME: Logic to check permissions, should probably be done in utils.rs
 

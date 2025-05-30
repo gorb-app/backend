@@ -27,7 +27,7 @@ pub async fn get(
 
     let channel = Channel::fetch_one(&data, channel_uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, channel.guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     Ok(HttpResponse::Ok().json(channel))
 }
@@ -52,7 +52,7 @@ pub async fn delete(
 
     let channel = Channel::fetch_one(&data, channel_uuid).await?;
 
-    Member::fetch_one(&mut conn, uuid, channel.guild_uuid).await?;
+    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     channel.delete(&data).await?;
 
