@@ -1,11 +1,11 @@
-//! `/api/v1/me/servers` Contains endpoint related to guild memberships
+//! `/api/v1/me/guilds` Contains endpoint related to guild memberships
 
 use actix_web::{get, web, HttpRequest, HttpResponse};
 
 use crate::{api::v1::auth::check_access_token, error::Error, structs::Me, utils::{get_auth_header, global_checks}, Data};
 
 
-/// `GET /api/v1/me/servers` Returns all guild memberships in a list
+/// `GET /api/v1/me/guilds` Returns all guild memberships in a list
 /// 
 /// requires auth: yes
 /// 
@@ -27,7 +27,7 @@ use crate::{api::v1::auth::check_access_token, error::Error, structs::Me, utils:
 /// ]);
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
-#[get("/servers")]
+#[get("/guilds")]
 pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 

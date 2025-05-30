@@ -6,10 +6,13 @@ use crate::{
     api::v1::auth::check_access_token, error::Error, structs::Me, utils::{get_auth_header, global_checks}, Data
 };
 
-mod servers;
+mod guilds;
 
 pub fn web() -> Scope {
-    web::scope("/me").service(get).service(update)
+    web::scope("/me")
+        .service(get)
+        .service(update)
+        .service(guilds::get)
 }
 
 #[get("")]
