@@ -12,6 +12,7 @@ use crate::error::Error;
 use crate::schema::users::dsl::{users, uuid};
 
 const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
+const GIT_SHORT_HASH: &str = env!("GIT_SHORT_HASH");
 
 #[derive(Serialize)]
 struct Response {
@@ -57,7 +58,7 @@ pub async fn res(data: web::Data<Data>) -> Result<HttpResponse, Error> {
         registration_enabled: data.config.instance.registration,
         email_verification_required: data.config.instance.require_email_verification,
         // TODO: Get build number from git hash or remove this from the spec
-        build_number: String::from("how do i implement this?"),
+        build_number: String::from(GIT_SHORT_HASH),
     };
 
     Ok(HttpResponse::Ok().json(response))
