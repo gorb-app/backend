@@ -106,7 +106,7 @@ pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cooki
         .http_only(true)
         .secure(true)
         .same_site(SameSite::None)
-        .domain(config.web.backend_url.domain().unwrap().to_string())
+        //.domain(config.web.backend_url.domain().unwrap().to_string())
         .path(config.web.backend_url.path().to_string())
         .max_age(Duration::days(30))
         .finish()
