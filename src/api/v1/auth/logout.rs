@@ -8,7 +8,7 @@ use crate::{
     schema::refresh_tokens::{self, dsl},
 };
 
-/// `GET /api/v1/logout` 
+/// `GET /api/v1/logout`
 ///
 /// requires auth: kinda, needs refresh token set but no access token is technically required
 ///
@@ -18,11 +18,10 @@ use crate::{
 /// 401 Unauthorized (no refresh token found)
 ///
 #[post("/logout")]
-pub async fn res(
-    req: HttpRequest,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let mut refresh_token_cookie = req.cookie("refresh_token").ok_or(Error::Unauthorized("request has no refresh token".to_string()))?;
+pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+    let mut refresh_token_cookie = req.cookie("refresh_token").ok_or(Error::Unauthorized(
+        "request has no refresh token".to_string(),
+    ))?;
 
     let refresh_token = String::from(refresh_token_cookie.value());
 

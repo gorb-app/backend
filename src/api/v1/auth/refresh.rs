@@ -18,7 +18,9 @@ use super::Response;
 
 #[post("/refresh")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let mut refresh_token_cookie = req.cookie("refresh_token").ok_or(Error::Unauthorized("request has no refresh token".to_string()))?;
+    let mut refresh_token_cookie = req.cookie("refresh_token").ok_or(Error::Unauthorized(
+        "request has no refresh token".to_string(),
+    ))?;
 
     let mut refresh_token = String::from(refresh_token_cookie.value());
 

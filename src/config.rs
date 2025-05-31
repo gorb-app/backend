@@ -87,7 +87,11 @@ impl ConfigBuilder {
             ip: self.web.ip.unwrap_or(String::from("0.0.0.0")),
             port: self.web.port.unwrap_or(8080),
             frontend_url: self.web.frontend_url.clone(),
-            backend_url: self.web.backend_url.or_else(|| self.web.frontend_url.join("/api").ok()).unwrap(),
+            backend_url: self
+                .web
+                .backend_url
+                .or_else(|| self.web.frontend_url.join("/api").ok())
+                .unwrap(),
         };
 
         let endpoint = match &*self.bunny.endpoint {

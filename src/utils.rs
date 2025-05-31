@@ -16,7 +16,11 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    config::Config, error::Error, schema::users, structs::{HasIsAbove, HasUuid}, Conn, Data
+    Conn, Data,
+    config::Config,
+    error::Error,
+    schema::users,
+    structs::{HasIsAbove, HasUuid},
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
