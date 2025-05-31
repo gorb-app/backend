@@ -8,7 +8,15 @@ use crate::{
     schema::refresh_tokens::{self, dsl},
 };
 
-// TODO: Should maybe be a delete request?
+/// `GET /api/v1/logout` 
+///
+/// requires auth: kinda, needs refresh token set but no access token is technically required
+///
+/// ### Responses
+/// 200 Logged out
+/// 404 Refresh token is invalid
+/// 401 Unauthorized (no refresh token found)
+///
 #[post("/logout")]
 pub async fn res(
     req: HttpRequest,
