@@ -24,7 +24,7 @@ struct Response {
     build_number: String,
 }
 
-/// `GET /api/v1/` Returns stats about the server
+/// `GET /api/v1/stats` Returns stats about the server
 ///
 /// requires auth: no
 ///
