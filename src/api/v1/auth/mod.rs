@@ -9,6 +9,7 @@ use uuid::Uuid;
 use crate::{Conn, error::Error, schema::access_tokens::dsl};
 
 mod login;
+mod logout;
 mod refresh;
 mod register;
 mod reset_password;
@@ -24,6 +25,7 @@ pub fn web() -> Scope {
     web::scope("/auth")
         .service(register::res)
         .service(login::response)
+        .service(logout::res)
         .service(refresh::res)
         .service(revoke::res)
         .service(verify_email::get)
