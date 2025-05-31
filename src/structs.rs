@@ -933,11 +933,13 @@ impl Me {
 
     pub async fn fetch_memberships(&self, conn: &mut Conn) -> Result<Vec<Guild>, Error> {
         use guild_members::dsl;
-        let memberships: Vec<MemberBuilder> = dsl::guild_members
-            .filter(dsl::user_uuid.eq(self.uuid))
-            .select(MemberBuilder::as_select())
-            .load(conn)
-            .await?;
+        let memberships: Vec<MemberBuilder> = load_or_empty(
+            dsl::guild_members
+                .filter(dsl::user_uuid.eq(self.uuid))
+                .select(MemberBuilder::as_select())
+                .load(conn)
+                .await
+        )?;
 
         let mut guilds: Vec<Guild> = vec![];
 
