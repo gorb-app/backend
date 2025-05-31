@@ -11,20 +11,16 @@ use crate::{
         access_tokens::{self, dsl},
         refresh_tokens::{self, dsl as rdsl},
     },
-    utils::{generate_access_token, generate_refresh_token, refresh_token_cookie},
+    utils::{generate_access_token, generate_refresh_token, new_refresh_token_cookie},
 };
 
 use super::Response;
 
 #[post("/refresh")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let recv_refresh_token_cookie = req.cookie("refresh_token");
+    let mut refresh_token_cookie = req.cookie("refresh_token").ok_or(Error::Unauthorized("request has no refresh token".to_string()))?;
 
-    if recv_refresh_token_cookie.is_none() {
-        return Ok(HttpResponse::Unauthorized().finish());
-    }
-
-    let mut refresh_token = String::from(recv_refresh_token_cookie.unwrap().value());
+    let mut refresh_token = String::from(refresh_token_cookie.value());
 
     let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
@@ -46,8 +42,6 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
             {
                 error!("{}", error);
             }
-
-            let mut refresh_token_cookie = refresh_token_cookie(refresh_token);
 
             refresh_token_cookie.make_removal();
 
@@ -91,11 +85,9 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
             .await?;
 
         return Ok(HttpResponse::Ok()
-            .cookie(refresh_token_cookie(refresh_token))
+            .cookie(new_refresh_token_cookie(refresh_token))
             .json(Response { access_token }));
     }
-
-    let mut refresh_token_cookie = refresh_token_cookie(refresh_token);
 
     refresh_token_cookie.make_removal();
 

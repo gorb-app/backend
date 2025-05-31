@@ -11,7 +11,7 @@ use crate::{
     error::Error,
     schema::*,
     utils::{
-        PASSWORD_REGEX, generate_access_token, generate_refresh_token, refresh_token_cookie,
+        PASSWORD_REGEX, generate_access_token, generate_refresh_token, new_refresh_token_cookie,
         user_uuid_from_identifier,
     },
 };
@@ -89,6 +89,6 @@ pub async fn response(
         .await?;
 
     Ok(HttpResponse::Ok()
-        .cookie(refresh_token_cookie(refresh_token))
+        .cookie(new_refresh_token_cookie(refresh_token))
         .json(Response { access_token }))
 }

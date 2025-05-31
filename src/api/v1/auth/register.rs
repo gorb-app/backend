@@ -21,7 +21,7 @@ use crate::{
     },
     utils::{
         EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_access_token, generate_refresh_token,
-        refresh_token_cookie,
+        new_refresh_token_cookie,
     },
 };
 
@@ -146,7 +146,7 @@ pub async fn res(
             .await?;
 
         return Ok(HttpResponse::Ok()
-            .cookie(refresh_token_cookie(refresh_token))
+            .cookie(new_refresh_token_cookie(refresh_token))
             .json(Response { access_token }));
     }
 

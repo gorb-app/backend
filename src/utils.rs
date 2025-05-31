@@ -100,7 +100,7 @@ pub fn get_ws_protocol_header(headers: &HeaderMap) -> Result<&str, Error> {
     Ok(auth_value.unwrap())
 }
 
-pub fn refresh_token_cookie(refresh_token: String) -> Cookie<'static> {
+pub fn new_refresh_token_cookie(refresh_token: String) -> Cookie<'static> {
     Cookie::build("refresh_token", refresh_token)
         .http_only(true)
         .secure(true)
