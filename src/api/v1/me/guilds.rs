@@ -18,16 +18,39 @@ use crate::{
 /// ```
 /// json!([
 ///     {
-///         "uuid": "22006503-fb01-46e6-8e0e-70336dac6c63",
-///         "nickname": "This field is nullable",
-///         "user_uuid": "522bca17-de63-4706-9d18-0971867ad1e0",
-///         "guild_uuid": "0911e468-3e9e-47bf-8381-59b30e8b68a8"
+///         "uuid": "383d2afa-082f-4dd3-9050-ca6ed91487b6",
+///         "name": "My new server!",
+///         "description": null,
+///         "icon": null,
+///         "owner_uuid": "155d2291-fb23-46bd-a656-ae7c5d8218e6",
+///         "roles": [],
+///         "member_count": 1
 ///     },
 ///     {
-///         "uuid": "bf95361e-3b64-4704-969c-3c5a80d10514",
-///         "nickname": null,
-///         "user_uuid": "522bca17-de63-4706-9d18-0971867ad1e0",
-///         "guild_uuid": "69ec2ce5-3d8b-4451-b644-c2d969905458"
+///         "uuid": "5ba61ec7-5f97-43e1-89a5-d4693c155612",
+///         "name": "My first server!",
+///         "description": "This is a cool and nullable description!",
+///         "icon": "https://nullable-url/path/to/icon.png",
+///         "owner_uuid": "155d2291-fb23-46bd-a656-ae7c5d8218e6",
+///         "roles": [
+///             {
+///                 "uuid": "be0e4da4-cf73-4f45-98f8-bb1c73d1ab8b",
+///                 "guild_uuid": "5ba61ec7-5f97-43e1-89a5-d4693c155612",
+///                 "name": "Cool people",
+///                 "color": 15650773,
+///                 "is_above": c7432f1c-f4ad-4ad3-8216-51388b6abb5b,
+///                 "permissions": 0
+///             }
+///             {
+///                 "uuid": "c7432f1c-f4ad-4ad3-8216-51388b6abb5b",
+///                 "guild_uuid": "5ba61ec7-5f97-43e1-89a5-d4693c155612",
+///                 "name": "Equally cool people",
+///                 "color": 16777215,
+///                 "is_above": null,
+///                 "permissions": 0
+///             }
+///         ],
+///         "member_count": 20
 ///     }
 /// ]);
 /// ```
@@ -46,7 +69,7 @@ pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let memberships = me.fetch_memberships(&data).await?;
+    let memberships = me.fetch_memberships(&mut conn).await?;
 
     Ok(HttpResponse::Ok().json(memberships))
 }

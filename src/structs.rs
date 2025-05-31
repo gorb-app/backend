@@ -931,30 +931,30 @@ impl Me {
         Ok(me)
     }
 
-    pub async fn fetch_memberships(&self, data: &Data) -> Result<Vec<Member>, Error> {
-        let mut conn = data.pool.get().await?;
-
+    pub async fn fetch_memberships(&self, conn: &mut Conn) -> Result<Vec<Guild>, Error> {
         use guild_members::dsl;
-        let member_builders: Vec<MemberBuilder> = dsl::guild_members
+        let memberships: Vec<MemberBuilder> = dsl::guild_members
             .filter(dsl::user_uuid.eq(self.uuid))
             .select(MemberBuilder::as_select())
-            .load(&mut conn)
+            .load(conn)
             .await?;
 
-        let user = User::fetch_one(data, self.uuid).await?;
+        let mut guilds: Vec<Guild> = vec![];
 
-        let memberships = member_builders
-            .iter()
-            .map(|m| Member {
-                uuid: m.uuid,
-                nickname: m.nickname.clone(),
-                user_uuid: m.user_uuid,
-                guild_uuid: m.guild_uuid,
-                user: user.clone(),
-            })
-            .collect();
+        for membership in memberships {
+            use guilds::dsl;
+            guilds.push(
+                dsl::guilds
+                    .filter(dsl::uuid.eq(membership.guild_uuid))
+                    .select(GuildBuilder::as_select())
+                    .get_result(conn)
+                    .await?
+                    .build(conn)
+                    .await?,
+            )
+        }
 
-        Ok(memberships)
+        Ok(guilds)
     }
 
     pub async fn set_avatar(
