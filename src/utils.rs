@@ -16,10 +16,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
-    error::Error,
-    schema::users,
-    structs::{HasIsAbove, HasUuid},
+    config::Config, error::Error, schema::users, structs::{HasIsAbove, HasUuid}, Conn, Data
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -100,12 +97,13 @@ pub fn get_ws_protocol_header(headers: &HeaderMap) -> Result<&str, Error> {
     Ok(auth_value.unwrap())
 }
 
-pub fn new_refresh_token_cookie(refresh_token: String) -> Cookie<'static> {
+pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cookie<'static> {
     Cookie::build("refresh_token", refresh_token)
         .http_only(true)
         .secure(true)
         .same_site(SameSite::None)
-        .path("/api")
+        .domain(config.web.backend_url.domain().unwrap().to_string())
+        .path(config.web.backend_url.path().to_string())
         .max_age(Duration::days(30))
         .finish()
 }

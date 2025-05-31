@@ -85,7 +85,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
             .await?;
 
         return Ok(HttpResponse::Ok()
-            .cookie(new_refresh_token_cookie(refresh_token))
+            .cookie(new_refresh_token_cookie(&data.config, refresh_token))
             .json(Response { access_token }));
     }
 
