@@ -309,7 +309,7 @@ impl Channel {
             .await
         {
             Ok(r) => Ok(Some(r)),
-            Err(e) if e == diesel::result::Error::NotFound => Ok(None),
+            Err(diesel::result::Error::NotFound) => Ok(None),
             Err(e) => Err(e),
         }?;
 
@@ -328,7 +328,7 @@ impl Channel {
             .await
         {
             Ok(r) => Ok(r),
-            Err(e) if e == diesel::result::Error::NotFound => Ok(0),
+            Err(diesel::result::Error::NotFound) => Ok(0),
             Err(e) => Err(e),
         }?;
 
