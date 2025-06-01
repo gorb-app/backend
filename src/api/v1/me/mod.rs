@@ -40,6 +40,7 @@ struct NewInfo {
     display_name: Option<String>,
     //password: Option<String>, will probably be handled through a reset password link
     email: Option<String>,
+    pronouns: Option<String>,
 }
 
 #[derive(Debug, MultipartForm)]
@@ -95,6 +96,10 @@ pub async fn update(
 
     if let Some(email) = &form.json.email {
         me.set_email(&data, email.clone()).await?;
+    }
+
+    if let Some(pronouns) = &form.json.pronouns {
+        me.set_pronouns(&data, pronouns.clone()).await?;
     }
 
     Ok(HttpResponse::Ok().finish())

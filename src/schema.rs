@@ -144,6 +144,8 @@ diesel::table! {
         deleted_at -> Nullable<Int8>,
         #[max_length = 100]
         avatar -> Nullable<Varchar>,
+        #[max_length = 32]
+        pronouns -> Nullable<Varchar>,
     }
 }
 
