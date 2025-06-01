@@ -961,25 +961,27 @@ impl Me {
 
     pub async fn set_avatar(
         &mut self,
-        bunny_cdn: &bunny_api_tokio::Client,
-        conn: &mut Conn,
+        data: &Data,
         cdn_url: Url,
         avatar: BytesMut,
     ) -> Result<(), Error> {
         let avatar_clone = avatar.clone();
         let image_type = task::spawn_blocking(move || image_check(avatar_clone)).await??;
 
+        let mut conn = data.pool.get().await?;
+
         if let Some(avatar) = &self.avatar {
             let avatar_url: Url = avatar.parse()?;
 
             let relative_url = avatar_url.path().trim_start_matches('/');
 
-            bunny_cdn.storage.delete(relative_url).await?;
+            data.bunny_cdn.storage.delete(relative_url).await?;
         }
 
         let path = format!("avatar/{}/avatar.{}", self.uuid, image_type);
 
-        bunny_cdn
+        data.
+            bunny_cdn
             .storage
             .upload(path.clone(), avatar.into())
             .await?;
@@ -990,8 +992,12 @@ impl Me {
         update(users::table)
             .filter(dsl::uuid.eq(self.uuid))
             .set(dsl::avatar.eq(avatar_url.as_str()))
-            .execute(conn)
+            .execute(&mut conn)
             .await?;
+
+        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            data.del_cache_key(self.uuid.to_string()).await?
+        }
 
         self.avatar = Some(avatar_url.to_string());
 
@@ -1011,19 +1017,25 @@ impl Me {
 
     pub async fn set_username(
         &mut self,
-        conn: &mut Conn,
+        data: &Data,
         new_username: String,
     ) -> Result<(), Error> {
         if !USERNAME_REGEX.is_match(&new_username) {
             return Err(Error::BadRequest("Invalid username".to_string()));
         }
 
+        let mut conn = data.pool.get().await?;
+
         use users::dsl;
         update(users::table)
             .filter(dsl::uuid.eq(self.uuid))
             .set(dsl::username.eq(new_username.as_str()))
-            .execute(conn)
+            .execute(&mut conn)
             .await?;
+
+        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            data.del_cache_key(self.uuid.to_string()).await?
+        }
 
         self.username = new_username;
 
@@ -1032,25 +1044,33 @@ impl Me {
 
     pub async fn set_display_name(
         &mut self,
-        conn: &mut Conn,
+        data: &Data,
         new_display_name: String,
     ) -> Result<(), Error> {
+        let mut conn = data.pool.get().await?;
+
         use users::dsl;
         update(users::table)
             .filter(dsl::uuid.eq(self.uuid))
             .set(dsl::display_name.eq(new_display_name.as_str()))
-            .execute(conn)
+            .execute(&mut conn)
             .await?;
+
+        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            data.del_cache_key(self.uuid.to_string()).await?
+        }
 
         self.display_name = Some(new_display_name);
 
         Ok(())
     }
 
-    pub async fn set_email(&mut self, conn: &mut Conn, new_email: String) -> Result<(), Error> {
+    pub async fn set_email(&mut self, data: &Data, new_email: String) -> Result<(), Error> {
         if !EMAIL_REGEX.is_match(&new_email) {
             return Err(Error::BadRequest("Invalid username".to_string()));
         }
+
+        let mut conn = data.pool.get().await?;
 
         use users::dsl;
         update(users::table)
@@ -1059,8 +1079,12 @@ impl Me {
                 dsl::email.eq(new_email.as_str()),
                 dsl::email_verified.eq(false),
             ))
-            .execute(conn)
+            .execute(&mut conn)
             .await?;
+
+        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            data.del_cache_key(self.uuid.to_string()).await?
+        }
 
         self.email = new_email;
 

@@ -81,8 +81,7 @@ pub async fn update(
         let byte_slice: &[u8] = &bytes;
 
         me.set_avatar(
-            &data.bunny_cdn,
-            &mut conn,
+            &data,
             data.config.bunny.cdn_url.clone(),
             byte_slice.into(),
         )
@@ -91,15 +90,15 @@ pub async fn update(
 
     if let Some(new_info) = form.json.0 {
         if let Some(username) = &new_info.username {
-            me.set_username(&mut conn, username.clone()).await?;
+            me.set_username(&data, username.clone()).await?;
         }
 
         if let Some(display_name) = &new_info.display_name {
-            me.set_display_name(&mut conn, display_name.clone()).await?;
+            me.set_display_name(&data, display_name.clone()).await?;
         }
 
         if let Some(email) = &new_info.email {
-            me.set_email(&mut conn, email.to_string()).await?;
+            me.set_email(&data, email.to_string()).await?;
         }
     }
 
