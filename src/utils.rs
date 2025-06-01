@@ -30,6 +30,9 @@ pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
 pub static USERNAME_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-z0-9_.-]+$").unwrap());
 
+pub static CHANNEL_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-z0-9_.-]+$").unwrap());
+
 // Password is expected to be hashed using SHA3-384
 pub static PASSWORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-f]{96}").unwrap());
 

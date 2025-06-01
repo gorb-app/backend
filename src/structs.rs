@@ -24,13 +24,9 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
-    error::Error,
-    schema::*,
-    utils::{
-        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_refresh_token, global_checks,
-        image_check, order_by_is_above, user_uuid_from_identifier,
-    },
+    error::Error, schema::*, utils::{
+        generate_refresh_token, global_checks, image_check, order_by_is_above, user_uuid_from_identifier, CHANNEL_REGEX, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX
+    }, Conn, Data
 };
 
 pub trait HasUuid {
@@ -231,6 +227,10 @@ impl Channel {
         name: String,
         description: Option<String>,
     ) -> Result<Self, Error> {
+        if !CHANNEL_REGEX.is_match(&name) {
+            return Err(Error::BadRequest("Channel name is invalid".to_string()))
+        }
+
         let mut conn = data.pool.get().await?;
 
         let channel_uuid = Uuid::now_v7();
@@ -352,6 +352,93 @@ impl Channel {
             .await?;
 
         message.build(data).await
+    }
+
+    pub async fn set_name(&mut self, data: &Data, new_name: String) -> Result<(), Error> {
+        if !CHANNEL_REGEX.is_match(&new_name) {
+            return Err(Error::BadRequest("Channel name is invalid".to_string()))
+        }
+
+        let mut conn = data.pool.get().await?;
+
+        use channels::dsl;
+        update(channels::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::name.eq(&new_name))
+            .execute(&mut conn)
+            .await?;
+
+        self.name = new_name;
+
+        Ok(())
+    }
+
+    pub async fn set_description(&mut self, data: &Data, new_description: String) -> Result<(), Error> {
+        let mut conn = data.pool.get().await?;
+
+        use channels::dsl;
+        update(channels::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::description.eq(&new_description))
+            .execute(&mut conn)
+            .await?;
+
+        self.description = Some(new_description);
+
+        Ok(())
+    }
+
+    pub async fn move_channel(&mut self, data: &Data, new_is_above: Uuid) -> Result<(), Error> {
+        let mut conn = data.pool.get().await?;
+
+        use channels::dsl;
+        let old_above_uuid: Option<Uuid> = match dsl::channels
+            .filter(dsl::is_above.eq(self.uuid))
+            .select(dsl::uuid)
+            .get_result(&mut conn)
+            .await
+        {
+            Ok(r) => Ok(Some(r)),
+            Err(e) if e == diesel::result::Error::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }?;
+
+        if let Some(uuid) = old_above_uuid {
+            update(channels::table)
+                .filter(dsl::uuid.eq(uuid))
+                .set(dsl::is_above.eq(None::<Uuid>))
+                .execute(&mut conn)
+                .await?;
+        }
+
+        match update(channels::table)
+            .filter(dsl::is_above.eq(new_is_above))
+            .set(dsl::is_above.eq(self.uuid))
+            .execute(&mut conn)
+            .await
+        {
+            Ok(r) => Ok(r),
+            Err(e) if e == diesel::result::Error::NotFound => Ok(0),
+            Err(e) => Err(e),
+        }?;
+
+        update(channels::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::is_above.eq(new_is_above))
+            .execute(&mut conn)
+            .await?;
+
+        if let Some(uuid) = old_above_uuid {
+            update(channels::table)
+                .filter(dsl::uuid.eq(uuid))
+                .set(dsl::is_above.eq(self.is_above))
+                .execute(&mut conn)
+                .await?;
+        }
+
+        self.is_above = Some(new_is_above);
+
+        Ok(())
     }
 }
 
