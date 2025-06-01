@@ -46,7 +46,7 @@ struct NewInfo {
 struct UploadForm {
     #[multipart(limit = "100MB")]
     avatar: Option<TempFile>,
-    json: MpJson<Option<NewInfo>>,
+    json: MpJson<NewInfo>,
 }
 
 #[patch("")]
@@ -64,11 +64,8 @@ pub async fn update(
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
     if form.avatar.is_some()
-        || form
-            .json
-            .0
-            .clone()
-            .is_some_and(|ni| ni.username.is_some() || ni.display_name.is_some())
+    || form.json.username.is_some()
+    || form.json.display_name.is_some()
     {
         global_checks(&data, uuid).await?;
     }
@@ -88,18 +85,16 @@ pub async fn update(
         .await?;
     }
 
-    if let Some(new_info) = form.json.0 {
-        if let Some(username) = &new_info.username {
-            me.set_username(&data, username.clone()).await?;
-        }
+    if let Some(username) = &form.json.username {
+        me.set_username(&data, username.clone()).await?;
+    }
 
-        if let Some(display_name) = &new_info.display_name {
-            me.set_display_name(&data, display_name.clone()).await?;
-        }
+    if let Some(display_name) = &form.json.display_name {
+        me.set_display_name(&data, display_name.clone()).await?;
+    }
 
-        if let Some(email) = &new_info.email {
-            me.set_email(&data, email.to_string()).await?;
-        }
+    if let Some(email) = &form.json.email {
+        me.set_email(&data, email.clone()).await?;
     }
 
     Ok(HttpResponse::Ok().finish())
