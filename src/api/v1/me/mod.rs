@@ -6,7 +6,7 @@ use crate::{
     Data,
     api::v1::auth::check_access_token,
     error::Error,
-    structs::Me,
+    objects::Me,
     utils::{get_auth_header, global_checks},
 };
 
@@ -65,10 +65,7 @@ pub async fn update(
 
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    if form.avatar.is_some()
-    || form.json.username.is_some()
-    || form.json.display_name.is_some()
-    {
+    if form.avatar.is_some() || form.json.username.is_some() || form.json.display_name.is_some() {
         global_checks(&data, uuid).await?;
     }
 
@@ -79,12 +76,8 @@ pub async fn update(
 
         let byte_slice: &[u8] = &bytes;
 
-        me.set_avatar(
-            &data,
-            data.config.bunny.cdn_url.clone(),
-            byte_slice.into(),
-        )
-        .await?;
+        me.set_avatar(&data, data.config.bunny.cdn_url.clone(), byte_slice.into())
+            .await?;
     }
 
     if let Some(username) = &form.json.username {

@@ -7,12 +7,12 @@ use crate::{
     Data,
     api::v1::auth::check_access_token,
     error::Error,
-    structs::{Channel, Member},
+    objects::{Channel, Member},
     utils::{get_auth_header, global_checks},
 };
-use actix_web::{delete, get, patch, web, HttpRequest, HttpResponse};
-use uuid::Uuid;
+use actix_web::{HttpRequest, HttpResponse, delete, get, patch, web};
 use serde::Deserialize;
+use uuid::Uuid;
 
 #[get("/{uuid}")]
 pub async fn get(
@@ -88,7 +88,7 @@ struct NewInfo {
 ///     "is_above": "398f6d7b-752c-4348-9771-fe6024adbfb1"
 /// });
 /// ```
-/// 
+///
 /// ### Response Example
 /// ```
 /// json!({
@@ -132,13 +132,16 @@ pub async fn patch(
     }
 
     if let Some(new_description) = &new_info.description {
-        channel.set_description(&data, new_description.to_string()).await?;
+        channel
+            .set_description(&data, new_description.to_string())
+            .await?;
     }
 
     if let Some(new_is_above) = &new_info.is_above {
-        channel.set_description(&data, new_is_above.to_string()).await?;
+        channel
+            .set_description(&data, new_is_above.to_string())
+            .await?;
     }
 
     Ok(HttpResponse::Ok().json(channel))
 }
-

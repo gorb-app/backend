@@ -19,8 +19,8 @@ use crate::{
     Conn, Data,
     config::Config,
     error::Error,
+    objects::{HasIsAbove, HasUuid},
     schema::users,
-    structs::{HasIsAbove, HasUuid},
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {

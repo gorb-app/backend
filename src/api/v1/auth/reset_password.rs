@@ -4,7 +4,7 @@ use actix_web::{HttpResponse, get, post, web};
 use chrono::{Duration, Utc};
 use serde::Deserialize;
 
-use crate::{Data, error::Error, structs::PasswordResetToken};
+use crate::{Data, error::Error, objects::PasswordResetToken};
 
 #[derive(Deserialize)]
 struct Query {

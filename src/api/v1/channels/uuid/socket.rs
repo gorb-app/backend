@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     Data,
     api::v1::auth::check_access_token,
-    structs::{Channel, Member},
+    objects::{Channel, Member},
     utils::{get_ws_protocol_header, global_checks},
 };
 

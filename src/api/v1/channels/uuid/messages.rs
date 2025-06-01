@@ -4,7 +4,7 @@ use crate::{
     Data,
     api::v1::auth::check_access_token,
     error::Error,
-    structs::{Channel, Member},
+    objects::{Channel, Member},
     utils::{get_auth_header, global_checks},
 };
 use ::uuid::Uuid;

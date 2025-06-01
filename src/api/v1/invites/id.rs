@@ -4,7 +4,7 @@ use crate::{
     Data,
     api::v1::auth::check_access_token,
     error::Error,
-    structs::{Guild, Invite, Member},
+    objects::{Guild, Invite, Member},
     utils::{get_auth_header, global_checks},
 };
 

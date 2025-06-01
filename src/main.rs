@@ -5,9 +5,9 @@ use clap::Parser;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
 use error::Error;
+use objects::MailClient;
 use simple_logger::SimpleLogger;
 use std::time::SystemTime;
-use structs::MailClient;
 mod config;
 use config::{Config, ConfigBuilder};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
@@ -19,8 +19,8 @@ type Conn =
 
 mod api;
 pub mod error;
+pub mod objects;
 pub mod schema;
-pub mod structs;
 pub mod utils;
 
 #[derive(Parser, Debug)]

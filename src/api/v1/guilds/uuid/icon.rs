@@ -8,7 +8,7 @@ use crate::{
     Data,
     api::v1::auth::check_access_token,
     error::Error,
-    structs::{Guild, Member},
+    objects::{Guild, Member},
     utils::{get_auth_header, global_checks},
 };
 

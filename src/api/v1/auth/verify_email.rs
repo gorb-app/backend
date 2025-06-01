@@ -8,7 +8,7 @@ use crate::{
     Data,
     api::v1::auth::check_access_token,
     error::Error,
-    structs::{EmailToken, Me},
+    objects::{EmailToken, Me},
     utils::get_auth_header,
 };
 
