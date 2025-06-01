@@ -1,16 +1,17 @@
-FROM rust:bookworm AS builder
+FROM --platform=linux/amd64 debian:12-slim AS prep
 
 WORKDIR /src
 
-COPY . .
-
-RUN cargo build --release
+COPY target/release/backend backend-amd64
+COPY target/aarch64-unknown-linux-gnu/release/backend backend-arm64
 
 FROM debian:12-slim
 
+ARG TARGETARCH
+
 RUN apt update -y && apt install libssl3 ca-certificates -y && rm -rf /var/lib/apt/lists/* /var/cache/apt/* /tmp/*
 
-COPY --from=builder /src/target/release/backend /usr/bin/gorb-backend
+COPY --from=prep /src/backend-${TARGETARCH} /usr/bin/gorb-backend
 
 COPY entrypoint.sh /usr/bin/entrypoint.sh
 
