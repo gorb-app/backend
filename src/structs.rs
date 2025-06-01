@@ -953,6 +953,7 @@ pub struct User {
     display_name: Option<String>,
     avatar: Option<String>,
     pronouns: Option<String>,
+    about: Option<String>,
 }
 
 impl User {
@@ -1004,6 +1005,7 @@ pub struct Me {
     display_name: Option<String>,
     avatar: Option<String>,
     pronouns: Option<String>,
+    about: Option<String>,
     email: String,
     pub email_verified: bool,
 }
@@ -1188,6 +1190,25 @@ impl Me {
             .filter(dsl::uuid.eq(self.uuid))
             .set((
                 dsl::pronouns.eq(new_pronouns.as_str()),
+            ))
+            .execute(&mut conn)
+            .await?;
+
+        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            data.del_cache_key(self.uuid.to_string()).await?
+        }
+
+        Ok(())
+    }
+
+    pub async fn set_about(&mut self, data: &Data, new_about: String) -> Result<(), Error> {
+        let mut conn = data.pool.get().await?;
+
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set((
+                dsl::about.eq(new_about.as_str()),
             ))
             .execute(&mut conn)
             .await?;

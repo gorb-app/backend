@@ -1,0 +1,2 @@
+-- Your SQL goes here
+ALTER TABLE users ADD COLUMN about VARCHAR(200) DEFAULT NULL;

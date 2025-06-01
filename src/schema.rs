@@ -146,6 +146,8 @@ diesel::table! {
         avatar -> Nullable<Varchar>,
         #[max_length = 32]
         pronouns -> Nullable<Varchar>,
+        #[max_length = 200]
+        about -> Nullable<Varchar>,
     }
 }
 
