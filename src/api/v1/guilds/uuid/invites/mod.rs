@@ -12,7 +12,7 @@ use crate::{
 
 #[derive(Deserialize)]
 struct InviteRequest {
-    custom_id: String,
+    custom_id: Option<String>,
 }
 
 #[get("{uuid}/invites")]
@@ -46,7 +46,7 @@ pub async fn get(
 pub async fn create(
     req: HttpRequest,
     path: web::Path<(Uuid,)>,
-    invite_request: web::Json<Option<InviteRequest>>,
+    invite_request: web::Json<InviteRequest>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
     let headers = req.headers();
@@ -65,9 +65,7 @@ pub async fn create(
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 
-    let custom_id = invite_request.as_ref().map(|ir| ir.custom_id.clone());
-
-    let invite = guild.create_invite(&mut conn, uuid, custom_id).await?;
+    let invite = guild.create_invite(&mut conn, uuid, invite_request.custom_id.clone()).await?;
 
     Ok(HttpResponse::Ok().json(invite))
 }
