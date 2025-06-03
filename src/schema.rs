@@ -81,15 +81,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    password_reset_tokens (token, user_uuid) {
-        #[max_length = 64]
-        token -> Varchar,
-        user_uuid -> Uuid,
-        created_at -> Timestamptz,
-    }
-}
-
-diesel::table! {
     refresh_tokens (token) {
         #[max_length = 64]
         token -> Varchar,
@@ -154,7 +145,6 @@ diesel::joinable!(invites -> guilds (guild_uuid));
 diesel::joinable!(invites -> users (user_uuid));
 diesel::joinable!(messages -> channels (channel_uuid));
 diesel::joinable!(messages -> users (user_uuid));
-diesel::joinable!(password_reset_tokens -> users (user_uuid));
 diesel::joinable!(refresh_tokens -> users (uuid));
 diesel::joinable!(role_members -> guild_members (member_uuid));
 diesel::joinable!(roles -> guilds (guild_uuid));
@@ -168,7 +158,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     instance_permissions,
     invites,
     messages,
-    password_reset_tokens,
     refresh_tokens,
     role_members,
     roles,

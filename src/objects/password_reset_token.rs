@@ -4,23 +4,21 @@ use argon2::{
 };
 use chrono::Utc;
 use diesel::{
-    ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper, delete, dsl::now,
-    insert_into, update,
+    ExpressionMethods, QueryDsl, update,
 };
 use diesel_async::RunQueryDsl;
 use lettre::message::MultiPart;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
+    Data,
     error::Error,
-    schema::{password_reset_tokens, users},
+    schema::users,
     utils::{PASSWORD_REGEX, generate_refresh_token, global_checks, user_uuid_from_identifier},
 };
 
-#[derive(Selectable, Queryable)]
-#[diesel(table_name = password_reset_tokens)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[derive(Serialize, Deserialize)]
 pub struct PasswordResetToken {
     user_uuid: Uuid,
     pub token: String,
@@ -28,29 +26,22 @@ pub struct PasswordResetToken {
 }
 
 impl PasswordResetToken {
-    pub async fn get(conn: &mut Conn, token: String) -> Result<PasswordResetToken, Error> {
-        use password_reset_tokens::dsl;
-        let password_reset_token = dsl::password_reset_tokens
-            .filter(dsl::token.eq(token))
-            .select(PasswordResetToken::as_select())
-            .get_result(conn)
-            .await?;
+    pub async fn get(data: &Data, token: String) -> Result<PasswordResetToken, Error> {
+        let user_uuid: Uuid = serde_json::from_str(&data.get_cache_key(format!("{}", token)).await?)?;
+        let password_reset_token = serde_json::from_str(&data.get_cache_key(format!("{}_password_reset", user_uuid)).await?)?;
 
         Ok(password_reset_token)
     }
 
     pub async fn get_with_identifier(
-        conn: &mut Conn,
+        data: &Data,
         identifier: String,
     ) -> Result<PasswordResetToken, Error> {
-        let user_uuid = user_uuid_from_identifier(conn, &identifier).await?;
+        let mut conn = data.pool.get().await?;
 
-        use password_reset_tokens::dsl;
-        let password_reset_token = dsl::password_reset_tokens
-            .filter(dsl::user_uuid.eq(user_uuid))
-            .select(PasswordResetToken::as_select())
-            .get_result(conn)
-            .await?;
+        let user_uuid = user_uuid_from_identifier(&mut conn, &identifier).await?;
+
+        let password_reset_token = serde_json::from_str(&data.get_cache_key(format!("{}_password_reset", user_uuid)).await?)?;
 
         Ok(password_reset_token)
     }
@@ -72,15 +63,14 @@ impl PasswordResetToken {
             .get_result(&mut conn)
             .await?;
 
-        use password_reset_tokens::dsl;
-        insert_into(password_reset_tokens::table)
-            .values((
-                dsl::user_uuid.eq(user_uuid),
-                dsl::token.eq(&token),
-                dsl::created_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .await?;
+        let password_reset_token = PasswordResetToken {
+            user_uuid,
+            token: token.clone(),
+            created_at: Utc::now(),
+        };
+
+        data.set_cache_key(format!("{}_password_reset", user_uuid), password_reset_token,  86400).await?;
+        data.set_cache_key(token.clone(), user_uuid, 86400).await?;
 
         let mut reset_endpoint = data.config.web.frontend_url.join("reset-password")?;
 
@@ -144,16 +134,12 @@ impl PasswordResetToken {
 
         data.mail_client.send_mail(email).await?;
 
-        self.delete(&mut conn).await
+        self.delete(&data).await
     }
 
-    pub async fn delete(&self, conn: &mut Conn) -> Result<(), Error> {
-        use password_reset_tokens::dsl;
-        delete(password_reset_tokens::table)
-            .filter(dsl::user_uuid.eq(self.user_uuid))
-            .filter(dsl::token.eq(&self.token))
-            .execute(conn)
-            .await?;
+    pub async fn delete(&self, data: &Data) -> Result<(), Error> {
+        data.del_cache_key(format!("{}_password_reset", &self.user_uuid)).await?;
+        data.del_cache_key(format!("{}", &self.token)).await?;
 
         Ok(())
     }

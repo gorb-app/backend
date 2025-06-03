@@ -26,13 +26,11 @@ struct Query {
 ///
 #[get("/reset-password")]
 pub async fn get(query: web::Query<Query>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let mut conn = data.pool.get().await?;
-
     if let Ok(password_reset_token) =
-        PasswordResetToken::get_with_identifier(&mut conn, query.identifier.clone()).await
+        PasswordResetToken::get_with_identifier(&data, query.identifier.clone()).await
     {
         if Utc::now().signed_duration_since(password_reset_token.created_at) > Duration::hours(1) {
-            password_reset_token.delete(&mut conn).await?;
+            password_reset_token.delete(&data).await?;
         } else {
             return Err(Error::TooManyRequests(
                 "Please allow 1 hour before sending a new email".to_string(),
@@ -74,15 +72,8 @@ pub async fn post(
     reset_password: web::Json<ResetPassword>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
-    let mut conn = data.pool.get().await?;
-
     let password_reset_token =
-        PasswordResetToken::get(&mut conn, reset_password.token.clone()).await?;
-
-    if Utc::now().signed_duration_since(password_reset_token.created_at) > Duration::hours(24) {
-        password_reset_token.delete(&mut conn).await?;
-        return Ok(HttpResponse::Gone().finish());
-    }
+        PasswordResetToken::get(&data, reset_password.token.clone()).await?;
 
     password_reset_token
         .set_password(&data, reset_password.password.clone())
