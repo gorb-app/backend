@@ -1,19 +1,13 @@
 use chrono::Utc;
-use diesel::{
-    ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper, delete, dsl::now,
-    insert_into,
-};
-use diesel_async::RunQueryDsl;
 use lettre::message::MultiPart;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Conn, Data, error::Error, schema::email_tokens, utils::generate_refresh_token};
+use crate::{Data, error::Error, utils::generate_refresh_token};
 
 use super::Me;
 
-#[derive(Selectable, Queryable)]
-#[diesel(table_name = email_tokens)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[derive(Serialize, Deserialize)]
 pub struct EmailToken {
     user_uuid: Uuid,
     pub token: String,
@@ -21,13 +15,8 @@ pub struct EmailToken {
 }
 
 impl EmailToken {
-    pub async fn get(conn: &mut Conn, user_uuid: Uuid) -> Result<EmailToken, Error> {
-        use email_tokens::dsl;
-        let email_token = dsl::email_tokens
-            .filter(dsl::user_uuid.eq(user_uuid))
-            .select(EmailToken::as_select())
-            .get_result(conn)
-            .await?;
+    pub async fn get(data: &Data, user_uuid: Uuid) -> Result<EmailToken, Error> {
+        let email_token = serde_json::from_str(&data.get_cache_key(format!("{}_email_verify", user_uuid)).await?)?;
 
         Ok(email_token)
     }
@@ -36,17 +25,14 @@ impl EmailToken {
     pub async fn new(data: &Data, me: Me) -> Result<(), Error> {
         let token = generate_refresh_token()?;
 
-        let mut conn = data.pool.get().await?;
+        let email_token = EmailToken {
+            user_uuid: me.uuid,
+            token: token.clone(),
+            // TODO: Check if this can be replaced with something built into valkey
+            created_at: Utc::now()
+        };
 
-        use email_tokens::dsl;
-        insert_into(email_tokens::table)
-            .values((
-                dsl::user_uuid.eq(me.uuid),
-                dsl::token.eq(&token),
-                dsl::created_at.eq(now),
-            ))
-            .execute(&mut conn)
-            .await?;
+        data.set_cache_key(format!("{}_email_verify", me.uuid), email_token,  86400).await?;
 
         let mut verify_endpoint = data.config.web.frontend_url.join("verify-email")?;
 
@@ -67,13 +53,8 @@ impl EmailToken {
         Ok(())
     }
 
-    pub async fn delete(&self, conn: &mut Conn) -> Result<(), Error> {
-        use email_tokens::dsl;
-        delete(email_tokens::table)
-            .filter(dsl::user_uuid.eq(self.user_uuid))
-            .filter(dsl::token.eq(&self.token))
-            .execute(conn)
-            .await?;
+    pub async fn delete(&self, data: &Data) -> Result<(), Error> {
+        data.del_cache_key(format!("{}_email_verify", self.user_uuid)).await?;
 
         Ok(())
     }

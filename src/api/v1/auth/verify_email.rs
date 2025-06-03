@@ -46,20 +46,15 @@ pub async fn get(
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let email_token = EmailToken::get(&mut conn, me.uuid).await?;
+    let email_token = EmailToken::get(&data, me.uuid).await?;
 
     if query.token != email_token.token {
         return Ok(HttpResponse::Unauthorized().finish());
     }
 
-    if Utc::now().signed_duration_since(email_token.created_at) > Duration::hours(24) {
-        email_token.delete(&mut conn).await?;
-        return Ok(HttpResponse::Gone().finish());
-    }
-
     me.verify_email(&mut conn).await?;
 
-    email_token.delete(&mut conn).await?;
+    email_token.delete(&data).await?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -90,9 +85,9 @@ pub async fn post(req: HttpRequest, data: web::Data<Data>) -> Result<HttpRespons
         return Ok(HttpResponse::NoContent().finish());
     }
 
-    if let Ok(email_token) = EmailToken::get(&mut conn, me.uuid).await {
+    if let Ok(email_token) = EmailToken::get(&data, me.uuid).await {
         if Utc::now().signed_duration_since(email_token.created_at) > Duration::hours(1) {
-            email_token.delete(&mut conn).await?;
+            email_token.delete(&data).await?;
         } else {
             return Err(Error::TooManyRequests(
                 "Please allow 1 hour before sending a new email".to_string(),
