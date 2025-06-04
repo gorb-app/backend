@@ -45,6 +45,7 @@ thiserror = "2.0.12"
 actix-multipart = "0.7.2"
 lettre = { version = "0.11.16", features = ["tokio1", "tokio1-native-tls"] }
 chrono = { version = "0.4.41", features = ["serde"] }
+ed25519-dalek = { version = "2.1.1", features = ["pem", "pkcs8", "rand_core"] }
 
 [dependencies.tokio]
 version = "1.45"

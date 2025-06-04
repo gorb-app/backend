@@ -17,6 +17,7 @@ mod message;
 mod password_reset_token;
 mod role;
 mod user;
+mod signature;
 
 pub use channel::Channel;
 pub use email_token::EmailToken;
@@ -28,6 +29,7 @@ pub use message::Message;
 pub use password_reset_token::PasswordResetToken;
 pub use role::Role;
 pub use user::User;
+pub use signature::Signature;
 
 use crate::error::Error;
 

@@ -12,6 +12,7 @@ use bunny_api_tokio::error::Error as BunnyError;
 use deadpool::managed::{BuildError, PoolError};
 use diesel::{ConnectionError, result::Error as DieselError};
 use diesel_async::pooled_connection::PoolError as DieselPoolError;
+use ed25519_dalek::pkcs8::{self, spki};
 use lettre::{
     address::AddressError, error::Error as EmailError, transport::smtp::Error as SmtpError,
 };
@@ -63,6 +64,10 @@ pub enum Error {
     SmtpError(#[from] SmtpError),
     #[error(transparent)]
     SmtpAddressError(#[from] AddressError),
+    #[error(transparent)]
+    Pkcs8Error(#[from] pkcs8::Error),
+    #[error(transparent)]
+    SpkiError(#[from] spki::Error),
     #[error("{0}")]
     PasswordHashError(String),
     #[error("{0}")]

@@ -32,6 +32,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    federated_users (uuid) {
+        uuid -> Uuid,
+        email_verified -> Bool,
+        #[max_length = 8000]
+        instance_url -> Varchar,
+    }
+}
+
+diesel::table! {
     guild_members (uuid) {
         uuid -> Uuid,
         guild_uuid -> Uuid,
@@ -58,6 +67,15 @@ diesel::table! {
     instance_permissions (uuid) {
         uuid -> Uuid,
         administrator -> Bool,
+    }
+}
+
+diesel::table! {
+    instances (instance_url) {
+        #[max_length = 8000]
+        instance_url -> Varchar,
+        #[max_length = 500]
+        public_key -> Varchar,
     }
 }
 
@@ -137,6 +155,7 @@ diesel::joinable!(access_tokens -> refresh_tokens (refresh_token));
 diesel::joinable!(access_tokens -> users (uuid));
 diesel::joinable!(channel_permissions -> channels (channel_uuid));
 diesel::joinable!(channels -> guilds (guild_uuid));
+diesel::joinable!(federated_users -> instances (instance_url));
 diesel::joinable!(guild_members -> guilds (guild_uuid));
 diesel::joinable!(guild_members -> users (user_uuid));
 diesel::joinable!(guilds -> users (owner_uuid));
@@ -153,9 +172,11 @@ diesel::allow_tables_to_appear_in_same_query!(
     access_tokens,
     channel_permissions,
     channels,
+    federated_users,
     guild_members,
     guilds,
     instance_permissions,
+    instances,
     invites,
     messages,
     refresh_tokens,

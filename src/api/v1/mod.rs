@@ -9,6 +9,7 @@ mod invites;
 mod me;
 mod stats;
 mod users;
+mod federation;
 
 pub fn web() -> Scope {
     web::scope("/v1")
@@ -19,4 +20,5 @@ pub fn web() -> Scope {
         .service(guilds::web())
         .service(invites::web())
         .service(me::web())
+        .service(federation::web())
 }

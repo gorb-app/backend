@@ -1,4 +1,4 @@
-use std::sync::LazyLock;
+use std::{collections::HashMap, sync::LazyLock};
 
 use actix_web::{
     cookie::{Cookie, SameSite, time::Duration},

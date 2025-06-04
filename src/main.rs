@@ -1,12 +1,14 @@
 use actix_cors::Cors;
 use actix_web::{App, HttpServer, web};
-use argon2::Argon2;
+use argon2::{password_hash::rand_core::OsRng, Argon2};
 use clap::Parser;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
+use ed25519_dalek::{pkcs8::{spki::der::pem::LineEnding, DecodePrivateKey, EncodePrivateKey}, SigningKey};
 use error::Error;
 use objects::MailClient;
 use simple_logger::SimpleLogger;
+use tokio::{fs::{read_to_string, File}, io::AsyncWriteExt};
 use std::time::SystemTime;
 mod config;
 use config::{Config, ConfigBuilder};
@@ -28,6 +30,8 @@ pub mod utils;
 struct Args {
     #[arg(short, long, default_value_t = String::from("/etc/gorb/config.toml"))]
     config: String,
+    #[arg(short, long, default_value_t = String::from("/etc/gorb/privkey.pem"))]
+    private_key: String,
 }
 
 #[derive(Clone)]
@@ -42,6 +46,7 @@ pub struct Data {
     pub start_time: SystemTime,
     pub bunny_cdn: bunny_api_tokio::Client,
     pub mail_client: MailClient,
+    pub signing_key: SigningKey,
 }
 
 #[tokio::main]
@@ -98,6 +103,18 @@ async fn main() -> Result<(), Error> {
     .await?
     .unwrap();
 
+    let signing_key;
+
+    if let Ok(content) = read_to_string(&args.private_key).await {
+        signing_key = SigningKey::from_pkcs8_pem(&content)?;
+    } else {
+        let mut csprng = OsRng;
+        signing_key = tokio::task::spawn_blocking(move || SigningKey::generate(&mut csprng)).await?;
+
+        let mut file = File::create(args.private_key).await?;
+        file.write_all(signing_key.to_pkcs8_pem(LineEnding::LF)?.as_bytes()).await?;
+    }
+
     /*
     **Stored for later possible use**
 
@@ -124,6 +141,7 @@ async fn main() -> Result<(), Error> {
         start_time: SystemTime::now(),
         bunny_cdn,
         mail_client,
+        signing_key,
     };
 
     HttpServer::new(move || {
