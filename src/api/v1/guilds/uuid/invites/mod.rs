@@ -3,11 +3,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Guild, Member},
-    utils::{get_auth_header, global_checks},
+    api::v1::auth::check_access_token, error::Error, objects::{Guild, Member, Permissions}, utils::{get_auth_header, global_checks}, Data
 };
 
 #[derive(Deserialize)]
@@ -61,7 +57,9 @@ pub async fn create(
 
     global_checks(&data, uuid).await?;
 
-    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+    let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+
+    member.check_permission(&data, Permissions::CreateInvite).await?;
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 

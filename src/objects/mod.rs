@@ -27,6 +27,7 @@ pub use member::Member;
 pub use message::Message;
 pub use password_reset_token::PasswordResetToken;
 pub use role::Role;
+pub use role::Permissions;
 pub use user::User;
 
 use crate::error::Error;
@@ -108,44 +109,6 @@ impl MailClient {
         debug!("mail sending response: {:?}", response);
 
         Ok(())
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum Permissions {
-    SendMessage = 1,
-    CreateChannel = 2,
-    DeleteChannel = 4,
-    ManageChannel = 8,
-    CreateRole = 16,
-    DeleteRole = 32,
-    ManageRole = 64,
-    CreateInvite = 128,
-    ManageInvite = 256,
-    ManageServer = 512,
-    ManageMember = 1024,
-}
-
-impl Permissions {
-    pub fn fetch_permissions(permissions: i64) -> Vec<Self> {
-        let all_perms = vec![
-            Self::SendMessage,
-            Self::CreateChannel,
-            Self::DeleteChannel,
-            Self::ManageChannel,
-            Self::CreateRole,
-            Self::DeleteRole,
-            Self::ManageRole,
-            Self::CreateInvite,
-            Self::ManageInvite,
-            Self::ManageServer,
-            Self::ManageMember,
-        ];
-
-        all_perms
-            .into_iter()
-            .filter(|p| permissions & (*p as i64) != 0)
-            .collect()
     }
 }
 

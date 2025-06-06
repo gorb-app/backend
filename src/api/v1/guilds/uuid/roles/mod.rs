@@ -3,11 +3,7 @@ use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Member, Role},
-    utils::{get_auth_header, global_checks, order_by_is_above},
+    api::v1::auth::check_access_token, error::Error, objects::{Member, Permissions, Role}, utils::{get_auth_header, global_checks, order_by_is_above}, Data
 };
 
 pub mod uuid;
@@ -70,9 +66,9 @@ pub async fn create(
 
     global_checks(&data, uuid).await?;
 
-    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+    let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    // FIXME: Logic to check permissions, should probably be done in utils.rs
+    member.check_permission(&data, Permissions::CreateRole).await?;
 
     let role = Role::new(&mut conn, guild_uuid, role_info.name.clone()).await?;
 

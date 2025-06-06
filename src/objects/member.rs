@@ -5,7 +5,7 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Conn, Data, error::Error, schema::guild_members};
+use crate::{error::Error, objects::{Permissions, Role}, schema::guild_members, Conn, Data};
 
 use super::{User, load_or_empty};
 
@@ -21,7 +21,7 @@ pub struct MemberBuilder {
 }
 
 impl MemberBuilder {
-    async fn build(&self, data: &Data) -> Result<Member, Error> {
+    pub async fn build(&self, data: &Data) -> Result<Member, Error> {
         let user = User::fetch_one(data, self.user_uuid).await?;
 
         Ok(Member {
@@ -32,6 +32,18 @@ impl MemberBuilder {
             is_owner: self.is_owner,
             user,
         })
+    }
+
+    pub async fn check_permission(&self, data: &Data, permission: Permissions) -> Result<(), Error> {
+        if !self.is_owner {
+            let roles = Role::fetch_from_member(&data, self.uuid).await?;
+            let allowed = roles.iter().any(|r| r.permissions & permission as i64 != 0);
+            if !allowed {
+                return Err(Error::Forbidden("Not allowed".to_string()))
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -61,16 +73,16 @@ impl Member {
         conn: &mut Conn,
         user_uuid: Uuid,
         guild_uuid: Uuid,
-    ) -> Result<(), Error> {
+    ) -> Result<MemberBuilder, Error> {
         use guild_members::dsl;
-        dsl::guild_members
+        let member_builder = dsl::guild_members
             .filter(dsl::user_uuid.eq(user_uuid))
             .filter(dsl::guild_uuid.eq(guild_uuid))
             .select(MemberBuilder::as_select())
             .get_result(conn)
             .await?;
 
-        Ok(())
+        Ok(member_builder)
     }
 
     pub async fn fetch_one(data: &Data, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {

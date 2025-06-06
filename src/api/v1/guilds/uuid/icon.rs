@@ -5,11 +5,7 @@ use futures_util::StreamExt as _;
 use uuid::Uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Guild, Member},
-    utils::{get_auth_header, global_checks},
+    api::v1::auth::check_access_token, error::Error, objects::{Guild, Member, Permissions}, utils::{get_auth_header, global_checks}, Data
 };
 
 /// `PUT /api/v1/guilds/{uuid}/icon` Icon upload
@@ -36,7 +32,9 @@ pub async fn upload(
 
     global_checks(&data, uuid).await?;
 
-    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+    let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+
+    member.check_permission(&data, Permissions::ManageServer).await?;
 
     let mut guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 
