@@ -198,13 +198,32 @@ impl Channel {
         let mut conn = data.pool.get().await?;
 
         use channels::dsl;
+        update(channels::table)
+            .filter(dsl::is_above.eq(self.uuid))
+            .set(dsl::is_above.eq(None::<Uuid>))
+            .execute(&mut conn)
+            .await?;
         delete(channels::table)
             .filter(dsl::uuid.eq(self.uuid))
+            .execute(&mut conn)
+            .await?;
+        update(channels::table)
+            .filter(dsl::is_above.eq(self.uuid))
+            .set(dsl::is_above.eq(self.is_above))
             .execute(&mut conn)
             .await?;
 
         if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
             data.del_cache_key(self.uuid.to_string()).await?;
+        }
+
+        if data
+            .get_cache_key(format!("{}_channels", self.guild_uuid))
+            .await
+            .is_ok()
+        {
+            data.del_cache_key(format!("{}_channels", self.guild_uuid))
+                .await?;
         }
 
         Ok(())
