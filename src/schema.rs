@@ -38,13 +38,13 @@ diesel::table! {
         user_uuid -> Uuid,
         #[max_length = 100]
         nickname -> Nullable<Varchar>,
+        is_owner -> Bool,
     }
 }
 
 diesel::table! {
     guilds (uuid) {
         uuid -> Uuid,
-        owner_uuid -> Uuid,
         #[max_length = 100]
         name -> Varchar,
         #[max_length = 300]
@@ -139,7 +139,6 @@ diesel::joinable!(channel_permissions -> channels (channel_uuid));
 diesel::joinable!(channels -> guilds (guild_uuid));
 diesel::joinable!(guild_members -> guilds (guild_uuid));
 diesel::joinable!(guild_members -> users (user_uuid));
-diesel::joinable!(guilds -> users (owner_uuid));
 diesel::joinable!(instance_permissions -> users (uuid));
 diesel::joinable!(invites -> guilds (guild_uuid));
 diesel::joinable!(invites -> users (user_uuid));

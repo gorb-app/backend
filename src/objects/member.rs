@@ -17,6 +17,7 @@ pub struct MemberBuilder {
     pub nickname: Option<String>,
     pub user_uuid: Uuid,
     pub guild_uuid: Uuid,
+    pub is_owner: bool,
 }
 
 impl MemberBuilder {
@@ -28,6 +29,7 @@ impl MemberBuilder {
             nickname: self.nickname.clone(),
             user_uuid: self.user_uuid,
             guild_uuid: self.guild_uuid,
+            is_owner: self.is_owner,
             user,
         })
     }
@@ -39,6 +41,7 @@ pub struct Member {
     pub nickname: Option<String>,
     pub user_uuid: Uuid,
     pub guild_uuid: Uuid,
+    pub is_owner: bool,
     user: User,
 }
 
@@ -113,6 +116,7 @@ impl Member {
             guild_uuid,
             user_uuid,
             nickname: None,
+            is_owner: false,
         };
 
         insert_into(guild_members::table)

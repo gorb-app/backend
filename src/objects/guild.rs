@@ -26,7 +26,6 @@ pub struct GuildBuilder {
     name: String,
     description: Option<String>,
     icon: Option<String>,
-    owner_uuid: Uuid,
 }
 
 impl GuildBuilder {
@@ -40,7 +39,6 @@ impl GuildBuilder {
             name: self.name,
             description: self.description,
             icon: self.icon.and_then(|i| i.parse().ok()),
-            owner_uuid: self.owner_uuid,
             roles,
             member_count,
         })
@@ -53,7 +51,6 @@ pub struct Guild {
     name: String,
     description: Option<String>,
     icon: Option<Url>,
-    owner_uuid: Uuid,
     pub roles: Vec<Role>,
     member_count: i64,
 }
@@ -110,7 +107,6 @@ impl Guild {
             name: name.clone(),
             description: None,
             icon: None,
-            owner_uuid,
         };
 
         insert_into(guilds::table)
@@ -125,6 +121,7 @@ impl Guild {
             nickname: None,
             user_uuid: owner_uuid,
             guild_uuid,
+            is_owner: true,
         };
 
         insert_into(guild_members::table)
@@ -137,7 +134,6 @@ impl Guild {
             name,
             description: None,
             icon: None,
-            owner_uuid,
             roles: vec![],
             member_count: 1,
         })
