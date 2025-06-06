@@ -198,20 +198,32 @@ impl Channel {
         let mut conn = data.pool.get().await?;
 
         use channels::dsl;
-        update(channels::table)
+        match update(channels::table)
             .filter(dsl::is_above.eq(self.uuid))
             .set(dsl::is_above.eq(None::<Uuid>))
             .execute(&mut conn)
-            .await?;
+            .await
+        {
+            Ok(r) => Ok(r),
+            Err(diesel::result::Error::NotFound) => Ok(0),
+            Err(e) => Err(e),
+        }?;
+
         delete(channels::table)
             .filter(dsl::uuid.eq(self.uuid))
             .execute(&mut conn)
             .await?;
-        update(channels::table)
+
+        match update(channels::table)
             .filter(dsl::is_above.eq(self.uuid))
             .set(dsl::is_above.eq(self.is_above))
             .execute(&mut conn)
-            .await?;
+            .await
+        {
+            Ok(r) => Ok(r),
+            Err(diesel::result::Error::NotFound) => Ok(0),
+            Err(e) => Err(e),
+        }?;
 
         if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
             data.del_cache_key(self.uuid.to_string()).await?;
