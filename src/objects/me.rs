@@ -85,13 +85,12 @@ impl Me {
 
             let relative_url = avatar_url.path().trim_start_matches('/');
 
-            data.bunny_cdn.storage.delete(relative_url).await?;
+            data.bunny_storage.delete(relative_url).await?;
         }
 
         let path = format!("avatar/{}/avatar.{}", self.uuid, image_type);
 
-        data.bunny_cdn
-            .storage
+        data.bunny_storage
             .upload(path.clone(), avatar.into())
             .await?;
 

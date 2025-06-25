@@ -188,7 +188,7 @@ impl Guild {
     // FIXME: Horrible security
     pub async fn set_icon(
         &mut self,
-        bunny_cdn: &bunny_api_tokio::Client,
+        bunny_storage: &bunny_api_tokio::EdgeStorageClient,
         conn: &mut Conn,
         cdn_url: Url,
         icon: BytesMut,
@@ -199,12 +199,12 @@ impl Guild {
         if let Some(icon) = &self.icon {
             let relative_url = icon.path().trim_start_matches('/');
 
-            bunny_cdn.storage.delete(relative_url).await?;
+            bunny_storage.delete(relative_url).await?;
         }
 
         let path = format!("icons/{}/icon.{}", self.uuid, image_type);
 
-        bunny_cdn.storage.upload(path.clone(), icon.into()).await?;
+        bunny_storage.upload(path.clone(), icon.into()).await?;
 
         let icon_url = cdn_url.join(&path)?;
 

@@ -40,7 +40,7 @@ pub struct Data {
     pub config: Config,
     pub argon2: Argon2<'static>,
     pub start_time: SystemTime,
-    pub bunny_cdn: bunny_api_tokio::Client,
+    pub bunny_storage: bunny_api_tokio::EdgeStorageClient,
     pub mail_client: MailClient,
 }
 
@@ -65,14 +65,9 @@ async fn main() -> Result<(), Error> {
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
 
-    let mut bunny_cdn = bunny_api_tokio::Client::new("").await?;
-
     let bunny = config.bunny.clone();
 
-    bunny_cdn
-        .storage
-        .init(bunny.api_key, bunny.endpoint, bunny.storage_zone)
-        .await?;
+    let bunny_storage = bunny_api_tokio::EdgeStorageClient::new(bunny.api_key, bunny.endpoint, bunny.storage_zone).await?;
 
     let mail = config.mail.clone();
 
@@ -122,7 +117,7 @@ async fn main() -> Result<(), Error> {
         // TODO: Possibly implement "pepper" into this (thinking it could generate one if it doesnt exist and store it on disk)
         argon2: Argon2::default(),
         start_time: SystemTime::now(),
-        bunny_cdn,
+        bunny_storage,
         mail_client,
     };
 
