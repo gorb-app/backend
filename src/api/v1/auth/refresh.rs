@@ -11,7 +11,7 @@ use crate::{
         access_tokens::{self, dsl},
         refresh_tokens::{self, dsl as rdsl},
     },
-    utils::{generate_access_token, generate_refresh_token, new_refresh_token_cookie},
+    utils::{generate_token, new_refresh_token_cookie},
 };
 
 use super::Response;
@@ -55,7 +55,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
         if lifetime > 1987200 {
-            let new_refresh_token = generate_refresh_token()?;
+            let new_refresh_token = generate_token::<32>()?;
 
             match update(refresh_tokens::table)
                 .filter(rdsl::token.eq(&refresh_token))
@@ -75,7 +75,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
             }
         }
 
-        let access_token = generate_access_token()?;
+        let access_token = generate_token::<16>()?;
 
         update(access_tokens::table)
             .filter(dsl::refresh_token.eq(&refresh_token))

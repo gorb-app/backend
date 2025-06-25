@@ -12,10 +12,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Data,
     error::Error,
     schema::users,
-    utils::{PASSWORD_REGEX, generate_refresh_token, global_checks, user_uuid_from_identifier},
+    utils::{generate_token, global_checks, user_uuid_from_identifier, PASSWORD_REGEX},
+    Data
 };
 
 #[derive(Serialize, Deserialize)]
@@ -48,7 +48,7 @@ impl PasswordResetToken {
 
     #[allow(clippy::new_ret_no_self)]
     pub async fn new(data: &Data, identifier: String) -> Result<(), Error> {
-        let token = generate_refresh_token()?;
+        let token = generate_token::<32>()?;
 
         let mut conn = data.pool.get().await?;
 

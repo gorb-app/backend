@@ -11,7 +11,7 @@ use crate::{
     error::Error,
     schema::*,
     utils::{
-        PASSWORD_REGEX, generate_access_token, generate_refresh_token, new_refresh_token_cookie,
+        PASSWORD_REGEX, generate_token, new_refresh_token_cookie,
         user_uuid_from_identifier,
     },
 };
@@ -59,8 +59,8 @@ pub async fn response(
         ));
     }
 
-    let refresh_token = generate_refresh_token()?;
-    let access_token = generate_access_token()?;
+    let refresh_token = generate_token::<32>()?;
+    let access_token = generate_token::<16>()?;
 
     let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 

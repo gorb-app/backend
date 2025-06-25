@@ -3,7 +3,7 @@ use lettre::message::MultiPart;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Data, error::Error, utils::generate_refresh_token};
+use crate::{Data, error::Error, utils::generate_token};
 
 use super::Me;
 
@@ -23,7 +23,7 @@ impl EmailToken {
 
     #[allow(clippy::new_ret_no_self)]
     pub async fn new(data: &Data, me: Me) -> Result<(), Error> {
-        let token = generate_refresh_token()?;
+        let token = generate_token::<32>()?;
 
         let email_token = EmailToken {
             user_uuid: me.uuid,

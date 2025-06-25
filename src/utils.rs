@@ -115,14 +115,8 @@ pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cooki
         .finish()
 }
 
-pub fn generate_access_token() -> Result<String, getrandom::Error> {
-    let mut buf = [0u8; 16];
-    fill(&mut buf)?;
-    Ok(encode(buf))
-}
-
-pub fn generate_refresh_token() -> Result<String, getrandom::Error> {
-    let mut buf = [0u8; 32];
+pub fn generate_token<const N: usize>() -> Result<String, getrandom::Error> {
+    let mut buf = [0u8; N];
     fill(&mut buf)?;
     Ok(encode(buf))
 }

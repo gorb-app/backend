@@ -20,7 +20,7 @@ use crate::{
         users::{self, dsl as udsl},
     },
     utils::{
-        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_access_token, generate_refresh_token,
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_token,
         new_refresh_token_cookie,
     },
 };
@@ -120,8 +120,8 @@ pub async fn res(
             .execute(&mut conn)
             .await?;
 
-        let refresh_token = generate_refresh_token()?;
-        let access_token = generate_access_token()?;
+        let refresh_token = generate_token::<32>()?;
+        let access_token = generate_token::<16>()?;
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
