@@ -5,7 +5,12 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::Error, objects::{Permissions, Role}, schema::guild_members, Conn, Data};
+use crate::{
+    Conn, Data,
+    error::Error,
+    objects::{Permissions, Role},
+    schema::guild_members,
+};
 
 use super::{User, load_or_empty};
 
@@ -34,12 +39,16 @@ impl MemberBuilder {
         })
     }
 
-    pub async fn check_permission(&self, data: &Data, permission: Permissions) -> Result<(), Error> {
+    pub async fn check_permission(
+        &self,
+        data: &Data,
+        permission: Permissions,
+    ) -> Result<(), Error> {
         if !self.is_owner {
-            let roles = Role::fetch_from_member(&data, self.uuid).await?;
+            let roles = Role::fetch_from_member(data, self.uuid).await?;
             let allowed = roles.iter().any(|r| r.permissions & permission as i64 != 0);
             if !allowed {
-                return Err(Error::Forbidden("Not allowed".to_string()))
+                return Err(Error::Forbidden("Not allowed".to_string()));
             }
         }
 

@@ -10,10 +10,7 @@ use crate::{
     Data,
     error::Error,
     schema::*,
-    utils::{
-        PASSWORD_REGEX, generate_token, new_refresh_token_cookie,
-        user_uuid_from_identifier,
-    },
+    utils::{PASSWORD_REGEX, generate_token, new_refresh_token_cookie, user_uuid_from_identifier},
 };
 
 use super::Response;

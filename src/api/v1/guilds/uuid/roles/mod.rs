@@ -3,7 +3,11 @@ use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, objects::{Member, Permissions, Role}, utils::{get_auth_header, global_checks, order_by_is_above}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    objects::{Member, Permissions, Role},
+    utils::{get_auth_header, global_checks, order_by_is_above},
 };
 
 pub mod uuid;
@@ -31,7 +35,7 @@ pub async fn get(
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    if let Ok(cache_hit) = data.get_cache_key(format!("{}_roles", guild_uuid)).await {
+    if let Ok(cache_hit) = data.get_cache_key(format!("{guild_uuid}_roles")).await {
         return Ok(HttpResponse::Ok()
             .content_type("application/json")
             .body(cache_hit));
@@ -41,7 +45,7 @@ pub async fn get(
 
     let roles_ordered = order_by_is_above(roles).await?;
 
-    data.set_cache_key(format!("{}_roles", guild_uuid), roles_ordered.clone(), 1800)
+    data.set_cache_key(format!("{guild_uuid}_roles"), roles_ordered.clone(), 1800)
         .await?;
 
     Ok(HttpResponse::Ok().json(roles_ordered))
@@ -68,7 +72,9 @@ pub async fn create(
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    member.check_permission(&data, Permissions::CreateRole).await?;
+    member
+        .check_permission(&data, Permissions::CreateRole)
+        .await?;
 
     let role = Role::new(&mut conn, guild_uuid, role_info.name.clone()).await?;
 

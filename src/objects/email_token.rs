@@ -16,7 +16,11 @@ pub struct EmailToken {
 
 impl EmailToken {
     pub async fn get(data: &Data, user_uuid: Uuid) -> Result<EmailToken, Error> {
-        let email_token = serde_json::from_str(&data.get_cache_key(format!("{}_email_verify", user_uuid)).await?)?;
+        let email_token = serde_json::from_str(
+            &data
+                .get_cache_key(format!("{user_uuid}_email_verify"))
+                .await?,
+        )?;
 
         Ok(email_token)
     }
@@ -29,14 +33,15 @@ impl EmailToken {
             user_uuid: me.uuid,
             token: token.clone(),
             // TODO: Check if this can be replaced with something built into valkey
-            created_at: Utc::now()
+            created_at: Utc::now(),
         };
 
-        data.set_cache_key(format!("{}_email_verify", me.uuid), email_token,  86400).await?;
+        data.set_cache_key(format!("{}_email_verify", me.uuid), email_token, 86400)
+            .await?;
 
         let mut verify_endpoint = data.config.web.frontend_url.join("verify-email")?;
 
-        verify_endpoint.set_query(Some(&format!("token={}", token)));
+        verify_endpoint.set_query(Some(&format!("token={token}")));
 
         let email = data
             .mail_client
@@ -54,7 +59,8 @@ impl EmailToken {
     }
 
     pub async fn delete(&self, data: &Data) -> Result<(), Error> {
-        data.del_cache_key(format!("{}_email_verify", self.user_uuid)).await?;
+        data.del_cache_key(format!("{}_email_verify", self.user_uuid))
+            .await?;
 
         Ok(())
     }

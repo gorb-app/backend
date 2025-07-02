@@ -183,12 +183,11 @@ impl Channel {
             .await?;
 
         if data
-            .get_cache_key(format!("{}_channels", guild_uuid))
+            .get_cache_key(format!("{guild_uuid}_channels"))
             .await
             .is_ok()
         {
-            data.del_cache_key(format!("{}_channels", guild_uuid))
-                .await?;
+            data.del_cache_key(format!("{guild_uuid}_channels")).await?;
         }
 
         Ok(channel)

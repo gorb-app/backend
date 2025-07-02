@@ -6,7 +6,12 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::Error, schema::{role_members, roles}, utils::order_by_is_above, Conn, Data};
+use crate::{
+    Conn, Data,
+    error::Error,
+    schema::{role_members, roles},
+    utils::order_by_is_above,
+};
 
 use super::{HasIsAbove, HasUuid, load_or_empty};
 
@@ -70,8 +75,8 @@ impl Role {
     }
 
     pub async fn fetch_from_member(data: &Data, member_uuid: Uuid) -> Result<Vec<Self>, Error> {
-        if let Ok(roles) = data.get_cache_key(format!("{}_roles", member_uuid)).await {
-            return Ok(serde_json::from_str(&roles)?)
+        if let Ok(roles) = data.get_cache_key(format!("{member_uuid}_roles")).await {
+            return Ok(serde_json::from_str(&roles)?);
         }
 
         let mut conn = data.pool.get().await?;
@@ -91,7 +96,8 @@ impl Role {
             roles.push(membership.fetch_role(&mut conn).await?);
         }
 
-        data.set_cache_key(format!("{}_roles", member_uuid), roles.clone(), 300).await?;
+        data.set_cache_key(format!("{member_uuid}_roles"), roles.clone(), 300)
+            .await?;
 
         Ok(roles)
     }
@@ -108,7 +114,7 @@ impl Role {
     }
 
     pub async fn fetch_permissions(&self) -> Vec<Permissions> {
-        Permissions::fetch_permissions(self.permissions.clone())
+        Permissions::fetch_permissions(self.permissions)
     }
 
     pub async fn new(conn: &mut Conn, guild_uuid: Uuid, name: String) -> Result<Self, Error> {

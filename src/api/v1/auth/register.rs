@@ -12,11 +12,17 @@ use uuid::Uuid;
 
 use super::Response;
 use crate::{
-    error::Error, objects::Member, schema::{
-        access_tokens::{self, dsl as adsl}, refresh_tokens::{self, dsl as rdsl}, users::{self, dsl as udsl}
-    }, utils::{
-        generate_token, new_refresh_token_cookie, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX
-    }, Data
+    Data,
+    error::Error,
+    objects::Member,
+    schema::{
+        access_tokens::{self, dsl as adsl},
+        refresh_tokens::{self, dsl as rdsl},
+        users::{self, dsl as udsl},
+    },
+    utils::{
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_token, new_refresh_token_cookie,
+    },
 };
 
 #[derive(Deserialize)]

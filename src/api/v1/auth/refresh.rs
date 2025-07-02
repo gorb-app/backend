@@ -42,7 +42,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
                 .execute(&mut conn)
                 .await
             {
-                error!("{}", error);
+                error!("{error}");
             }
 
             refresh_token_cookie.make_removal();
@@ -70,7 +70,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
                     refresh_token = new_refresh_token;
                 }
                 Err(error) => {
-                    error!("{}", error);
+                    error!("{error}");
                 }
             }
         }

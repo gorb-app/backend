@@ -3,19 +3,17 @@ use argon2::{
     password_hash::{SaltString, rand_core::OsRng},
 };
 use chrono::Utc;
-use diesel::{
-    ExpressionMethods, QueryDsl, update,
-};
+use diesel::{ExpressionMethods, QueryDsl, update};
 use diesel_async::RunQueryDsl;
 use lettre::message::MultiPart;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    Data,
     error::Error,
     schema::users,
-    utils::{generate_token, global_checks, user_uuid_from_identifier, PASSWORD_REGEX},
-    Data
+    utils::{PASSWORD_REGEX, generate_token, global_checks, user_uuid_from_identifier},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -27,8 +25,12 @@ pub struct PasswordResetToken {
 
 impl PasswordResetToken {
     pub async fn get(data: &Data, token: String) -> Result<PasswordResetToken, Error> {
-        let user_uuid: Uuid = serde_json::from_str(&data.get_cache_key(format!("{}", token)).await?)?;
-        let password_reset_token = serde_json::from_str(&data.get_cache_key(format!("{}_password_reset", user_uuid)).await?)?;
+        let user_uuid: Uuid = serde_json::from_str(&data.get_cache_key(token.to_string()).await?)?;
+        let password_reset_token = serde_json::from_str(
+            &data
+                .get_cache_key(format!("{user_uuid}_password_reset"))
+                .await?,
+        )?;
 
         Ok(password_reset_token)
     }
@@ -41,7 +43,11 @@ impl PasswordResetToken {
 
         let user_uuid = user_uuid_from_identifier(&mut conn, &identifier).await?;
 
-        let password_reset_token = serde_json::from_str(&data.get_cache_key(format!("{}_password_reset", user_uuid)).await?)?;
+        let password_reset_token = serde_json::from_str(
+            &data
+                .get_cache_key(format!("{user_uuid}_password_reset"))
+                .await?,
+        )?;
 
         Ok(password_reset_token)
     }
@@ -69,12 +75,17 @@ impl PasswordResetToken {
             created_at: Utc::now(),
         };
 
-        data.set_cache_key(format!("{}_password_reset", user_uuid), password_reset_token,  86400).await?;
+        data.set_cache_key(
+            format!("{user_uuid}_password_reset"),
+            password_reset_token,
+            86400,
+        )
+        .await?;
         data.set_cache_key(token.clone(), user_uuid, 86400).await?;
 
         let mut reset_endpoint = data.config.web.frontend_url.join("reset-password")?;
 
-        reset_endpoint.set_query(Some(&format!("token={}", token)));
+        reset_endpoint.set_query(Some(&format!("token={token}")));
 
         let email = data
             .mail_client
@@ -134,12 +145,13 @@ impl PasswordResetToken {
 
         data.mail_client.send_mail(email).await?;
 
-        self.delete(&data).await
+        self.delete(data).await
     }
 
     pub async fn delete(&self, data: &Data) -> Result<(), Error> {
-        data.del_cache_key(format!("{}_password_reset", &self.user_uuid)).await?;
-        data.del_cache_key(format!("{}", &self.token)).await?;
+        data.del_cache_key(format!("{}_password_reset", &self.user_uuid))
+            .await?;
+        data.del_cache_key(self.token.to_string()).await?;
 
         Ok(())
     }

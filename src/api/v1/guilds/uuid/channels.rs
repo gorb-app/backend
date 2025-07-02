@@ -1,5 +1,9 @@
 use crate::{
-    api::v1::auth::check_access_token, error::Error, objects::{Channel, Member, Permissions}, utils::{get_auth_header, global_checks, order_by_is_above}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    objects::{Channel, Member, Permissions},
+    utils::{get_auth_header, global_checks, order_by_is_above},
 };
 use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
@@ -31,7 +35,7 @@ pub async fn get(
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    if let Ok(cache_hit) = data.get_cache_key(format!("{}_channels", guild_uuid)).await {
+    if let Ok(cache_hit) = data.get_cache_key(format!("{guild_uuid}_channels")).await {
         return Ok(HttpResponse::Ok()
             .content_type("application/json")
             .body(cache_hit));
@@ -42,7 +46,7 @@ pub async fn get(
     let channels_ordered = order_by_is_above(channels).await?;
 
     data.set_cache_key(
-        format!("{}_channels", guild_uuid),
+        format!("{guild_uuid}_channels"),
         channels_ordered.clone(),
         1800,
     )
@@ -72,7 +76,9 @@ pub async fn create(
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    member.check_permission(&data, Permissions::CreateChannel).await?;
+    member
+        .check_permission(&data, Permissions::CreateChannel)
+        .await?;
 
     let channel = Channel::new(
         data.clone(),

@@ -76,7 +76,7 @@ pub struct Smtp {
 
 impl ConfigBuilder {
     pub async fn load(path: String) -> Result<Self, Error> {
-        debug!("loading config from: {}", path);
+        debug!("loading config from: {path}");
         let raw = read_to_string(path).await?;
 
         let config = toml::from_str(&raw)?;

@@ -12,5 +12,5 @@ fn main() {
         .unwrap_or_else(|| "UNKNOWN".to_string());
 
     // Tell Cargo to set `GIT_SHORT_HASH` for the main compilation
-    println!("cargo:rustc-env=GIT_SHORT_HASH={}", git_short_hash);
+    println!("cargo:rustc-env=GIT_SHORT_HASH={git_short_hash}");
 }

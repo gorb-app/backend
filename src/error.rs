@@ -79,7 +79,7 @@ pub enum Error {
 
 impl ResponseError for Error {
     fn error_response(&self) -> HttpResponse {
-        debug!("{:?}", self);
+        debug!("{self:?}");
         error!("{}: {}", self.status_code(), self);
 
         HttpResponse::build(self.status_code())

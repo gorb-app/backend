@@ -26,8 +26,8 @@ pub use me::Me;
 pub use member::Member;
 pub use message::Message;
 pub use password_reset_token::PasswordResetToken;
-pub use role::Role;
 pub use role::Permissions;
+pub use role::Role;
 pub use user::User;
 
 use crate::error::Error;
@@ -106,7 +106,7 @@ impl MailClient {
 
         let response = mailer.send(email).await?;
 
-        debug!("mail sending response: {:?}", response);
+        debug!("mail sending response: {response:?}");
 
         Ok(())
     }

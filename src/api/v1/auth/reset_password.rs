@@ -72,8 +72,7 @@ pub async fn post(
     reset_password: web::Json<ResetPassword>,
     data: web::Data<Data>,
 ) -> Result<HttpResponse, Error> {
-    let password_reset_token =
-        PasswordResetToken::get(&data, reset_password.token.clone()).await?;
+    let password_reset_token = PasswordResetToken::get(&data, reset_password.token.clone()).await?;
 
     password_reset_token
         .set_password(&data, reset_password.password.clone())

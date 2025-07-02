@@ -28,7 +28,7 @@ pub async fn get(
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    if let Ok(cache_hit) = data.get_cache_key(format!("{}", role_uuid)).await {
+    if let Ok(cache_hit) = data.get_cache_key(format!("{role_uuid}")).await {
         return Ok(HttpResponse::Ok()
             .content_type("application/json")
             .body(cache_hit));
@@ -36,7 +36,7 @@ pub async fn get(
 
     let role = Role::fetch_one(&mut conn, role_uuid).await?;
 
-    data.set_cache_key(format!("{}", role_uuid), role.clone(), 60)
+    data.set_cache_key(format!("{role_uuid}"), role.clone(), 60)
         .await?;
 
     Ok(HttpResponse::Ok().json(role))

@@ -67,7 +67,9 @@ async fn main() -> Result<(), Error> {
 
     let bunny = config.bunny.clone();
 
-    let bunny_storage = bunny_api_tokio::EdgeStorageClient::new(bunny.api_key, bunny.endpoint, bunny.storage_zone).await?;
+    let bunny_storage =
+        bunny_api_tokio::EdgeStorageClient::new(bunny.api_key, bunny.endpoint, bunny.storage_zone)
+            .await?;
 
     let mail = config.mail.clone();
 

@@ -4,7 +4,11 @@ pub mod messages;
 pub mod socket;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, objects::{Channel, Member, Permissions}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    objects::{Channel, Member, Permissions},
+    utils::{get_auth_header, global_checks},
 };
 use actix_web::{HttpRequest, HttpResponse, delete, get, patch, web};
 use serde::Deserialize;
@@ -57,7 +61,9 @@ pub async fn delete(
 
     let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
-    member.check_permission(&data, Permissions::DeleteChannel).await?;
+    member
+        .check_permission(&data, Permissions::DeleteChannel)
+        .await?;
 
     channel.delete(&data).await?;
 
@@ -125,7 +131,9 @@ pub async fn patch(
 
     let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
-    member.check_permission(&data, Permissions::ManageChannel).await?;
+    member
+        .check_permission(&data, Permissions::ManageChannel)
+        .await?;
 
     if let Some(new_name) = &new_info.name {
         channel.set_name(&data, new_name.to_string()).await?;
