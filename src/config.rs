@@ -5,6 +5,7 @@ use log::debug;
 use serde::Deserialize;
 use tokio::fs::read_to_string;
 use url::Url;
+use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct ConfigBuilder {
@@ -48,6 +49,7 @@ struct InstanceBuilder {
     name: Option<String>,
     registration: Option<bool>,
     require_email_verification: Option<bool>,
+    initial_guild: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -119,11 +121,13 @@ impl ConfigBuilder {
                 name: instance.name.unwrap_or("Gorb".to_string()),
                 registration: instance.registration.unwrap_or(true),
                 require_email_verification: instance.require_email_verification.unwrap_or(false),
+                initial_guild: instance.initial_guild,
             },
             None => Instance {
                 name: "Gorb".to_string(),
                 registration: true,
                 require_email_verification: false,
+                initial_guild: None,
             },
         };
 
@@ -161,6 +165,7 @@ pub struct Instance {
     pub name: String,
     pub registration: bool,
     pub require_email_verification: bool,
+    pub initial_guild: Option<Uuid>,
 }
 
 #[derive(Debug, Clone)]
