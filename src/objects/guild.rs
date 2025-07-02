@@ -202,7 +202,7 @@ impl Guild {
             bunny_storage.delete(relative_url).await?;
         }
 
-        let path = format!("icons/{}/icon.{}", self.uuid, image_type);
+        let path = format!("icons/{}/{}.{}", self.uuid, Uuid::now_v7(), image_type);
 
         bunny_storage.upload(path.clone(), icon.into()).await?;
 

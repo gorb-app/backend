@@ -88,7 +88,7 @@ impl Me {
             data.bunny_storage.delete(relative_url).await?;
         }
 
-        let path = format!("avatar/{}/avatar.{}", self.uuid, image_type);
+        let path = format!("avatar/{}/{}.{}", self.uuid, Uuid::now_v7(), image_type);
 
         data.bunny_storage
             .upload(path.clone(), avatar.into())
