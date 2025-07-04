@@ -14,6 +14,7 @@ pub struct MessageBuilder {
     pub channel_uuid: Uuid,
     pub user_uuid: Uuid,
     pub message: String,
+    pub reply_to: Option<Uuid>,
 }
 
 impl MessageBuilder {
@@ -25,6 +26,7 @@ impl MessageBuilder {
             channel_uuid: self.channel_uuid,
             user_uuid: self.user_uuid,
             message: self.message.clone(),
+            reply_to: self.reply_to,
             user,
         })
     }
@@ -36,5 +38,6 @@ pub struct Message {
     channel_uuid: Uuid,
     user_uuid: Uuid,
     message: String,
+    reply_to: Option<Uuid>,
     user: User,
 }

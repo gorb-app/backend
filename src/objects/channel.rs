@@ -270,6 +270,7 @@ impl Channel {
         data: &Data,
         user_uuid: Uuid,
         message: String,
+        reply_to: Option<Uuid>,
     ) -> Result<Message, Error> {
         let message_uuid = Uuid::now_v7();
 
@@ -278,6 +279,7 @@ impl Channel {
             channel_uuid: self.uuid,
             user_uuid,
             message,
+            reply_to,
         };
 
         let mut conn = data.pool.get().await?;

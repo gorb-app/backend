@@ -77,6 +77,7 @@ diesel::table! {
         user_uuid -> Uuid,
         #[max_length = 4000]
         message -> Varchar,
+        reply_to -> Nullable<Uuid>,
     }
 }
 

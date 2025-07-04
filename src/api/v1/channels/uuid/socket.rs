@@ -5,6 +5,7 @@ use actix_web::{
 };
 use actix_ws::AggregatedMessage;
 use futures_util::StreamExt as _;
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
@@ -13,6 +14,12 @@ use crate::{
     objects::{Channel, Member},
     utils::{get_ws_protocol_header, global_checks},
 };
+
+#[derive(Deserialize)]
+struct MessageBody {
+    message: String,
+    reply_to: Option<Uuid>,
+}
 
 #[get("/{uuid}/socket")]
 pub async fn ws(
@@ -74,7 +81,9 @@ pub async fn ws(
                 Ok(AggregatedMessage::Text(text)) => {
                     let mut conn = data.cache_pool.get_multiplexed_tokio_connection().await?;
 
-                    let message = channel.new_message(&data, uuid, text.to_string()).await?;
+                    let message_body: MessageBody = serde_json::from_str(&text)?;
+
+                    let message = channel.new_message(&data, uuid, message_body.message, message_body.reply_to).await?;
 
                     redis::cmd("PUBLISH")
                         .arg(&[channel_uuid.to_string(), serde_json::to_string(&message)?])
