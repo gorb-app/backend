@@ -1,4 +1,4 @@
-use actix_web::{HttpRequest, HttpResponse, post, web};
+use actix_web::{HttpRequest, HttpResponse, get, web};
 use diesel::{ExpressionMethods, delete};
 use diesel_async::RunQueryDsl;
 
@@ -17,7 +17,7 @@ use crate::{
 /// 404 Refresh token is invalid
 /// 401 Unauthorized (no refresh token found)
 ///
-#[post("/logout")]
+#[get("/logout")]
 pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
     let mut refresh_token_cookie = req.cookie("refresh_token").ok_or(Error::Unauthorized(
         "request has no refresh token".to_string(),
