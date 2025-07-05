@@ -26,8 +26,13 @@ struct Query {
 ///
 /// ### Responses
 /// 200 Success
+/// 
+/// 204 Already verified
+/// 
 /// 410 Token Expired
+/// 
 /// 404 Not Found
+/// 
 /// 401 Unauthorized
 ///
 #[get("/verify-email")]
@@ -45,6 +50,10 @@ pub async fn get(
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
+
+    if me.email_verified {
+        return Ok(HttpResponse::NoContent().finish());
+    }
 
     let email_token = EmailToken::get(&data, me.uuid).await?;
 
@@ -65,8 +74,11 @@ pub async fn get(
 ///
 /// ### Responses
 /// 200 Email sent
+/// 
 /// 204 Already verified
+/// 
 /// 429 Too Many Requests
+/// 
 /// 401 Unauthorized
 ///
 #[post("/verify-email")]
