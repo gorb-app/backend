@@ -153,10 +153,18 @@ impl Me {
     ) -> Result<(), Error> {
         let mut conn = data.pool.get().await?;
 
+        let new_display_name_option;
+
+        if new_display_name.is_empty() {
+            new_display_name_option = None;
+        } else {
+            new_display_name_option = Some(new_display_name)
+        }
+
         use users::dsl;
         update(users::table)
             .filter(dsl::uuid.eq(self.uuid))
-            .set(dsl::display_name.eq(new_display_name.as_str()))
+            .set(dsl::display_name.eq(&new_display_name_option))
             .execute(&mut conn)
             .await?;
 
@@ -164,7 +172,7 @@ impl Me {
             data.del_cache_key(self.uuid.to_string()).await?
         }
 
-        self.display_name = Some(new_display_name);
+        self.display_name = new_display_name_option;
 
         Ok(())
     }
