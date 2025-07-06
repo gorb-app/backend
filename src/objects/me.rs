@@ -124,7 +124,7 @@ impl Me {
     }
 
     pub async fn set_username(&mut self, data: &Data, new_username: String) -> Result<(), Error> {
-        if !USERNAME_REGEX.is_match(&new_username) {
+        if !USERNAME_REGEX.is_match(&new_username) || new_username.len() < 3 || new_username.len() > 32 {
             return Err(Error::BadRequest("Invalid username".to_string()));
         }
 
