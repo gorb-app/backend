@@ -7,7 +7,7 @@ use diesel_async::pooled_connection::deadpool::Pool;
 use error::Error;
 use objects::MailClient;
 use simple_logger::SimpleLogger;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 mod config;
 use config::{Config, ConfigBuilder};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
@@ -61,7 +61,12 @@ async fn main() -> Result<(), Error> {
     // create a new connection pool with the default config
     let pool_config =
         AsyncDieselConnectionManager::<diesel_async::AsyncPgConnection>::new(config.database.url());
-    let pool = Pool::builder(pool_config).build()?;
+    // FIXME: Don't manually set max size and instead fix underlying connection issues
+    let pool = Pool::builder(pool_config)
+        .max_size(50)
+        .wait_timeout(Some(Duration::from_secs(5)))
+        .recycle_timeout(Some(Duration::from_secs(5)))
+        .build()?;
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
 
