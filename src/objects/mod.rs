@@ -17,6 +17,7 @@ mod message;
 mod password_reset_token;
 mod role;
 mod user;
+mod friends;
 
 pub use channel::Channel;
 pub use email_token::EmailToken;
@@ -29,6 +30,8 @@ pub use password_reset_token::PasswordResetToken;
 pub use role::Permissions;
 pub use role::Role;
 pub use user::User;
+pub use friends::Friend;
+pub use friends::FriendRequest;
 
 use crate::error::Error;
 

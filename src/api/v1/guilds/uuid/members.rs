@@ -1,9 +1,5 @@
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::Member,
-    utils::{get_auth_header, global_checks},
+    api::v1::auth::check_access_token, error::Error, objects::{Me, Member}, utils::{get_auth_header, global_checks}, Data
 };
 use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, web};
@@ -28,7 +24,9 @@ pub async fn get(
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    let members = Member::fetch_all(&data, guild_uuid).await?;
+    let me = Me::get(&mut conn, uuid).await?;
+
+    let members = Member::fetch_all(&data, &me, guild_uuid).await?;
 
     Ok(HttpResponse::Ok().json(members))
 }

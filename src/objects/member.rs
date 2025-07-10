@@ -6,10 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
-    error::Error,
-    objects::{Permissions, Role},
-    schema::guild_members,
+    error::Error, objects::{Me, Permissions, Role}, schema::guild_members, Conn, Data
 };
 
 use super::{User, load_or_empty};
@@ -26,8 +23,14 @@ pub struct MemberBuilder {
 }
 
 impl MemberBuilder {
-    pub async fn build(&self, data: &Data) -> Result<Member, Error> {
-        let user = User::fetch_one(data, self.user_uuid).await?;
+    pub async fn build(&self, data: &Data, me: Option<&Me>) -> Result<Member, Error> {
+        let user;
+
+        if let Some(me) = me {
+            user = User::fetch_one_with_friendship(data, me, self.user_uuid).await?;
+        } else {
+            user = User::fetch_one(data, self.user_uuid).await?;
+        }
 
         Ok(Member {
             uuid: self.uuid,
@@ -94,7 +97,7 @@ impl Member {
         Ok(member_builder)
     }
 
-    pub async fn fetch_one(data: &Data, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {
+    pub async fn fetch_one(data: &Data, me: &Me, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {
         let mut conn = data.pool.get().await?;
 
         use guild_members::dsl;
@@ -105,10 +108,10 @@ impl Member {
             .get_result(&mut conn)
             .await?;
 
-        member.build(data).await
+        member.build(data, Some(me)).await
     }
 
-    pub async fn fetch_all(data: &Data, guild_uuid: Uuid) -> Result<Vec<Self>, Error> {
+    pub async fn fetch_all(data: &Data, me: &Me, guild_uuid: Uuid) -> Result<Vec<Self>, Error> {
         let mut conn = data.pool.get().await?;
 
         use guild_members::dsl;
@@ -122,7 +125,7 @@ impl Member {
 
         let member_futures = member_builders
             .iter()
-            .map(async move |m| m.build(data).await);
+            .map(async move |m| m.build(data, Some(me)).await);
 
         futures::future::try_join_all(member_futures).await
     }
@@ -145,6 +148,6 @@ impl Member {
             .execute(&mut conn)
             .await?;
 
-        member.build(data).await
+        member.build(data, None).await
     }
 }

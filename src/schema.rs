@@ -32,6 +32,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    friend_requests (sender, receiver) {
+        sender -> Uuid,
+        receiver -> Uuid,
+        requested_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
+    friends (uuid1, uuid2) {
+        uuid1 -> Uuid,
+        uuid2 -> Uuid,
+        accepted_at -> Timestamptz,
+    }
+}
+
+diesel::table! {
     guild_members (uuid) {
         uuid -> Uuid,
         guild_uuid -> Uuid,
@@ -153,6 +169,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     access_tokens,
     channel_permissions,
     channels,
+    friend_requests,
+    friends,
     guild_members,
     guilds,
     instance_permissions,

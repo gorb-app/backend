@@ -1,5 +1,5 @@
 use actix_web::web::BytesMut;
-use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper, update};
+use diesel::{delete, insert_into, update, ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
 use tokio::task;
@@ -7,10 +7,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
-    error::Error,
-    schema::{guild_members, guilds, users},
-    utils::{EMAIL_REGEX, USERNAME_REGEX, image_check},
+    error::Error, objects::{FriendRequest, Friend, User}, schema::{friend_requests, friends, guild_members, guilds, users}, utils::{image_check, EMAIL_REGEX, USERNAME_REGEX}, Conn, Data
 };
 
 use super::{Guild, guild::GuildBuilder, load_or_empty, member::MemberBuilder};
@@ -153,13 +150,11 @@ impl Me {
     ) -> Result<(), Error> {
         let mut conn = data.pool.get().await?;
 
-        let new_display_name_option;
-
-        if new_display_name.is_empty() {
-            new_display_name_option = None;
+        let new_display_name_option = if new_display_name.is_empty() {
+            None
         } else {
-            new_display_name_option = Some(new_display_name)
-        }
+            Some(new_display_name)
+        };
 
         use users::dsl;
         update(users::table)
@@ -236,4 +231,175 @@ impl Me {
 
         Ok(())
     }
+
+    pub async fn friends_with(&self, conn: &mut Conn, user_uuid: Uuid) -> Result<Option<Friend>, Error> {
+        use friends::dsl;
+
+        let friends: Vec<Friend> = if self.uuid < user_uuid {
+            load_or_empty(
+                dsl::friends
+                    .filter(dsl::uuid1.eq(self.uuid))
+                    .filter(dsl::uuid2.eq(user_uuid))
+                    .load(conn)
+                    .await
+            )?
+        } else {
+            load_or_empty(
+                dsl::friends
+                    .filter(dsl::uuid1.eq(user_uuid))
+                    .filter(dsl::uuid2.eq(self.uuid))
+                    .load(conn)
+                    .await
+            )?
+        };
+
+        if friends.is_empty() {
+            return Ok(None)
+        }
+
+        Ok(Some(friends[0].clone()))
+    }
+
+    pub async fn add_friend(&self, conn: &mut Conn, user_uuid: Uuid) -> Result<(), Error> {
+        if self.friends_with(conn, user_uuid).await?.is_some() {
+            // TODO: Check if another error should be used
+            return Err(Error::BadRequest("Already friends with user".to_string()))
+        }
+        
+        use friend_requests::dsl;
+
+        let friend_request: Vec<FriendRequest> = load_or_empty(
+            dsl::friend_requests
+                .filter(dsl::sender.eq(user_uuid))
+                .filter(dsl::receiver.eq(self.uuid))
+                .load(conn)
+                .await
+        )?;
+
+        #[allow(clippy::get_first)]
+        if let Some(friend_request) = friend_request.get(0) {
+            use friends::dsl;
+
+            if self.uuid < user_uuid {
+                insert_into(friends::table)
+                    .values((dsl::uuid1.eq(self.uuid), dsl::uuid2.eq(user_uuid)))
+                    .execute(conn)
+                    .await?;
+            } else {
+                insert_into(friends::table)
+                    .values((dsl::uuid1.eq(user_uuid), dsl::uuid2.eq(self.uuid)))
+                    .execute(conn)
+                    .await?;
+            }
+
+            use friend_requests::dsl as frdsl;
+
+            delete(friend_requests::table)
+                .filter(frdsl::sender.eq(friend_request.sender))
+                .filter(frdsl::receiver.eq(friend_request.receiver))
+                .execute(conn)
+                .await?;
+
+            Ok(())
+        } else {
+            use friend_requests::dsl;
+
+            insert_into(friend_requests::table)
+                .values((dsl::sender.eq(self.uuid), dsl::receiver.eq(user_uuid)))
+                .execute(conn)
+                .await?;
+
+            Ok(())
+        }
+    }
+
+    pub async fn remove_friend(&self, conn: &mut Conn, user_uuid: Uuid) -> Result<(), Error> {
+        if self.friends_with(conn, user_uuid).await?.is_none() {
+            // TODO: Check if another error should be used
+            return Err(Error::BadRequest("Not friends with user".to_string()))
+        }
+
+        use friends::dsl;
+
+        if self.uuid < user_uuid {
+            delete(friends::table)
+                .filter(dsl::uuid1.eq(self.uuid))
+                .filter(dsl::uuid2.eq(user_uuid))
+                .execute(conn)
+                .await?;
+        } else {
+            delete(friends::table)
+                .filter(dsl::uuid1.eq(user_uuid))
+                .filter(dsl::uuid2.eq(self.uuid))
+                .execute(conn)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn get_friends(&self, data: &Data) -> Result<Vec<User>, Error> {
+        use friends::dsl;
+
+        let mut conn = data.pool.get().await?;
+
+        let friends1 = load_or_empty(
+            dsl::friends
+                .filter(dsl::uuid1.eq(self.uuid))
+                .select(Friend::as_select())
+                .load(&mut conn)
+                .await
+        )?;
+
+        let friends2 = load_or_empty(
+            dsl::friends
+                .filter(dsl::uuid2.eq(self.uuid))
+                .select(Friend::as_select())
+                .load(&mut conn)
+                .await
+        )?;
+
+        let friend_futures = friends1.iter().map(async move |friend| {
+            User::fetch_one_with_friendship(data, self, friend.uuid2).await
+        });
+
+        let mut friends = futures::future::try_join_all(friend_futures).await?;
+
+        let friend_futures = friends2.iter().map(async move |friend| {
+            User::fetch_one_with_friendship(data, self, friend.uuid1).await
+        });
+
+        friends.append(&mut futures::future::try_join_all(friend_futures).await?);
+
+        Ok(friends)
+    }
+
+    /* TODO
+    pub async fn get_friend_requests(&self, conn: &mut Conn) -> Result<Vec<FriendRequest>, Error> {
+        use friend_requests::dsl;
+
+        let friend_request: Vec<FriendRequest> = load_or_empty(
+            dsl::friend_requests
+                .filter(dsl::receiver.eq(self.uuid))
+                .load(conn)
+                .await
+        )?;
+
+        Ok()
+    }
+
+    pub async fn delete_friend_request(&self, conn: &mut Conn, user_uuid: Uuid) -> Result<Vec<FriendRequest>, Error> {
+        use friend_requests::dsl;
+
+        let friend_request: Vec<FriendRequest> = load_or_empty(
+            dsl::friend_requests
+                .filter(dsl::sender.eq(user_uuid))
+                .filter(dsl::receiver.eq(self.uuid))
+                .load(conn)
+                .await
+        )?;
+
+        Ok()
+    }
+    */
 }

@@ -11,12 +11,16 @@ use crate::{
 };
 
 mod guilds;
+mod friends;
 
 pub fn web() -> Scope {
     web::scope("/me")
         .service(get)
         .service(update)
         .service(guilds::get)
+        .service(friends::get)
+        .service(friends::post)
+        .service(friends::uuid::delete)
 }
 
 #[get("")]
