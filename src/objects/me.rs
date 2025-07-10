@@ -1,5 +1,8 @@
 use actix_web::web::BytesMut;
-use diesel::{delete, insert_into, update, ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
+use diesel::{
+    ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper, delete, insert_into,
+    update,
+};
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
 use tokio::task;
@@ -7,7 +10,11 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    error::Error, objects::{FriendRequest, Friend, User}, schema::{friend_requests, friends, guild_members, guilds, users}, utils::{image_check, EMAIL_REGEX, USERNAME_REGEX}, Conn, Data
+    Conn, Data,
+    error::Error,
+    objects::{Friend, FriendRequest, User},
+    schema::{friend_requests, friends, guild_members, guilds, users},
+    utils::{EMAIL_REGEX, USERNAME_REGEX, image_check},
 };
 
 use super::{Guild, guild::GuildBuilder, load_or_empty, member::MemberBuilder};
@@ -121,7 +128,10 @@ impl Me {
     }
 
     pub async fn set_username(&mut self, data: &Data, new_username: String) -> Result<(), Error> {
-        if !USERNAME_REGEX.is_match(&new_username) || new_username.len() < 3 || new_username.len() > 32 {
+        if !USERNAME_REGEX.is_match(&new_username)
+            || new_username.len() < 3
+            || new_username.len() > 32
+        {
             return Err(Error::BadRequest("Invalid username".to_string()));
         }
 
@@ -232,7 +242,11 @@ impl Me {
         Ok(())
     }
 
-    pub async fn friends_with(&self, conn: &mut Conn, user_uuid: Uuid) -> Result<Option<Friend>, Error> {
+    pub async fn friends_with(
+        &self,
+        conn: &mut Conn,
+        user_uuid: Uuid,
+    ) -> Result<Option<Friend>, Error> {
         use friends::dsl;
 
         let friends: Vec<Friend> = if self.uuid < user_uuid {
@@ -241,7 +255,7 @@ impl Me {
                     .filter(dsl::uuid1.eq(self.uuid))
                     .filter(dsl::uuid2.eq(user_uuid))
                     .load(conn)
-                    .await
+                    .await,
             )?
         } else {
             load_or_empty(
@@ -249,12 +263,12 @@ impl Me {
                     .filter(dsl::uuid1.eq(user_uuid))
                     .filter(dsl::uuid2.eq(self.uuid))
                     .load(conn)
-                    .await
+                    .await,
             )?
         };
 
         if friends.is_empty() {
-            return Ok(None)
+            return Ok(None);
         }
 
         Ok(Some(friends[0].clone()))
@@ -263,9 +277,9 @@ impl Me {
     pub async fn add_friend(&self, conn: &mut Conn, user_uuid: Uuid) -> Result<(), Error> {
         if self.friends_with(conn, user_uuid).await?.is_some() {
             // TODO: Check if another error should be used
-            return Err(Error::BadRequest("Already friends with user".to_string()))
+            return Err(Error::BadRequest("Already friends with user".to_string()));
         }
-        
+
         use friend_requests::dsl;
 
         let friend_request: Vec<FriendRequest> = load_or_empty(
@@ -273,7 +287,7 @@ impl Me {
                 .filter(dsl::sender.eq(user_uuid))
                 .filter(dsl::receiver.eq(self.uuid))
                 .load(conn)
-                .await
+                .await,
         )?;
 
         #[allow(clippy::get_first)]
@@ -316,7 +330,7 @@ impl Me {
     pub async fn remove_friend(&self, conn: &mut Conn, user_uuid: Uuid) -> Result<(), Error> {
         if self.friends_with(conn, user_uuid).await?.is_none() {
             // TODO: Check if another error should be used
-            return Err(Error::BadRequest("Not friends with user".to_string()))
+            return Err(Error::BadRequest("Not friends with user".to_string()));
         }
 
         use friends::dsl;
@@ -348,7 +362,7 @@ impl Me {
                 .filter(dsl::uuid1.eq(self.uuid))
                 .select(Friend::as_select())
                 .load(&mut conn)
-                .await
+                .await,
         )?;
 
         let friends2 = load_or_empty(
@@ -356,7 +370,7 @@ impl Me {
                 .filter(dsl::uuid2.eq(self.uuid))
                 .select(Friend::as_select())
                 .load(&mut conn)
-                .await
+                .await,
         )?;
 
         let friend_futures = friends1.iter().map(async move |friend| {

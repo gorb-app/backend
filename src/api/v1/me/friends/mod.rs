@@ -1,6 +1,6 @@
+use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
-use ::uuid::Uuid;
 
 pub mod uuid;
 
@@ -51,13 +51,17 @@ struct UserReq {
 ///
 /// ### Responses
 /// 200 Success
-/// 
+///
 /// 404 Not Found
-/// 
+///
 /// 400 Bad Request (usually means users are already friends)
 ///
 #[post("/friends")]
-pub async fn post(req: HttpRequest, json: web::Json<UserReq>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn post(
+    req: HttpRequest,
+    json: web::Json<UserReq>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers)?;

@@ -4,7 +4,7 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{error::Error, objects::Me, schema::users, Conn, Data};
+use crate::{Conn, Data, error::Error, objects::Me, schema::users};
 
 use super::load_or_empty;
 
@@ -68,7 +68,11 @@ impl User {
         Ok(user)
     }
 
-    pub async fn fetch_one_with_friendship(data: &Data, me: &Me, user_uuid: Uuid) -> Result<Self, Error> {
+    pub async fn fetch_one_with_friendship(
+        data: &Data,
+        me: &Me,
+        user_uuid: Uuid,
+    ) -> Result<Self, Error> {
         let mut conn = data.pool.get().await?;
 
         let mut user = Self::fetch_one(data, user_uuid).await?;

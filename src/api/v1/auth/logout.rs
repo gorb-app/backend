@@ -13,11 +13,11 @@ use crate::{
 /// requires auth: kinda, needs refresh token set but no access token is technically required
 ///
 /// ### Responses
-/// 
+///
 /// 200 Logged out
-/// 
+///
 /// 404 Refresh token is invalid
-/// 
+///
 /// 401 Unauthorized (no refresh token found)
 ///
 #[get("/logout")]
@@ -38,7 +38,9 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
     refresh_token_cookie.make_removal();
 
     if deleted == 0 {
-        return Ok(HttpResponse::NotFound().cookie(refresh_token_cookie).finish())
+        return Ok(HttpResponse::NotFound()
+            .cookie(refresh_token_cookie)
+            .finish());
     }
 
     Ok(HttpResponse::Ok().cookie(refresh_token_cookie).finish())

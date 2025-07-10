@@ -10,7 +10,11 @@ use crate::{
 };
 
 #[delete("/friends/{uuid}")]
-pub async fn delete(req: HttpRequest, path: web::Path<(Uuid,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn delete(
+    req: HttpRequest,
+    path: web::Path<(Uuid,)>,
+    data: web::Data<Data>,
+) -> Result<HttpResponse, Error> {
     let headers = req.headers();
 
     let auth_header = get_auth_header(headers)?;

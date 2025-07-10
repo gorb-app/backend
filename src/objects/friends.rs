@@ -9,7 +9,7 @@ use crate::schema::{friend_requests, friends};
 #[diesel(table_name = friends)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Friend {
-    pub uuid1:  Uuid,
+    pub uuid1: Uuid,
     pub uuid2: Uuid,
     pub accepted_at: DateTime<Utc>,
 }

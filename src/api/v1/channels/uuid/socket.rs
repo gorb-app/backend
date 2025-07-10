@@ -83,7 +83,9 @@ pub async fn ws(
 
                     let message_body: MessageBody = serde_json::from_str(&text)?;
 
-                    let message = channel.new_message(&data, uuid, message_body.message, message_body.reply_to).await?;
+                    let message = channel
+                        .new_message(&data, uuid, message_body.message, message_body.reply_to)
+                        .await?;
 
                     redis::cmd("PUBLISH")
                         .arg(&[channel_uuid.to_string(), serde_json::to_string(&message)?])

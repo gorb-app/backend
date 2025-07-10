@@ -10,8 +10,8 @@ use crate::{
     utils::{get_auth_header, global_checks},
 };
 
-mod guilds;
 mod friends;
+mod guilds;
 
 pub fn web() -> Scope {
     web::scope("/me")

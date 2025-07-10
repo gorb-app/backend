@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    error::Error, objects::{Me, Permissions, Role}, schema::guild_members, Conn, Data
+    Conn, Data,
+    error::Error,
+    objects::{Me, Permissions, Role},
+    schema::guild_members,
 };
 
 use super::{User, load_or_empty};
@@ -97,7 +100,12 @@ impl Member {
         Ok(member_builder)
     }
 
-    pub async fn fetch_one(data: &Data, me: &Me, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {
+    pub async fn fetch_one(
+        data: &Data,
+        me: &Me,
+        user_uuid: Uuid,
+        guild_uuid: Uuid,
+    ) -> Result<Self, Error> {
         let mut conn = data.pool.get().await?;
 
         use guild_members::dsl;

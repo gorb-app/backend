@@ -26,13 +26,13 @@ struct Query {
 ///
 /// ### Responses
 /// 200 Success
-/// 
+///
 /// 204 Already verified
-/// 
+///
 /// 410 Token Expired
-/// 
+///
 /// 404 Not Found
-/// 
+///
 /// 401 Unauthorized
 ///
 #[get("/verify-email")]
@@ -74,11 +74,11 @@ pub async fn get(
 ///
 /// ### Responses
 /// 200 Email sent
-/// 
+///
 /// 204 Already verified
-/// 
+///
 /// 429 Too Many Requests
-/// 
+///
 /// 401 Unauthorized
 ///
 #[post("/verify-email")]

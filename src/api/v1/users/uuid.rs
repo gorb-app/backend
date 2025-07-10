@@ -4,7 +4,11 @@ use actix_web::{HttpRequest, HttpResponse, get, web};
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, objects::{Me, User}, utils::{get_auth_header, global_checks}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    objects::{Me, User},
+    utils::{get_auth_header, global_checks},
 };
 
 /// `GET /api/v1/users/{uuid}` Returns user with the given UUID
