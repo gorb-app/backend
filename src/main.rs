@@ -64,8 +64,8 @@ async fn main() -> Result<(), Error> {
     // FIXME: Don't manually set max size and instead fix underlying connection issues
     let pool = Pool::builder(pool_config)
         .max_size(50)
-        .wait_timeout(Some(Duration::from_secs(5)))
-        .recycle_timeout(Some(Duration::from_secs(5)))
+        //.wait_timeout(Some(Duration::from_secs(5)))
+        //.recycle_timeout(Some(Duration::from_secs(5)))
         .build()?;
 
     let cache_pool = redis::Client::open(config.cache_database.url())?;
