@@ -131,11 +131,13 @@ impl Member {
                 .await,
         )?;
 
-        let member_futures = member_builders
-            .iter()
-            .map(async move |m| m.build(data, Some(me)).await);
+        let mut members = vec![];
 
-        futures::future::try_join_all(member_futures).await
+        for builder in member_builders {
+            members.push(builder.build(&data, Some(me)).await?);
+        }
+
+        Ok(members)
     }
 
     pub async fn new(data: &Data, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {
