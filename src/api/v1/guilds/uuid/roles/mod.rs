@@ -73,7 +73,7 @@ pub async fn create(
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&data, Permissions::CreateRole)
+        .check_permission(&data, Permissions::ManageRole)
         .await?;
 
     let role = Role::new(&mut conn, guild_uuid, role_info.name.clone()).await?;

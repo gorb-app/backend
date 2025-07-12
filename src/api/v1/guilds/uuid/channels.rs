@@ -77,7 +77,7 @@ pub async fn create(
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&data, Permissions::CreateChannel)
+        .check_permission(&data, Permissions::ManageChannel)
         .await?;
 
     let channel = Channel::new(

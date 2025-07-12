@@ -39,7 +39,7 @@ pub async fn upload(
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&data, Permissions::ManageServer)
+        .check_permission(&data, Permissions::ManageGuild)
         .await?;
 
     let mut guild = Guild::fetch_one(&mut conn, guild_uuid).await?;

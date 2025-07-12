@@ -155,32 +155,31 @@ impl Role {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Permissions {
+    /// Lets users send messages in the guild or channel
     SendMessage = 1,
-    CreateChannel = 2,
-    DeleteChannel = 4,
-    ManageChannel = 8,
-    CreateRole = 16,
-    DeleteRole = 32,
-    ManageRole = 64,
-    CreateInvite = 128,
-    ManageInvite = 256,
-    ManageServer = 512,
-    ManageMember = 1024,
+    /// Lets users create, delete and edit channels and categories or a singular channel depending on permission context
+    ManageChannel = 2,
+    /// Lets users manage roles in the guild
+    ManageRole = 4,
+    /// Lets users create invites in the guild
+    CreateInvite = 8,
+    /// Lets users manage invites in the guild
+    ManageInvite = 16,
+    /// Lets users change guild settings
+    ManageGuild = 32,
+    /// Lets users change member settings (nickname, etc)
+    ManageMember = 64,
 }
 
 impl Permissions {
     pub fn fetch_permissions(permissions: i64) -> Vec<Self> {
         let all_perms = vec![
             Self::SendMessage,
-            Self::CreateChannel,
-            Self::DeleteChannel,
             Self::ManageChannel,
-            Self::CreateRole,
-            Self::DeleteRole,
             Self::ManageRole,
             Self::CreateInvite,
             Self::ManageInvite,
-            Self::ManageServer,
+            Self::ManageGuild,
             Self::ManageMember,
         ];
 
