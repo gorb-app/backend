@@ -280,6 +280,7 @@ impl Channel {
             user_uuid,
             message,
             reply_to,
+            is_edited: false,
         };
 
         let mut conn = data.pool.get().await?;
@@ -291,6 +292,21 @@ impl Channel {
 
         message.build(data).await
     }
+
+    /*pub async fn edit_message(&self, data: &Data, user_uuid: Uuid, message_uuid: Uuid, message: String) -> Result<Message, Error> {
+        use messages::dsl;
+
+        let mut conn = data.pool.get().await?;
+
+        update(messages::table)
+            .filter(dsl::user_uuid.eq(user_uuid))
+            .filter(dsl::uuid.eq(message_uuid))
+            .set((dsl::is_edited.eq(true), dsl::message.eq(message)))
+            .execute(&mut conn)
+            .await?;
+
+        Ok(())
+    }*/
 
     pub async fn set_name(&mut self, data: &Data, new_name: String) -> Result<(), Error> {
         if !CHANNEL_REGEX.is_match(&new_name) {

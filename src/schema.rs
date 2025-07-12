@@ -94,6 +94,7 @@ diesel::table! {
         #[max_length = 4000]
         message -> Varchar,
         reply_to -> Nullable<Uuid>,
+        is_edited -> Bool,
     }
 }
 

@@ -15,6 +15,7 @@ pub struct MessageBuilder {
     pub user_uuid: Uuid,
     pub message: String,
     pub reply_to: Option<Uuid>,
+    pub is_edited: bool,
 }
 
 impl MessageBuilder {
@@ -27,6 +28,7 @@ impl MessageBuilder {
             user_uuid: self.user_uuid,
             message: self.message.clone(),
             reply_to: self.reply_to,
+            is_edited: self.is_edited,
             user,
         })
     }
@@ -39,5 +41,6 @@ pub struct Message {
     user_uuid: Uuid,
     message: String,
     reply_to: Option<Uuid>,
+    is_edited: bool,
     user: User,
 }
