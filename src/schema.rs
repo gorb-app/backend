@@ -12,6 +12,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    categories (uuid) {
+        uuid -> Uuid,
+        guild_uuid -> Uuid,
+        #[max_length = 32]
+        name -> Varchar,
+        #[max_length = 500]
+        description -> Nullable<Varchar>,
+        is_above -> Nullable<Uuid>,
+    }
+}
+
+diesel::table! {
     channel_permissions (channel_uuid, role_uuid) {
         channel_uuid -> Uuid,
         role_uuid -> Uuid,
@@ -28,6 +40,7 @@ diesel::table! {
         #[max_length = 500]
         description -> Nullable<Varchar>,
         is_above -> Nullable<Uuid>,
+        in_category -> Nullable<Uuid>,
     }
 }
 
@@ -153,7 +166,9 @@ diesel::table! {
 
 diesel::joinable!(access_tokens -> refresh_tokens (refresh_token));
 diesel::joinable!(access_tokens -> users (uuid));
+diesel::joinable!(categories -> guilds (guild_uuid));
 diesel::joinable!(channel_permissions -> channels (channel_uuid));
+diesel::joinable!(channels -> categories (in_category));
 diesel::joinable!(channels -> guilds (guild_uuid));
 diesel::joinable!(guild_members -> guilds (guild_uuid));
 diesel::joinable!(guild_members -> users (user_uuid));
@@ -168,6 +183,7 @@ diesel::joinable!(roles -> guilds (guild_uuid));
 
 diesel::allow_tables_to_appear_in_same_query!(
     access_tokens,
+    categories,
     channel_permissions,
     channels,
     friend_requests,

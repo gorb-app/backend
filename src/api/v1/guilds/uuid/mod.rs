@@ -8,6 +8,7 @@ mod icon;
 mod invites;
 mod members;
 mod roles;
+mod categories;
 
 use crate::{
     Data,
@@ -21,6 +22,9 @@ pub fn web() -> Scope {
     web::scope("")
         // Servers
         .service(get)
+        // Categories
+        .service(categories::get)
+        .service(categories::create)
         // Channels
         .service(channels::get)
         .service(channels::create)

@@ -7,6 +7,7 @@ use log::debug;
 use serde::Deserialize;
 use uuid::Uuid;
 
+mod categories;
 mod channel;
 mod email_token;
 mod friends;
