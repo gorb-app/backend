@@ -77,6 +77,15 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
         let access_token = generate_token::<16>()?;
 
+        let device_name: String;
+        
+        // fix me tomorrow
+        // let devices: Vec<Device> = dsl::refresh_tokens
+        //     .filter(dsl::uuid.eq(uuid))
+        //     .select(Device::as_select())
+        //     .get_results(&mut conn)
+        //     .await?;
+
         update(access_tokens::table)
             .filter(dsl::refresh_token.eq(&refresh_token))
             .set((
@@ -88,7 +97,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
         return Ok(HttpResponse::Ok()
             .cookie(new_refresh_token_cookie(&data.config, refresh_token))
-            .json(Response { access_token }));
+            .json(Response { access_token, device_name }));
     }
 
     refresh_token_cookie.make_removal();

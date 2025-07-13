@@ -9,6 +9,7 @@ use objects::MailClient;
 use simple_logger::SimpleLogger;
 use std::time::SystemTime;
 mod config;
+mod generate_device_name;
 use config::{Config, ConfigBuilder};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 

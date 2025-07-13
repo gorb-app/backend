@@ -20,6 +20,7 @@ mod verify_email;
 #[derive(Serialize)]
 struct Response {
     access_token: String,
+    device_name: String,
 }
 
 pub fn web() -> Scope {

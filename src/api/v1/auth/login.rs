@@ -7,10 +7,7 @@ use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
 use crate::{
-    Data,
-    error::Error,
-    schema::*,
-    utils::{PASSWORD_REGEX, generate_token, new_refresh_token_cookie, user_uuid_from_identifier},
+    error::Error, schema::*, utils::{generate_token, new_refresh_token_cookie, user_uuid_from_identifier, PASSWORD_REGEX}, generate_device_name::generate_device_name, Data
 };
 
 use super::Response;
@@ -19,7 +16,6 @@ use super::Response;
 struct LoginInformation {
     username: String,
     password: String,
-    device_name: String,
 }
 
 #[post("/login")]
@@ -63,12 +59,14 @@ pub async fn response(
 
     use refresh_tokens::dsl as rdsl;
 
+    let device_name = generate_device_name();
+
     insert_into(refresh_tokens::table)
         .values((
             rdsl::token.eq(&refresh_token),
             rdsl::uuid.eq(uuid),
             rdsl::created_at.eq(current_time),
-            rdsl::device_name.eq(&login_information.device_name),
+            rdsl::device_name.eq(&device_name),
         ))
         .execute(&mut conn)
         .await?;
@@ -87,5 +85,5 @@ pub async fn response(
 
     Ok(HttpResponse::Ok()
         .cookie(new_refresh_token_cookie(&data.config, refresh_token))
-        .json(Response { access_token }))
+        .json(Response { access_token, device_name }))
 }
