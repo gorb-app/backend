@@ -4,7 +4,11 @@ use serde::Deserialize;
 pub mod uuid;
 
 use crate::{
-    api::v1::auth::check_access_token, error::Error, objects::Me, utils::{get_auth_header, global_checks, user_uuid_from_identifier}, Data
+    Data,
+    api::v1::auth::check_access_token,
+    error::Error,
+    objects::Me,
+    utils::{get_auth_header, global_checks, user_uuid_from_identifier},
 };
 
 /// Returns a list of users that are your friends
