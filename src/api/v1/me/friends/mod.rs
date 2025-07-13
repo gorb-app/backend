@@ -8,7 +8,7 @@ use crate::{
     api::v1::auth::check_access_token,
     error::Error,
     objects::Me,
-    utils::{get_auth_header, global_checks, user_uuid_from_identifier},
+    utils::{get_auth_header, global_checks, user_uuid_from_username}
 };
 
 /// Returns a list of users that are your friends
@@ -73,7 +73,7 @@ pub async fn post(
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let target_uuid = user_uuid_from_identifier(&mut conn, &json.username).await?;
+    let target_uuid = user_uuid_from_username(&mut conn, &json.username).await?;
     me.add_friend(&mut conn, target_uuid).await?;
 
     Ok(HttpResponse::Ok().finish())
