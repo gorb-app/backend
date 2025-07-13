@@ -5,13 +5,10 @@ use log::error;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{
-    Data,
-    error::Error,
-    schema::{
+    error::Error, schema::{
         access_tokens::{self, dsl},
-        refresh_tokens::{self, dsl as rdsl},
-    },
-    utils::{generate_token, new_refresh_token_cookie},
+        refresh_tokens::{self, device_name, dsl as rdsl},
+    }, utils::{generate_token, new_refresh_token_cookie}, Data
 };
 
 use super::Response;
@@ -53,6 +50,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         }
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+        let existing_device_name: String;
 
         if lifetime > 1987200 {
             let new_refresh_token = generate_token::<32>()?;
@@ -63,11 +61,13 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
                     rdsl::token.eq(&new_refresh_token),
                     rdsl::created_at.eq(current_time),
                 ))
-                .execute(&mut conn)
+                .returning(rdsl::device_name)
+                .get_result::<String>(&mut conn)
                 .await
             {
-                Ok(_) => {
+                Ok(device_name) => {
                     refresh_token = new_refresh_token;
+                    existing_device_name = device_name.to_string();
                 }
                 Err(error) => {
                     error!("{error}");
@@ -76,15 +76,6 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
         }
 
         let access_token = generate_token::<16>()?;
-
-        let device_name: String;
-        
-        // fix me tomorrow
-        // let devices: Vec<Device> = dsl::refresh_tokens
-        //     .filter(dsl::uuid.eq(uuid))
-        //     .select(Device::as_select())
-        //     .get_results(&mut conn)
-        //     .await?;
 
         update(access_tokens::table)
             .filter(dsl::refresh_token.eq(&refresh_token))
@@ -97,7 +88,7 @@ pub async fn res(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
         return Ok(HttpResponse::Ok()
             .cookie(new_refresh_token_cookie(&data.config, refresh_token))
-            .json(Response { access_token, device_name }));
+            .json(Response { access_token, existing_device_name }));
     }
 
     refresh_token_cookie.make_removal();
