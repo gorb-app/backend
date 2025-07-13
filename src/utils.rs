@@ -170,12 +170,12 @@ pub async fn user_uuid_from_identifier(
 
 pub async fn user_uuid_from_username(
     conn: &mut Conn,
-    identifier: &String,
+    username: &String,
 ) -> Result<Uuid, Error> {
-    if USERNAME_REGEX.is_match(identifier) {
+    if USERNAME_REGEX.is_match(username) {
         use users::dsl;
         let user_uuid = dsl::users
-            .filter(dsl::username.eq(identifier))
+            .filter(dsl::username.eq(username))
             .select(dsl::uuid)
             .get_result(conn)
             .await?;
