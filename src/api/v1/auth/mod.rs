@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::{Conn, error::Error, schema::access_tokens::dsl};
 
+mod devices;
 mod login;
 mod logout;
 mod refresh;
@@ -32,6 +33,7 @@ pub fn web() -> Scope {
         .service(verify_email::post)
         .service(reset_password::get)
         .service(reset_password::post)
+        .service(devices::get)
 }
 
 pub async fn check_access_token(access_token: &str, conn: &mut Conn) -> Result<Uuid, Error> {
