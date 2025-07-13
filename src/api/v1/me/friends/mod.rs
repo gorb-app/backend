@@ -1,4 +1,3 @@
-use ::uuid::Uuid;
 use actix_web::{HttpRequest, HttpResponse, get, post, web};
 use serde::Deserialize;
 
@@ -9,7 +8,7 @@ use crate::{
     api::v1::auth::check_access_token,
     error::Error,
     objects::Me,
-    utils::{get_auth_header, global_checks},
+    utils::{get_auth_header, global_checks, user_uuid_from_username}
 };
 
 /// Returns a list of users that are your friends
@@ -34,7 +33,7 @@ pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse
 
 #[derive(Deserialize)]
 struct UserReq {
-    uuid: Uuid,
+    username: String,
 }
 
 /// `POST /api/v1/me/friends` Send friend request
@@ -74,7 +73,8 @@ pub async fn post(
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    me.add_friend(&mut conn, json.uuid).await?;
+    let target_uuid = user_uuid_from_username(&mut conn, &json.username).await?;
+    me.add_friend(&mut conn, target_uuid).await?;
 
     Ok(HttpResponse::Ok().finish())
 }

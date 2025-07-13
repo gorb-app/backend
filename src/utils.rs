@@ -168,6 +168,26 @@ pub async fn user_uuid_from_identifier(
     }
 }
 
+pub async fn user_uuid_from_username(
+    conn: &mut Conn,
+    username: &String,
+) -> Result<Uuid, Error> {
+    if USERNAME_REGEX.is_match(username) {
+        use users::dsl;
+        let user_uuid = dsl::users
+            .filter(dsl::username.eq(username))
+            .select(dsl::uuid)
+            .get_result(conn)
+            .await?;
+
+        Ok(user_uuid)
+    } else {
+        Err(Error::BadRequest(
+            "Please provide a valid username".to_string(),
+        ))
+    }
+}
+
 pub async fn global_checks(data: &Data, user_uuid: Uuid) -> Result<(), Error> {
     if data.config.instance.require_email_verification {
         let mut conn = data.pool.get().await?;
