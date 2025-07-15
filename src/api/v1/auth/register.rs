@@ -17,8 +17,8 @@ use crate::{
         refresh_tokens::{self, dsl as rdsl},
         users::{self, dsl as udsl},
     }, utils::{
-        generate_token, new_refresh_token_cookie, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX
-    }, generate_device_name::generate_device_name, Data
+        generate_device_name, generate_token, new_refresh_token_cookie, EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX
+    }, Data
 };
 
 #[derive(Deserialize)]

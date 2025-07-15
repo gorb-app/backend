@@ -1,16 +1,4 @@
-use rand::Rng;
-
-pub fn generate_device_name() -> String {
-    let adjective_index = rand::rng().random_range(0..ADJECTIVES_LENGTH-1);
-    let animal_index = rand::rng().random_range(0..ANIMALS_LENGTH-1);
-
-    return [ADJECTIVES[adjective_index], ANIMALS[animal_index]].join(" ")
-}
-
-const ANIMALS_LENGTH: usize = 223;
-const ADJECTIVES_LENGTH: usize = 765;
-
-const ANIMALS: [&'static str; ANIMALS_LENGTH] = [
+pub const ANIMALS: [&'static str; 223] = [
     "Aardvark",
     "Albatross",
     "Alligator",
@@ -236,7 +224,7 @@ const ANIMALS: [&'static str; ANIMALS_LENGTH] = [
     "Zebra",
 ];
 
-const ADJECTIVES: [&'static str; ADJECTIVES_LENGTH] = [
+pub const ADJECTIVES: [&'static str; 765] = [
     "other",
     "such",
     "first",

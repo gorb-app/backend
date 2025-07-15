@@ -1,4 +1,5 @@
 use std::sync::LazyLock;
+use rand::Rng;
 
 use actix_web::{
     cookie::{Cookie, SameSite, time::Duration},
@@ -16,11 +17,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
-    config::Config,
-    error::Error,
-    objects::{HasIsAbove, HasUuid},
-    schema::users,
+    config::Config, error::Error, objects::{HasIsAbove, HasUuid}, schema::users, wordlist::{ADJECTIVES, ANIMALS}, Conn, Data
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -281,4 +278,11 @@ impl Data {
             .query_async(&mut conn)
             .await
     }
+}
+
+pub fn generate_device_name() -> String {
+    let adjective_index = rand::rng().random_range(0..ADJECTIVES.len()-1);
+    let animal_index = rand::rng().random_range(0..ANIMALS.len()-1);
+
+    return [ADJECTIVES[adjective_index], ANIMALS[animal_index]].join(" ")
 }

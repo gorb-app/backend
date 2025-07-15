@@ -7,7 +7,7 @@ use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
 use crate::{
-    error::Error, schema::*, utils::{generate_token, new_refresh_token_cookie, user_uuid_from_identifier, PASSWORD_REGEX}, generate_device_name::generate_device_name, Data
+    error::Error, schema::*, utils::{generate_device_name, generate_token, new_refresh_token_cookie, user_uuid_from_identifier, PASSWORD_REGEX}, Data
 };
 
 use super::Response;
