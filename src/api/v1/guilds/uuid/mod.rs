@@ -1,40 +1,51 @@
 //! `/api/v1/guilds/{uuid}` Specific server endpoints
 
-use actix_web::{HttpRequest, HttpResponse, Scope, get, web};
+use std::sync::Arc;
+
+use axum::{
+    Json, Router,
+    extract::{Multipart, Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, patch, post},
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
+use bytes::Bytes;
 use uuid::Uuid;
 
 mod channels;
-mod icon;
 mod invites;
 mod members;
 mod roles;
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
-    objects::{Guild, Member},
-    utils::{get_auth_header, global_checks},
+    objects::{Guild, Member, Permissions},
+    utils::global_checks,
 };
 
-pub fn web() -> Scope {
-    web::scope("")
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
         // Servers
-        .service(get)
+        .route("/", get(get_guild))
+        .route("/", patch(edit))
         // Channels
-        .service(channels::get)
-        .service(channels::create)
+        .route("/channels", get(channels::get))
+        .route("/channels", post(channels::create))
         // Roles
-        .service(roles::get)
-        .service(roles::create)
-        .service(roles::uuid::get)
+        .route("/roles", get(roles::get))
+        .route("/roles", post(roles::create))
+        .route("/roles/{role_uuid}", get(roles::uuid::get))
         // Invites
-        .service(invites::get)
-        .service(invites::create)
-        // Icon
-        .service(icon::upload)
+        .route("/invites", get(invites::get))
+        .route("/invites", post(invites::create))
         // Members
-        .service(members::get)
+        .route("/members", get(members::get))
 }
 
 /// `GET /api/v1/guilds/{uuid}` DESCRIPTION
@@ -70,27 +81,69 @@ pub fn web() -> Scope {
 ///         "member_count": 20
 /// });
 /// ```
-#[get("/{uuid}")]
-pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+pub async fn get_guild(
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
 
-    Ok(HttpResponse::Ok().json(guild))
+    Ok((StatusCode::OK, Json(guild)))
+}
+
+/// `PATCH /api/v1/guilds/{uuid}` change guild settings
+///
+/// requires auth: yes
+pub async fn edit(
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
+
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
+
+    global_checks(&app_state, uuid).await?;
+
+    let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+
+    member
+        .check_permission(&app_state, Permissions::ManageGuild)
+        .await?;
+
+    let mut guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
+
+    let mut icon: Option<Bytes> = None;
+
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let name = field
+            .name()
+            .ok_or(Error::BadRequest("Field has no name".to_string()))?;
+
+        if name == "icon" {
+            icon = Some(field.bytes().await?);
+        }
+    }
+
+    if let Some(icon) = icon {
+        guild
+            .set_icon(
+                &app_state.bunny_storage,
+                &mut conn,
+                app_state.config.bunny.cdn_url.clone(),
+                icon,
+            )
+            .await?;
+    }
+
+    Ok(StatusCode::OK)
 }

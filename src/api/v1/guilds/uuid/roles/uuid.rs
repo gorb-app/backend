@@ -1,43 +1,47 @@
+use std::sync::Arc;
+
+use ::uuid::Uuid;
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
+
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     objects::{Member, Role},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
-use ::uuid::Uuid;
-use actix_web::{HttpRequest, HttpResponse, get, web};
 
-#[get("{uuid}/roles/{role_uuid}")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid, Uuid)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path((guild_uuid, role_uuid)): Path<(Uuid, Uuid)>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let (guild_uuid, role_uuid) = path.into_inner();
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    if let Ok(cache_hit) = data.get_cache_key(format!("{role_uuid}")).await {
-        return Ok(HttpResponse::Ok()
-            .content_type("application/json")
-            .body(cache_hit));
+    if let Ok(cache_hit) = app_state.get_cache_key(format!("{role_uuid}")).await {
+        return Ok((StatusCode::OK, Json(cache_hit)).into_response());
     }
 
     let role = Role::fetch_one(&mut conn, role_uuid).await?;
 
-    data.set_cache_key(format!("{role_uuid}"), role.clone(), 60)
+    app_state
+        .set_cache_key(format!("{role_uuid}"), role.clone(), 60)
         .await?;
 
-    Ok(HttpResponse::Ok().json(role))
+    Ok((StatusCode::OK, Json(role)).into_response())
 }

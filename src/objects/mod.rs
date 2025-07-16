@@ -42,6 +42,37 @@ pub trait HasUuid {
 pub trait HasIsAbove {
     fn is_above(&self) -> Option<&Uuid>;
 }
+/*
+pub trait Cookies {
+    fn cookies(&self) -> CookieJar;
+    fn cookie<T: AsRef<str>>(&self, cookie: T) -> Option<Cookie>;
+}
+
+impl Cookies for Request<Body> {
+    fn cookies(&self) -> CookieJar {
+        let cookies = self.headers()
+            .get(axum::http::header::COOKIE)
+            .and_then(|value| value.to_str().ok())
+            .map(|s| Cookie::split_parse(s.to_string()))
+            .and_then(|c| c.collect::<Result<Vec<Cookie>, cookie::ParseError>>().ok())
+            .unwrap_or(vec![]);
+
+        let mut cookie_jar = CookieJar::new();
+
+        for cookie in cookies {
+            cookie_jar.add(cookie)
+        }
+
+        cookie_jar
+    }
+
+    fn cookie<T: AsRef<str>>(&self, cookie: T) -> Option<Cookie> {
+        self.cookies()
+            .get(cookie.as_ref())
+            .and_then(|c| Some(c.to_owned()))
+    }
+}
+*/
 
 fn load_or_empty<T>(
     query_result: Result<Vec<T>, diesel::result::Error>,

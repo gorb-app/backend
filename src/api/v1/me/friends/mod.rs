@@ -1,38 +1,42 @@
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use std::sync::Arc;
+
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 use serde::Deserialize;
 
 pub mod uuid;
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     objects::Me,
-    utils::{get_auth_header, global_checks, user_uuid_from_username}
+    utils::{global_checks, user_uuid_from_username},
 };
 
 /// Returns a list of users that are your friends
-#[get("/friends")]
-pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+pub async fn get(
+    State(app_state): State<Arc<AppState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let friends = me.get_friends(&data).await?;
+    let friends = me.get_friends(&app_state).await?;
 
-    Ok(HttpResponse::Ok().json(friends))
+    Ok((StatusCode::OK, Json(friends)))
 }
 
 #[derive(Deserialize)]
-struct UserReq {
+pub struct UserReq {
     username: String,
 }
 
@@ -55,26 +59,21 @@ struct UserReq {
 ///
 /// 400 Bad Request (usually means users are already friends)
 ///
-#[post("/friends")]
 pub async fn post(
-    req: HttpRequest,
-    json: web::Json<UserReq>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Json(user_request): Json<UserReq>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let target_uuid = user_uuid_from_username(&mut conn, &json.username).await?;
+    let target_uuid = user_uuid_from_username(&mut conn, &user_request.username).await?;
     me.add_friend(&mut conn, target_uuid).await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }

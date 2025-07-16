@@ -1,38 +1,39 @@
-use actix_web::{HttpRequest, HttpResponse, post, web};
+use std::sync::Arc;
+
 use argon2::{PasswordHash, PasswordVerifier};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum_extra::{
+    TypedHeader,
+    headers::authorization::{Authorization, Bearer},
+};
 use diesel::{ExpressionMethods, QueryDsl, delete};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     schema::refresh_tokens::{self, dsl as rdsl},
     schema::users::dsl as udsl,
-    utils::get_auth_header,
 };
 
 #[derive(Deserialize)]
-struct RevokeRequest {
+pub struct RevokeRequest {
     password: String,
     device_name: String,
 }
 
 // TODO: Should maybe be a delete request?
-#[post("/revoke")]
-pub async fn res(
-    req: HttpRequest,
-    revoke_request: web::Json<RevokeRequest>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+#[axum::debug_handler]
+pub async fn post(
+    State(app_state): State<Arc<AppState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Json(revoke_request): Json<RevokeRequest>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
     let database_password: String = udsl::users
         .filter(udsl::uuid.eq(uuid))
@@ -43,7 +44,7 @@ pub async fn res(
     let hashed_password = PasswordHash::new(&database_password)
         .map_err(|e| Error::PasswordHashError(e.to_string()))?;
 
-    if data
+    if app_state
         .argon2
         .verify_password(revoke_request.password.as_bytes(), &hashed_password)
         .is_err()
@@ -59,5 +60,5 @@ pub async fn res(
         .execute(&mut conn)
         .await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }

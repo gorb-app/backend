@@ -1,6 +1,10 @@
 //! `/api/v1` Contains version 1 of the api
 
-use actix_web::{Scope, web};
+use std::sync::Arc;
+
+use axum::{routing::get, Router};
+
+use crate::AppState;
 
 mod auth;
 mod channels;
@@ -10,13 +14,13 @@ mod me;
 mod stats;
 mod users;
 
-pub fn web() -> Scope {
-    web::scope("/v1")
-        .service(stats::res)
-        .service(auth::web())
-        .service(users::web())
-        .service(channels::web())
-        .service(guilds::web())
-        .service(invites::web())
-        .service(me::web())
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/stats", get(stats::res))
+        .nest("/auth", auth::router())
+        .nest("/users", users::router())
+        .nest("/channels", channels::router())
+        .nest("/guilds", guilds::router())
+        .nest("/invites", invites::router())
+        .nest("/me", me::router())
 }

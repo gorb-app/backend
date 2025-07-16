@@ -1,13 +1,13 @@
-use actix_cors::Cors;
-use actix_web::{App, HttpServer, web};
 use argon2::Argon2;
+use axum::Router;
 use clap::Parser;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
 use error::Error;
 use objects::MailClient;
-use simple_logger::SimpleLogger;
-use std::time::SystemTime;
+use socketioxide::SocketIo;
+use std::{sync::Arc, time::SystemTime};
+use tower_http::cors::{Any, CorsLayer};
 mod config;
 use config::{Config, ConfigBuilder};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
@@ -22,6 +22,7 @@ pub mod error;
 pub mod objects;
 pub mod schema;
 pub mod utils;
+mod socket;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -31,7 +32,7 @@ struct Args {
 }
 
 #[derive(Clone)]
-pub struct Data {
+pub struct AppState {
     pub pool: deadpool::managed::Pool<
         AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>,
         Conn,
@@ -46,12 +47,14 @@ pub struct Data {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    SimpleLogger::new()
-        .with_level(log::LevelFilter::Info)
-        .with_colors(true)
-        .env()
-        .init()
-        .unwrap();
+    tracing_subscriber::fmt::init();
+
+    //SimpleLogger::new()
+    //    .with_level(log::LevelFilter::Info)
+    //    .with_colors(true)
+    //    .env()
+    //    .init()
+    //    .unwrap();
     let args = Args::parse();
 
     let config = ConfigBuilder::load(args.config).await?.build();
@@ -112,7 +115,7 @@ async fn main() -> Result<(), Error> {
         )
     */
 
-    let data = Data {
+    let app_state = Arc::new(AppState {
         pool,
         cache_pool,
         config,
@@ -121,42 +124,31 @@ async fn main() -> Result<(), Error> {
         start_time: SystemTime::now(),
         bunny_storage,
         mail_client,
-    };
+    });
 
-    HttpServer::new(move || {
-        // Set CORS headers
-        let cors = Cors::default()
-            /*
-                Set Allowed-Control-Allow-Origin header to whatever
-                the request's Origin header is. Must be done like this
-                rather than setting it to "*" due to CORS not allowing
-                sending of credentials (cookies) with wildcard origin.
-            */
-            .allowed_origin_fn(|_origin, _req_head| true)
-            /*
-                Allows any request method in CORS preflight requests.
-                This will be restricted to only ones actually in use later.
-            */
-            .allow_any_method()
-            /*
-                Allows any header(s) in request in CORS preflight requests.
-                This wll be restricted to only ones actually in use later.
-            */
-            .allow_any_header()
-            /*
-                Allows browser to include cookies in requests.
-                This is needed for receiving the secure HttpOnly refresh_token cookie.
-            */
-            .supports_credentials();
+    let cors = CorsLayer::new()
+        // Allow any origin (equivalent to allowed_origin_fn returning true)
+        .allow_origin(Any)
+        // Allow any method
+        .allow_methods(Any)
+        // Allow any headers
+        .allow_headers(Any);
 
-        App::new()
-            .app_data(web::Data::new(data.clone()))
-            .wrap(cors)
-            .service(api::web(data.config.web.backend_url.path()))
-    })
-    .bind((web.ip, web.port))?
-    .run()
-    .await?;
+    let (socket_io, io) = SocketIo::builder().with_state(app_state.clone()).build_layer();
+
+    io.ns("/", socket::on_connect);
+
+    // build our application with a route
+    let app = Router::new()
+        // `GET /` goes to `root`
+        .nest(web.backend_url.path(), api::router())
+        .with_state(app_state)
+        .layer(cors)
+        .layer(socket_io);
+
+    // run our app with hyper, listening globally on port 3000
+    let listener = tokio::net::TcpListener::bind(web.ip + ":" + &web.port.to_string()).await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }

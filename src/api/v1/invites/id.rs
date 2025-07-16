@@ -1,49 +1,53 @@
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use std::sync::Arc;
+
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     objects::{Guild, Invite, Member},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
 
-#[get("{id}")]
-pub async fn get(path: web::Path<(String,)>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let mut conn = data.pool.get().await?;
-
-    let invite_id = path.into_inner().0;
+pub async fn get(
+    State(app_state): State<Arc<AppState>>,
+    Path(invite_id): Path<String>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
     let invite = Invite::fetch_one(&mut conn, invite_id).await?;
 
     let guild = Guild::fetch_one(&mut conn, invite.guild_uuid).await?;
 
-    Ok(HttpResponse::Ok().json(guild))
+    Ok((StatusCode::OK, Json(guild)))
 }
 
-#[post("{id}")]
 pub async fn join(
-    req: HttpRequest,
-    path: web::Path<(String,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(invite_id): Path<String>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let invite_id = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     let invite = Invite::fetch_one(&mut conn, invite_id).await?;
 
     let guild = Guild::fetch_one(&mut conn, invite.guild_uuid).await?;
 
-    Member::new(&data, uuid, guild.uuid).await?;
+    Member::new(&app_state, uuid, guild.uuid).await?;
 
-    Ok(HttpResponse::Ok().json(guild))
+    Ok((StatusCode::OK, Json(guild)))
 }

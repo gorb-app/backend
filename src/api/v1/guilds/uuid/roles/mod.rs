@@ -1,82 +1,78 @@
+use std::sync::Arc;
+
 use ::uuid::Uuid;
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 use serde::Deserialize;
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     objects::{Member, Permissions, Role},
-    utils::{get_auth_header, global_checks, order_by_is_above},
+    utils::{global_checks, order_by_is_above},
 };
 
 pub mod uuid;
 
 #[derive(Deserialize)]
-struct RoleInfo {
+pub struct RoleInfo {
     name: String,
 }
 
-#[get("{uuid}/roles")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    if let Ok(cache_hit) = data.get_cache_key(format!("{guild_uuid}_roles")).await {
-        return Ok(HttpResponse::Ok()
-            .content_type("application/json")
-            .body(cache_hit));
+    if let Ok(cache_hit) = app_state.get_cache_key(format!("{guild_uuid}_roles")).await {
+        return Ok((StatusCode::OK, Json(cache_hit)).into_response());
     }
 
     let roles = Role::fetch_all(&mut conn, guild_uuid).await?;
 
     let roles_ordered = order_by_is_above(roles).await?;
 
-    data.set_cache_key(format!("{guild_uuid}_roles"), roles_ordered.clone(), 1800)
+    app_state
+        .set_cache_key(format!("{guild_uuid}_roles"), roles_ordered.clone(), 1800)
         .await?;
 
-    Ok(HttpResponse::Ok().json(roles_ordered))
+    Ok((StatusCode::OK, Json(roles_ordered)).into_response())
 }
 
-#[post("{uuid}/roles")]
 pub async fn create(
-    req: HttpRequest,
-    role_info: web::Json<RoleInfo>,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Json(role_info): Json<RoleInfo>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&data, Permissions::ManageRole)
+        .check_permission(&app_state, Permissions::ManageRole)
         .await?;
 
     let role = Role::new(&mut conn, guild_uuid, role_info.name.clone()).await?;
 
-    Ok(HttpResponse::Ok().json(role))
+    Ok((StatusCode::OK, Json(role)).into_response())
 }

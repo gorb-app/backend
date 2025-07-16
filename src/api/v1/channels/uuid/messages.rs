@@ -1,18 +1,29 @@
 //! `/api/v1/channels/{uuid}/messages` Endpoints related to channel messages
 
+use std::sync::Arc;
+
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     objects::{Channel, Member},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
 use ::uuid::Uuid;
-use actix_web::{HttpRequest, HttpResponse, get, web};
+use axum::{
+    Json,
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
-struct MessageRequest {
+pub struct MessageRequest {
     amount: i64,
     offset: i64,
 }
@@ -47,32 +58,25 @@ struct MessageRequest {
 /// });
 /// ```
 ///
-#[get("/{uuid}/messages")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    message_request: web::Query<MessageRequest>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(channel_uuid): Path<Uuid>,
+    Query(message_request): Query<MessageRequest>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let channel_uuid = path.into_inner().0;
+    global_checks(&app_state, uuid).await?;
 
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
-
-    let channel = Channel::fetch_one(&data, channel_uuid).await?;
+    let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
     Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     let messages = channel
-        .fetch_messages(&data, message_request.amount, message_request.offset)
+        .fetch_messages(&app_state, message_request.amount, message_request.offset)
         .await?;
 
-    Ok(HttpResponse::Ok().json(messages))
+    Ok((StatusCode::OK, Json(messages)))
 }

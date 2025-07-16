@@ -1,37 +1,41 @@
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use std::sync::Arc;
+
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     objects::{Guild, Member, Permissions},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
 
 #[derive(Deserialize)]
-struct InviteRequest {
+pub struct InviteRequest {
     custom_id: Option<String>,
 }
 
-#[get("{uuid}/invites")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
@@ -39,32 +43,25 @@ pub async fn get(
 
     let invites = guild.get_invites(&mut conn).await?;
 
-    Ok(HttpResponse::Ok().json(invites))
+    Ok((StatusCode::OK, Json(invites)))
 }
 
-#[post("{uuid}/invites")]
 pub async fn create(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    invite_request: web::Json<InviteRequest>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Json(invite_request): Json<InviteRequest>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&data, Permissions::CreateInvite)
+        .check_permission(&app_state, Permissions::CreateInvite)
         .await?;
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
@@ -73,5 +70,5 @@ pub async fn create(
         .create_invite(&mut conn, uuid, invite_request.custom_id.clone())
         .await?;
 
-    Ok(HttpResponse::Ok().json(invite))
+    Ok((StatusCode::OK, Json(invite)))
 }

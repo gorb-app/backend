@@ -1,14 +1,25 @@
 //! `/api/v1/users/{uuid}` Specific user endpoints
 
-use actix_web::{HttpRequest, HttpResponse, get, web};
+use std::sync::Arc;
+
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 use uuid::Uuid;
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     objects::{Me, User},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
 
 /// `GET /api/v1/users/{uuid}` Returns user with the given UUID
@@ -27,27 +38,20 @@ use crate::{
 /// });
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
-#[get("/{uuid}")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(user_uuid): Path<Uuid>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let user_uuid = path.into_inner().0;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    global_checks(&app_state, uuid).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let user = User::fetch_one_with_friendship(&data, &me, user_uuid).await?;
+    let user = User::fetch_one_with_friendship(&app_state, &me, user_uuid).await?;
 
-    Ok(HttpResponse::Ok().json(user))
+    Ok((StatusCode::OK, Json(user)))
 }

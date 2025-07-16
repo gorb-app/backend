@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
+    AppState, Conn,
     error::Error,
     objects::{Me, Permissions, Role},
     schema::guild_members,
@@ -26,13 +26,13 @@ pub struct MemberBuilder {
 }
 
 impl MemberBuilder {
-    pub async fn build(&self, data: &Data, me: Option<&Me>) -> Result<Member, Error> {
+    pub async fn build(&self, app_state: &AppState, me: Option<&Me>) -> Result<Member, Error> {
         let user;
 
         if let Some(me) = me {
-            user = User::fetch_one_with_friendship(data, me, self.user_uuid).await?;
+            user = User::fetch_one_with_friendship(app_state, me, self.user_uuid).await?;
         } else {
-            user = User::fetch_one(data, self.user_uuid).await?;
+            user = User::fetch_one(app_state, self.user_uuid).await?;
         }
 
         Ok(Member {
@@ -47,11 +47,11 @@ impl MemberBuilder {
 
     pub async fn check_permission(
         &self,
-        data: &Data,
+        app_state: &AppState,
         permission: Permissions,
     ) -> Result<(), Error> {
         if !self.is_owner {
-            let roles = Role::fetch_from_member(data, self.uuid).await?;
+            let roles = Role::fetch_from_member(app_state, self.uuid).await?;
             let allowed = roles.iter().any(|r| r.permissions & permission as i64 != 0);
             if !allowed {
                 return Err(Error::Forbidden("Not allowed".to_string()));
@@ -101,12 +101,12 @@ impl Member {
     }
 
     pub async fn fetch_one(
-        data: &Data,
+        app_state: &AppState,
         me: &Me,
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, Error> {
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use guild_members::dsl;
         let member: MemberBuilder = dsl::guild_members
@@ -116,11 +116,15 @@ impl Member {
             .get_result(&mut conn)
             .await?;
 
-        member.build(data, Some(me)).await
+        member.build(app_state, Some(me)).await
     }
 
-    pub async fn fetch_all(data: &Data, me: &Me, guild_uuid: Uuid) -> Result<Vec<Self>, Error> {
-        let mut conn = data.pool.get().await?;
+    pub async fn fetch_all(
+        app_state: &AppState,
+        me: &Me,
+        guild_uuid: Uuid,
+    ) -> Result<Vec<Self>, Error> {
+        let mut conn = app_state.pool.get().await?;
 
         use guild_members::dsl;
         let member_builders: Vec<MemberBuilder> = load_or_empty(
@@ -134,14 +138,18 @@ impl Member {
         let mut members = vec![];
 
         for builder in member_builders {
-            members.push(builder.build(&data, Some(me)).await?);
+            members.push(builder.build(app_state, Some(me)).await?);
         }
 
         Ok(members)
     }
 
-    pub async fn new(data: &Data, user_uuid: Uuid, guild_uuid: Uuid) -> Result<Self, Error> {
-        let mut conn = data.pool.get().await?;
+    pub async fn new(
+        app_state: &AppState,
+        user_uuid: Uuid,
+        guild_uuid: Uuid,
+    ) -> Result<Self, Error> {
+        let mut conn = app_state.pool.get().await?;
 
         let member_uuid = Uuid::now_v7();
 
@@ -158,6 +166,6 @@ impl Member {
             .execute(&mut conn)
             .await?;
 
-        member.build(data, None).await
+        member.build(app_state, None).await
     }
 }

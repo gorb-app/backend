@@ -1,16 +1,21 @@
 //! `/api/v1/auth/devices` Returns list of logged in devices
 
-use actix_web::{HttpRequest, HttpResponse, get, web};
+use std::sync::Arc;
+
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
 
 use crate::{
-    Data,
+    AppState,
     api::v1::auth::check_access_token,
     error::Error,
     schema::refresh_tokens::{self, dsl},
-    utils::get_auth_header,
 };
 
 #[derive(Serialize, Selectable, Queryable)]
@@ -18,7 +23,7 @@ use crate::{
 #[diesel(check_for_backend(diesel::pg::Pg))]
 struct Device {
     device_name: String,
-    created_at: i64
+    created_at: i64,
 }
 
 /// `GET /api/v1/auth/devices` Returns list of logged in devices
@@ -35,18 +40,13 @@ struct Device {
 ///     
 /// ]);
 /// ```
-#[get("/devices")]
 pub async fn get(
-    req: HttpRequest,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
     let devices: Vec<Device> = dsl::refresh_tokens
         .filter(dsl::uuid.eq(uuid))
@@ -54,5 +54,5 @@ pub async fn get(
         .get_results(&mut conn)
         .await?;
 
-    Ok(HttpResponse::Ok().json(devices))
+    Ok((StatusCode::OK, Json(devices)))
 }

@@ -1,18 +1,25 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use actix_web::{HttpResponse, post, web};
 use argon2::{
     PasswordHasher,
     password_hash::{SaltString, rand_core::OsRng},
+};
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderValue, StatusCode},
+    response::IntoResponse,
 };
 use diesel::{ExpressionMethods, dsl::insert_into};
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::Response;
 use crate::{
-    Data,
+    AppState,
     error::Error,
     objects::Member,
     schema::{
@@ -21,12 +28,13 @@ use crate::{
         users::{self, dsl as udsl},
     },
     utils::{
-        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_token, new_refresh_token_cookie,
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_token, new_access_token_cookie,
+        new_refresh_token_cookie,
     },
 };
 
 #[derive(Deserialize)]
-struct AccountInformation {
+pub struct AccountInformation {
     identifier: String,
     email: String,
     password: String,
@@ -34,17 +42,13 @@ struct AccountInformation {
 }
 
 #[derive(Serialize)]
-struct ResponseError {
+pub struct ResponseError {
     signups_enabled: bool,
     gorb_id_valid: bool,
     gorb_id_available: bool,
     email_valid: bool,
     email_available: bool,
-    password_hashed: bool,
-    password_minimum_length: bool,
-    password_special_characters: bool,
-    password_letters: bool,
-    password_numbers: bool,
+    password_strength: bool,
 }
 
 impl Default for ResponseError {
@@ -55,21 +59,16 @@ impl Default for ResponseError {
             gorb_id_available: true,
             email_valid: true,
             email_available: true,
-            password_hashed: true,
-            password_minimum_length: true,
-            password_special_characters: true,
-            password_letters: true,
-            password_numbers: true,
+            password_strength: true,
         }
     }
 }
 
-#[post("/register")]
-pub async fn res(
-    account_information: web::Json<AccountInformation>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    if !data.config.instance.registration {
+pub async fn post(
+    State(app_state): State<Arc<AppState>>,
+    Json(account_information): Json<AccountInformation>,
+) -> Result<impl IntoResponse, Error> {
+    if !app_state.config.instance.registration {
         return Err(Error::Forbidden(
             "registration is disabled on this instance".to_string(),
         ));
@@ -78,36 +77,48 @@ pub async fn res(
     let uuid = Uuid::now_v7();
 
     if !EMAIL_REGEX.is_match(&account_information.email) {
-        return Ok(HttpResponse::Forbidden().json(ResponseError {
-            email_valid: false,
-            ..Default::default()
-        }));
+        return Ok((
+            StatusCode::FORBIDDEN,
+            Json(ResponseError {
+                email_valid: false,
+                ..Default::default()
+            }),
+        )
+            .into_response());
     }
 
     if !USERNAME_REGEX.is_match(&account_information.identifier)
         || account_information.identifier.len() < 3
         || account_information.identifier.len() > 32
     {
-        return Ok(HttpResponse::Forbidden().json(ResponseError {
-            gorb_id_valid: false,
-            ..Default::default()
-        }));
+        return Ok((
+            StatusCode::FORBIDDEN,
+            Json(ResponseError {
+                gorb_id_valid: false,
+                ..Default::default()
+            }),
+        )
+            .into_response());
     }
 
     if !PASSWORD_REGEX.is_match(&account_information.password) {
-        return Ok(HttpResponse::Forbidden().json(ResponseError {
-            password_hashed: false,
-            ..Default::default()
-        }));
+        return Ok((
+            StatusCode::FORBIDDEN,
+            Json(ResponseError {
+                password_strength: false,
+                ..Default::default()
+            }),
+        )
+            .into_response());
     }
 
     let salt = SaltString::generate(&mut OsRng);
 
-    if let Ok(hashed_password) = data
+    if let Ok(hashed_password) = app_state
         .argon2
         .hash_password(account_information.password.as_bytes(), &salt)
     {
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         // TODO: Check security of this implementation
         insert_into(users::table)
@@ -145,14 +156,27 @@ pub async fn res(
             .execute(&mut conn)
             .await?;
 
-        if let Some(initial_guild) = data.config.instance.initial_guild {
-            Member::new(&data, uuid, initial_guild).await?;
+        if let Some(initial_guild) = app_state.config.instance.initial_guild {
+            Member::new(&app_state, uuid, initial_guild).await?;
         }
 
-        return Ok(HttpResponse::Ok()
-            .cookie(new_refresh_token_cookie(&data.config, refresh_token))
-            .json(Response { access_token }));
+        let mut response = StatusCode::OK.into_response();
+
+        response.headers_mut().append(
+            "Set-Cookie",
+            HeaderValue::from_str(
+                &new_refresh_token_cookie(&app_state.config, refresh_token).to_string(),
+            )?,
+        );
+        response.headers_mut().append(
+            "Set-Cookie2",
+            HeaderValue::from_str(
+                &new_access_token_cookie(&app_state.config, access_token).to_string(),
+            )?,
+        );
+
+        return Ok(response);
     }
 
-    Ok(HttpResponse::InternalServerError().finish())
+    Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }

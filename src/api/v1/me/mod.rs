@@ -1,108 +1,120 @@
-use actix_multipart::form::{MultipartForm, json::Json as MpJson, tempfile::TempFile};
-use actix_web::{HttpRequest, HttpResponse, Scope, get, patch, web};
+use std::sync::Arc;
+
+use axum::{
+    Json, Router,
+    extract::{DefaultBodyLimit, Multipart, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{delete, get, patch, post},
+};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
+use bytes::Bytes;
 use serde::Deserialize;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::Me,
-    utils::{get_auth_header, global_checks},
+    AppState, api::v1::auth::check_access_token, error::Error, objects::Me, utils::global_checks,
 };
 
 mod friends;
 mod guilds;
 
-pub fn web() -> Scope {
-    web::scope("/me")
-        .service(get)
-        .service(update)
-        .service(guilds::get)
-        .service(friends::get)
-        .service(friends::post)
-        .service(friends::uuid::delete)
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", get(get_me))
+        .route(
+            "/",
+            patch(update).layer(DefaultBodyLimit::max(
+                100 * 1024 * 1024, /* limit is in bytes */
+            )),
+        )
+        .route("/guilds", get(guilds::get))
+        .route("/friends", get(friends::get))
+        .route("/friends", post(friends::post))
+        .route("/friends/{uuid}", delete(friends::uuid::delete))
 }
 
-#[get("")]
-pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+pub async fn get_me(
+    State(app_state): State<Arc<AppState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    Ok(HttpResponse::Ok().json(me))
+    Ok((StatusCode::OK, Json(me)))
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Default, Debug, Deserialize, Clone)]
 struct NewInfo {
     username: Option<String>,
     display_name: Option<String>,
-    //password: Option<String>, will probably be handled through a reset password link
     email: Option<String>,
     pronouns: Option<String>,
     about: Option<String>,
 }
 
-#[derive(Debug, MultipartForm)]
-struct UploadForm {
-    #[multipart(limit = "100MB")]
-    avatar: Option<TempFile>,
-    json: MpJson<NewInfo>,
-}
-
-#[patch("")]
 pub async fn update(
-    req: HttpRequest,
-    MultipartForm(form): MultipartForm<UploadForm>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
-    let mut conn = data.pool.get().await?;
+    let mut json_raw: Option<NewInfo> = None;
+    let mut avatar: Option<Bytes> = None;
 
-    let uuid = check_access_token(auth_header, &mut conn).await?;
+    while let Some(field) = multipart.next_field().await.unwrap() {
+        let name = field
+            .name()
+            .ok_or(Error::BadRequest("Field has no name".to_string()))?;
 
-    if form.avatar.is_some() || form.json.username.is_some() || form.json.display_name.is_some() {
-        global_checks(&data, uuid).await?;
+        if name == "avatar" {
+            avatar = Some(field.bytes().await?);
+        } else if name == "json" {
+            json_raw = Some(serde_json::from_str(&field.text().await?)?)
+        }
+    }
+
+    let json = json_raw.unwrap_or_default();
+
+    if avatar.is_some() || json.username.is_some() || json.display_name.is_some() {
+        global_checks(&app_state, uuid).await?;
     }
 
     let mut me = Me::get(&mut conn, uuid).await?;
 
-    if let Some(avatar) = form.avatar {
-        let bytes = tokio::fs::read(avatar.file).await?;
-
-        let byte_slice: &[u8] = &bytes;
-
-        me.set_avatar(&data, data.config.bunny.cdn_url.clone(), byte_slice.into())
+    if let Some(avatar) = avatar {
+        me.set_avatar(&app_state, app_state.config.bunny.cdn_url.clone(), avatar)
             .await?;
     }
 
-    if let Some(username) = &form.json.username {
-        me.set_username(&data, username.clone()).await?;
+    if let Some(username) = &json.username {
+        me.set_username(&app_state, username.clone()).await?;
     }
 
-    if let Some(display_name) = &form.json.display_name {
-        me.set_display_name(&data, display_name.clone()).await?;
+    if let Some(display_name) = &json.display_name {
+        me.set_display_name(&app_state, display_name.clone())
+            .await?;
     }
 
-    if let Some(email) = &form.json.email {
-        me.set_email(&data, email.clone()).await?;
+    if let Some(email) = &json.email {
+        me.set_email(&app_state, email.clone()).await?;
     }
 
-    if let Some(pronouns) = &form.json.pronouns {
-        me.set_pronouns(&data, pronouns.clone()).await?;
+    if let Some(pronouns) = &json.pronouns {
+        me.set_pronouns(&app_state, pronouns.clone()).await?;
     }
 
-    if let Some(about) = &form.json.about {
-        me.set_about(&data, about.clone()).await?;
+    if let Some(about) = &json.about {
+        me.set_about(&app_state, about.clone()).await?;
     }
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }

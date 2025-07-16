@@ -1,7 +1,16 @@
-use actix_web::{Scope, web};
+use std::sync::Arc;
+
+use axum::{
+    Router,
+    routing::{get, post},
+};
+
+use crate::AppState;
 
 mod id;
 
-pub fn web() -> Scope {
-    web::scope("/invites").service(id::get).service(id::join)
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/{id}", get(id::get))
+        .route("/{id}", post(id::join))
 }
