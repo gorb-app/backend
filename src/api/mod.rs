@@ -9,8 +9,8 @@ use crate::AppState;
 mod v1;
 mod versions;
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router(path: &str) -> Router<Arc<AppState>> {
     Router::new()
-        .route("/versions", get(versions::versions))
-        .nest("/v1", v1::router())
+        .route(&format!("{path}/versions"), get(versions::versions))
+        .nest(&format!("{path}/v1"), v1::router())
 }

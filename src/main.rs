@@ -141,7 +141,7 @@ async fn main() -> Result<(), Error> {
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
-        .nest(web.backend_url.path(), api::router())
+        .merge(api::router(web.backend_url.path().trim_end_matches("/")))
         .with_state(app_state)
         .layer(cors)
         .layer(socket_io);
