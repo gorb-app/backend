@@ -7,7 +7,7 @@ use error::Error;
 use objects::MailClient;
 use socketioxide::SocketIo;
 use std::{sync::Arc, time::SystemTime};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
 mod config;
 use config::{Config, ConfigBuilder};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
@@ -128,11 +128,21 @@ async fn main() -> Result<(), Error> {
 
     let cors = CorsLayer::new()
         // Allow any origin (equivalent to allowed_origin_fn returning true)
-        .allow_origin(Any)
+        .allow_origin(AllowOrigin::predicate(|_origin, _request_head| {
+            true
+        }))
         // Allow any method
-        .allow_methods(Any)
+        .allow_methods(AllowMethods::mirror_request())
         // Allow any headers
-        .allow_headers(Any);
+        .allow_headers(AllowHeaders::mirror_request())
+        /*
+        vec![
+            "content-type".parse().unwrap(),
+            "authorization".parse().unwrap(),
+        ]
+        */
+        // Allow credentials
+        .allow_credentials(true);
 
     let (socket_io, io) = SocketIo::builder().with_state(app_state.clone()).build_layer();
 
