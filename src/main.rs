@@ -1,5 +1,5 @@
 use argon2::Argon2;
-use axum::Router;
+use axum::{http::header, Router};
 use clap::Parser;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
@@ -131,16 +131,22 @@ async fn main() -> Result<(), Error> {
         .allow_origin(AllowOrigin::predicate(|_origin, _request_head| {
             true
         }))
-        // Allow any method
-        .allow_methods(AllowMethods::mirror_request())
-        // Allow any headers
-        .allow_headers(AllowHeaders::mirror_request())
-        /*
-        vec![
-            "content-type".parse().unwrap(),
-            "authorization".parse().unwrap(),
-        ]
-        */
+        .allow_methods(AllowMethods::list([
+            "GET".parse().unwrap(),
+            "POST".parse().unwrap(),
+            "PUT".parse().unwrap(),
+            "PATCH".parse().unwrap(),
+            "DELETE".parse().unwrap(), 
+            "OPTIONS".parse().unwrap(),
+        ]))
+        .allow_headers(AllowHeaders::list([
+            header::AUTHORIZATION,
+            header::CONTENT_TYPE,
+            header::ORIGIN,
+            header::ACCEPT,
+            header::COOKIE,
+            "x-requested-with".parse().unwrap(),
+        ]))
         // Allow credentials
         .allow_credentials(true);
 
