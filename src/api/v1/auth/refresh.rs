@@ -1,7 +1,7 @@
 use axum::{
     extract::State,
     http::{HeaderValue, StatusCode},
-    response::IntoResponse,
+    response::IntoResponse, Json,
 };
 use axum_extra::extract::CookieJar;
 use diesel::{ExpressionMethods, QueryDsl, delete, update};
@@ -12,6 +12,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use super::Response;
 use crate::{
     AppState,
     error::Error,
@@ -19,7 +20,7 @@ use crate::{
         access_tokens::{self, dsl},
         refresh_tokens::{self, dsl as rdsl},
     },
-    utils::{generate_token, new_access_token_cookie, new_refresh_token_cookie},
+    utils::{generate_token, new_refresh_token_cookie},
 };
 
 pub async fn post(
@@ -33,9 +34,7 @@ pub async fn post(
         ))?
         .to_owned();
 
-    let access_token_cookie = jar.get("access_token");
-
-    let refresh_token = String::from(refresh_token_cookie.value_trimmed());
+    let mut refresh_token = String::from(refresh_token_cookie.value_trimmed());
 
     let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
@@ -66,20 +65,10 @@ pub async fn post(
                 HeaderValue::from_str(&refresh_token_cookie.to_string())?,
             );
 
-            if let Some(cookie) = access_token_cookie {
-                let mut cookie = cookie.clone();
-                cookie.make_removal();
-                response
-                    .headers_mut()
-                    .append("Set-Cookie", HeaderValue::from_str(&cookie.to_string())?);
-            }
-
             return Ok(response);
         }
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
-
-        let mut response = StatusCode::OK.into_response();
 
         if lifetime > 1987200 {
             let new_refresh_token = generate_token::<32>()?;
@@ -94,13 +83,7 @@ pub async fn post(
                 .await
             {
                 Ok(_) => {
-                    response.headers_mut().append(
-                        "Set-Cookie",
-                        HeaderValue::from_str(
-                            &new_refresh_token_cookie(&app_state.config, new_refresh_token)
-                                .to_string(),
-                        )?,
-                    );
+                    refresh_token = new_refresh_token;
                 }
                 Err(error) => {
                     error!("{error}");
@@ -119,13 +102,16 @@ pub async fn post(
             .execute(&mut conn)
             .await?;
 
-        
+        let mut response = (StatusCode::OK, Json(Response { access_token })).into_response();
+
+        // TODO: Dont set this when refresh token is unchanged
         response.headers_mut().append(
             "Set-Cookie",
             HeaderValue::from_str(
-                &new_access_token_cookie(access_token).to_string(),
+                &new_refresh_token_cookie(&app_state.config, refresh_token).to_string(),
             )?,
         );
+        
 
         return Ok(response);
     }
@@ -137,14 +123,6 @@ pub async fn post(
         "Set-Cookie",
         HeaderValue::from_str(&refresh_token_cookie.to_string())?,
     );
-
-    if let Some(cookie) = access_token_cookie {
-        let mut cookie = cookie.clone();
-        cookie.make_removal();
-        response
-            .headers_mut()
-            .append("Set-Cookie", HeaderValue::from_str(&cookie.to_string())?);
-    }
 
     Ok(response)
 }

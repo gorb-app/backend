@@ -7,7 +7,7 @@ use error::Error;
 use objects::MailClient;
 use socketioxide::SocketIo;
 use std::{sync::Arc, time::SystemTime};
-use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
 mod config;
 use config::{Config, ConfigBuilder};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};

@@ -18,6 +18,7 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::Response;
 use crate::{
     AppState,
     error::Error,
@@ -28,7 +29,7 @@ use crate::{
         users::{self, dsl as udsl},
     },
     utils::{
-        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_token, new_access_token_cookie,
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_token,
         new_refresh_token_cookie,
     },
 };
@@ -160,18 +161,12 @@ pub async fn post(
             Member::new(&app_state, uuid, initial_guild).await?;
         }
 
-        let mut response = StatusCode::OK.into_response();
+        let mut response = (StatusCode::OK, Json(Response {access_token})).into_response();
 
         response.headers_mut().append(
             "Set-Cookie",
             HeaderValue::from_str(
                 &new_refresh_token_cookie(&app_state.config, refresh_token).to_string(),
-            )?,
-        );
-        response.headers_mut().append(
-            "Set-Cookie",
-            HeaderValue::from_str(
-                &new_access_token_cookie(access_token).to_string(),
             )?,
         );
 

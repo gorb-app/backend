@@ -43,15 +43,6 @@ pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cooki
         .build()
 }
 
-pub fn new_access_token_cookie<'cookie>(access_token: String) -> Cookie<'cookie> {
-    Cookie::build(("access_token", access_token))
-        .http_only(false)
-        .secure(true)
-        .same_site(SameSite::None)
-        .max_age(Duration::hours(1))
-        .build()
-}
-
 pub fn generate_token<const N: usize>() -> Result<String, getrandom::Error> {
     let mut buf = [0u8; N];
     fill(&mut buf)?;

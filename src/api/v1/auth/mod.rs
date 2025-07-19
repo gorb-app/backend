@@ -9,6 +9,7 @@ use axum::{
 };
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{AppState, Conn, error::Error, schema::access_tokens::dsl};
@@ -21,6 +22,13 @@ mod register;
 mod reset_password;
 mod revoke;
 mod verify_email;
+
+
+#[derive(Serialize)]
+pub struct Response {
+    access_token: String,
+}
+
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()

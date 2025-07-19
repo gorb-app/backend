@@ -14,12 +14,13 @@ use diesel::{ExpressionMethods, QueryDsl, dsl::insert_into};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
+use super::Response;
 use crate::{
     AppState,
     error::Error,
     schema::*,
     utils::{
-        PASSWORD_REGEX, generate_token, new_access_token_cookie, new_refresh_token_cookie,
+        PASSWORD_REGEX, generate_token, new_refresh_token_cookie,
         user_uuid_from_identifier,
     },
 };
@@ -93,19 +94,12 @@ pub async fn response(
         .execute(&mut conn)
         .await?;
 
-    let mut response = StatusCode::OK.into_response();
+    let mut response = (StatusCode::OK, Json(Response { access_token })).into_response();
 
     response.headers_mut().append(
         "Set-Cookie",
         HeaderValue::from_str(
             &new_refresh_token_cookie(&app_state.config, refresh_token).to_string(),
-        )?,
-    );
-
-    response.headers_mut().append(
-        "Set-Cookie",
-        HeaderValue::from_str(
-            &new_access_token_cookie(access_token).to_string(),
         )?,
     );
 
