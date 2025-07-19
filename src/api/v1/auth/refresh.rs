@@ -123,7 +123,7 @@ pub async fn post(
         response.headers_mut().append(
             "Set-Cookie",
             HeaderValue::from_str(
-                &new_access_token_cookie(&app_state.config, access_token).to_string(),
+                &new_access_token_cookie(access_token).to_string(),
             )?,
         );
 
