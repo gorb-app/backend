@@ -95,15 +95,15 @@ pub async fn response(
 
     let mut response = StatusCode::OK.into_response();
 
-    response.headers_mut().insert(
+    response.headers_mut().append(
         "Set-Cookie",
         HeaderValue::from_str(
             &new_refresh_token_cookie(&app_state.config, refresh_token).to_string(),
         )?,
     );
 
-    response.headers_mut().insert(
-        "Set-Cookie2",
+    response.headers_mut().append(
+        "Set-Cookie",
         HeaderValue::from_str(
             &new_access_token_cookie(&app_state.config, access_token).to_string(),
         )?,

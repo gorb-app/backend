@@ -71,7 +71,7 @@ pub async fn post(
                 cookie.make_removal();
                 response
                     .headers_mut()
-                    .append("Set-Cookie2", HeaderValue::from_str(&cookie.to_string())?);
+                    .append("Set-Cookie", HeaderValue::from_str(&cookie.to_string())?);
             }
 
             return Ok(response);
@@ -119,21 +119,13 @@ pub async fn post(
             .execute(&mut conn)
             .await?;
 
-        if response.headers().get("Set-Cookie").is_some() {
-            response.headers_mut().append(
-                "Set-Cookie2",
-                HeaderValue::from_str(
-                    &new_access_token_cookie(&app_state.config, access_token).to_string(),
-                )?,
-            );
-        } else {
-            response.headers_mut().append(
-                "Set-Cookie",
-                HeaderValue::from_str(
-                    &new_access_token_cookie(&app_state.config, access_token).to_string(),
-                )?,
-            );
-        }
+        
+        response.headers_mut().append(
+            "Set-Cookie",
+            HeaderValue::from_str(
+                &new_access_token_cookie(&app_state.config, access_token).to_string(),
+            )?,
+        );
 
         return Ok(response);
     }
@@ -151,7 +143,7 @@ pub async fn post(
         cookie.make_removal();
         response
             .headers_mut()
-            .append("Set-Cookie2", HeaderValue::from_str(&cookie.to_string())?);
+            .append("Set-Cookie", HeaderValue::from_str(&cookie.to_string())?);
     }
 
     Ok(response)

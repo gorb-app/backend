@@ -68,7 +68,7 @@ pub async fn res(
         cookie.make_removal();
         response
             .headers_mut()
-            .append("Set-Cookie2", HeaderValue::from_str(&cookie.to_string())?);
+            .append("Set-Cookie", HeaderValue::from_str(&cookie.to_string())?);
     }
 
     Ok(response)
