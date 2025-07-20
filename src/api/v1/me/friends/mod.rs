@@ -1,34 +1,23 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
 use serde::Deserialize;
+use ::uuid::Uuid;
 
 pub mod uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::Me,
-    utils::{global_checks, user_uuid_from_username},
+    api::v1::auth::CurrentUser, error::Error, objects::Me, utils::{global_checks, user_uuid_from_username}, AppState
 };
 
 /// Returns a list of users that are your friends
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
-    let me = Me::get(&mut conn, uuid).await?;
+    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
 
     let friends = me.get_friends(&app_state).await?;
 
@@ -61,14 +50,12 @@ pub struct UserReq {
 ///
 pub async fn post(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(user_request): Json<UserReq>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
+
+    let mut conn = app_state.pool.get().await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 

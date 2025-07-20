@@ -4,9 +4,9 @@ use std::{
 };
 
 use axum::{
-    Router,
-    routing::{delete, get, post},
+    extract::{Request, State}, middleware::{from_fn_with_state, Next}, response::IntoResponse, routing::{delete, get, post}, Router
 };
+use axum_extra::{headers::{authorization::Bearer, Authorization}, TypedHeader};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
@@ -30,18 +30,22 @@ pub struct Response {
 }
 
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+    let router_with_auth = Router::new()
+        .route("/verify-email", get(verify_email::get))
+        .route("/verify-email", post(verify_email::post))
+        .route("/revoke", post(revoke::post))
+        .route("/devices", get(devices::get))
+        .layer(from_fn_with_state(app_state, CurrentUser::check_auth_layer));
+
     Router::new()
         .route("/register", post(register::post))
         .route("/login", post(login::response))
         .route("/logout", delete(logout::res))
         .route("/refresh", post(refresh::post))
-        .route("/revoke", post(revoke::post))
-        .route("/verify-email", get(verify_email::get))
-        .route("/verify-email", post(verify_email::post))
         .route("/reset-password", get(reset_password::get))
         .route("/reset-password", post(reset_password::post))
-        .route("/devices", get(devices::get))
+        .merge(router_with_auth)
 }
 
 pub async fn check_access_token(access_token: &str, conn: &mut Conn) -> Result<Uuid, Error> {
@@ -67,4 +71,21 @@ pub async fn check_access_token(access_token: &str, conn: &mut Conn) -> Result<U
     }
 
     Ok(uuid)
+}
+
+#[derive(Clone)]
+pub struct CurrentUser<Uuid>(pub Uuid);
+
+impl CurrentUser<Uuid> {
+    pub async fn check_auth_layer(
+        State(app_state): State<Arc<AppState>>,
+        TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+        mut req: Request,
+        next: Next
+    ) -> Result<impl IntoResponse, Error> {
+        let current_user = CurrentUser(check_access_token(auth.token(), &mut app_state.pool.get().await?).await?);
+
+        req.extensions_mut().insert(current_user);
+        Ok(next.run(req).await)
+    }
 }

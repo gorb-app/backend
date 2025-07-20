@@ -3,23 +3,12 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
 };
 use uuid::Uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Me, User},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{Me, User}, utils::global_checks, AppState
 };
 
 /// `GET /api/v1/users/{uuid}` Returns user with the given UUID
@@ -41,15 +30,11 @@ use crate::{
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Path(user_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
-    let me = Me::get(&mut conn, uuid).await?;
+    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
 
     let user = User::fetch_one_with_friendship(&app_state, &me, user_uuid).await?;
 

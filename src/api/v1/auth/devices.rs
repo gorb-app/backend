@@ -2,20 +2,14 @@
 
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
 use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
+use uuid::Uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    schema::refresh_tokens::{self, dsl},
+    api::v1::auth::CurrentUser, error::Error, schema::refresh_tokens::{self, dsl}, AppState
 };
 
 #[derive(Serialize, Selectable, Queryable)]
@@ -42,16 +36,12 @@ struct Device {
 /// ```
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     let devices: Vec<Device> = dsl::refresh_tokens
         .filter(dsl::uuid.eq(uuid))
         .select(Device::as_select())
-        .get_results(&mut conn)
+        .get_results(&mut app_state.pool.get().await?)
         .await?;
 
     Ok((StatusCode::OK, Json(devices)))

@@ -2,23 +2,12 @@ use std::sync::Arc;
 
 use ::uuid::Uuid;
 use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
 };
 use serde::Deserialize;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Channel, Member, Permissions},
-    utils::{global_checks, order_by_is_above},
+    api::v1::auth::CurrentUser, error::Error, objects::{Channel, Member, Permissions}, utils::{global_checks, order_by_is_above}, AppState
 };
 
 #[derive(Deserialize)]
@@ -30,15 +19,11 @@ pub struct ChannelInfo {
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Path(guild_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
-    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+    Member::check_membership(&mut app_state.pool.get().await?, uuid, guild_uuid).await?;
 
     if let Ok(cache_hit) = app_state
         .get_cache_key(format!("{guild_uuid}_channels"))
@@ -65,16 +50,12 @@ pub async fn get(
 pub async fn create(
     State(app_state): State<Arc<AppState>>,
     Path(guild_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(channel_info): Json<ChannelInfo>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
-    let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+    let member = Member::check_membership(&mut app_state.pool.get().await?, uuid, guild_uuid).await?;
 
     member
         .check_permission(&app_state, Permissions::ManageChannel)

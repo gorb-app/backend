@@ -3,28 +3,22 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse,
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    response::IntoResponse, Extension,
 };
 use uuid::Uuid;
 
 use crate::{
-    AppState, api::v1::auth::check_access_token, error::Error, objects::Me, utils::global_checks,
+    AppState, api::v1::auth::CurrentUser, error::Error, objects::Me, utils::global_checks,
 };
 
 pub async fn delete(
     State(app_state): State<Arc<AppState>>,
     Path(friend_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
+
+    let mut conn = app_state.pool.get().await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 

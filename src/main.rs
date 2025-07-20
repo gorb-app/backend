@@ -163,7 +163,7 @@ async fn main() -> Result<(), Error> {
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
-        .merge(api::router(web.backend_url.path().trim_end_matches("/")))
+        .merge(api::router(web.backend_url.path().trim_end_matches("/"), app_state.clone()))
         .with_state(app_state)
         .layer(cors)
         .layer(socket_io);

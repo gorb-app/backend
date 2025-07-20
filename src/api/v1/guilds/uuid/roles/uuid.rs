@@ -2,19 +2,12 @@ use std::sync::Arc;
 
 use ::uuid::Uuid;
 use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
 };
 
 use crate::{
     AppState,
-    api::v1::auth::check_access_token,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{Member, Role},
     utils::global_checks,
@@ -23,13 +16,11 @@ use crate::{
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Path((guild_uuid, role_uuid)): Path<(Uuid, Uuid)>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
+
+    let mut conn = app_state.pool.get().await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 

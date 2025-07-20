@@ -3,26 +3,15 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, post},
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    extract::State, http::StatusCode, response::IntoResponse, routing::{get, post}, Extension, Json, Router
 };
 use serde::Deserialize;
+use ::uuid::Uuid;
 
 mod uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Guild, StartAmountQuery},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{Guild, StartAmountQuery}, utils::global_checks, AppState
 };
 
 #[derive(Deserialize)]
@@ -63,14 +52,10 @@ pub fn router() -> Router<Arc<AppState>> {
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
 pub async fn new(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(guild_info): Json<GuildInfo>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
-    let guild = Guild::new(&mut conn, guild_info.name.clone(), uuid).await?;
+    let guild = Guild::new(&mut app_state.pool.get().await?, guild_info.name.clone(), uuid).await?;
 
     Ok((StatusCode::OK, Json(guild)))
 }
@@ -124,14 +109,11 @@ pub async fn new(
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
 pub async fn get_guilds(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(request_query): Json<StartAmountQuery>,
 ) -> Result<impl IntoResponse, Error> {
     let start = request_query.start.unwrap_or(0);
-
     let amount = request_query.amount.unwrap_or(10);
-
-    let uuid = check_access_token(auth.token(), &mut app_state.pool.get().await?).await?;
 
     global_checks(&app_state, uuid).await?;
 

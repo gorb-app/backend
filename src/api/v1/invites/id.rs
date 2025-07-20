@@ -1,19 +1,13 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
+    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
 };
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
-};
+use uuid::Uuid;
 
 use crate::{
     AppState,
-    api::v1::auth::check_access_token,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{Guild, Invite, Member},
     utils::global_checks,
@@ -35,13 +29,11 @@ pub async fn get(
 pub async fn join(
     State(app_state): State<Arc<AppState>>,
     Path(invite_id): Path<String>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
+
+    let mut conn = app_state.pool.get().await?;
 
     let invite = Invite::fetch_one(&mut conn, invite_id).await?;
 

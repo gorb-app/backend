@@ -5,20 +5,14 @@ use std::sync::Arc;
 use axum::{
     extract::{Query, State},
     http::StatusCode,
-    response::IntoResponse,
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    response::IntoResponse, Extension,
 };
 use chrono::{Duration, Utc};
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{EmailToken, Me},
+    api::v1::auth::CurrentUser, error::Error, objects::{EmailToken, Me}, AppState
 };
 
 #[derive(Deserialize)]
@@ -47,11 +41,9 @@ pub struct QueryParams {
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Query(query): Query<QueryParams>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
@@ -87,13 +79,9 @@ pub async fn get(
 ///
 pub async fn post(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
-    let me = Me::get(&mut conn, uuid).await?;
+    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
 
     if me.email_verified {
         return Ok(StatusCode::NO_CONTENT);

@@ -3,15 +3,7 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
-    extract::{Multipart, Path, State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{get, patch, post},
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    extract::{Multipart, Path, State}, http::StatusCode, response::IntoResponse, routing::{get, patch, post}, Extension, Json, Router
 };
 use bytes::Bytes;
 use uuid::Uuid;
@@ -23,7 +15,7 @@ mod roles;
 
 use crate::{
     AppState,
-    api::v1::auth::check_access_token,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{Guild, Member, Permissions},
     utils::global_checks,
@@ -84,13 +76,11 @@ pub fn router() -> Router<Arc<AppState>> {
 pub async fn get_guild(
     State(app_state): State<Arc<AppState>>,
     Path(guild_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
+
+    let mut conn = app_state.pool.get().await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
@@ -105,14 +95,12 @@ pub async fn get_guild(
 pub async fn edit(
     State(app_state): State<Arc<AppState>>,
     Path(guild_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
+
+    let mut conn = app_state.pool.get().await?;
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 

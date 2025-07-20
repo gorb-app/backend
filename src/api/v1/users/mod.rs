@@ -3,23 +3,12 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
-    extract::{Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
+    extract::{Query, State}, http::StatusCode, response::IntoResponse, routing::get, Extension, Json, Router
 };
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
-};
+use ::uuid::Uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{StartAmountQuery, User},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{StartAmountQuery, User}, utils::global_checks, AppState
 };
 
 mod uuid;
@@ -63,7 +52,7 @@ pub fn router() -> Router<Arc<AppState>> {
 pub async fn users(
     State(app_state): State<Arc<AppState>>,
     Query(request_query): Query<StartAmountQuery>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let start = request_query.start.unwrap_or(0);
 
@@ -73,13 +62,9 @@ pub async fn users(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     }
 
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
-    let users = User::fetch_amount(&mut conn, start, amount).await?;
+    let users = User::fetch_amount(&mut app_state.pool.get().await?, start, amount).await?;
 
     Ok((StatusCode::OK, Json(users)).into_response())
 }

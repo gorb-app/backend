@@ -3,22 +3,11 @@
 use std::sync::Arc;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Channel, Member},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{Channel, Member}, utils::global_checks, AppState
 };
 use ::uuid::Uuid;
 use axum::{
-    Json,
-    extract::{Path, Query, State},
-    http::StatusCode,
-    response::IntoResponse,
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    extract::{Path, Query, State}, http::StatusCode, response::IntoResponse, Extension, Json
 };
 use serde::Deserialize;
 
@@ -62,17 +51,13 @@ pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Path(channel_uuid): Path<Uuid>,
     Query(message_request): Query<MessageRequest>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
     let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
+    Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
 
     let messages = channel
         .fetch_messages(&app_state, message_request.amount, message_request.offset)

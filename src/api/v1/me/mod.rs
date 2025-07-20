@@ -1,21 +1,14 @@
 use std::sync::Arc;
 
 use axum::{
-    Json, Router,
-    extract::{DefaultBodyLimit, Multipart, State},
-    http::StatusCode,
-    response::IntoResponse,
-    routing::{delete, get, patch, post},
-};
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
+    extract::{DefaultBodyLimit, Multipart, State}, http::StatusCode, response::IntoResponse, routing::{delete, get, patch, post}, Extension, Json, Router
 };
 use bytes::Bytes;
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::{
-    AppState, api::v1::auth::check_access_token, error::Error, objects::Me, utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::Me, utils::global_checks, AppState
 };
 
 mod friends;
@@ -38,13 +31,9 @@ pub fn router() -> Router<Arc<AppState>> {
 
 pub async fn get_me(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
-    let me = Me::get(&mut conn, uuid).await?;
+    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
 
     Ok((StatusCode::OK, Json(me)))
 }
@@ -60,13 +49,9 @@ struct NewInfo {
 
 pub async fn update(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     let mut json_raw: Option<NewInfo> = None;
     let mut avatar: Option<Bytes> = None;
 
@@ -88,7 +73,7 @@ pub async fn update(
         global_checks(&app_state, uuid).await?;
     }
 
-    let mut me = Me::get(&mut conn, uuid).await?;
+    let mut me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
 
     if let Some(avatar) = avatar {
         me.set_avatar(&app_state, app_state.config.bunny.cdn_url.clone(), avatar)

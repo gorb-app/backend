@@ -1,21 +1,14 @@
 use std::sync::Arc;
 
 use argon2::{PasswordHash, PasswordVerifier};
-use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
-use axum_extra::{
-    TypedHeader,
-    headers::authorization::{Authorization, Bearer},
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
 use diesel::{ExpressionMethods, QueryDsl, delete};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::check_access_token,
-    error::Error,
-    schema::refresh_tokens::{self, dsl as rdsl},
-    schema::users::dsl as udsl,
+    api::v1::auth::CurrentUser, error::Error, schema::{refresh_tokens::{self, dsl as rdsl}, users::dsl as udsl}, AppState
 };
 
 #[derive(Deserialize)]
@@ -28,12 +21,10 @@ pub struct RevokeRequest {
 #[axum::debug_handler]
 pub async fn post(
     State(app_state): State<Arc<AppState>>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(revoke_request): Json<RevokeRequest>,
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
 
     let database_password: String = udsl::users
         .filter(udsl::uuid.eq(uuid))

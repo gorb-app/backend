@@ -7,38 +7,28 @@ use std::sync::Arc;
 
 use crate::{
     AppState,
-    api::v1::auth::check_access_token,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{Channel, Member, Permissions},
     utils::global_checks,
 };
 use axum::{
-    Json,
-    extract::{Path, State},
-    http::StatusCode,
-    response::IntoResponse,
+    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
 };
-use axum_extra::{
-    TypedHeader,
-    headers::{Authorization, authorization::Bearer},
-};
+
 use serde::Deserialize;
 use uuid::Uuid;
 
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Path(channel_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
     let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
+    Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
 
     Ok((StatusCode::OK, Json(channel)))
 }
@@ -46,17 +36,13 @@ pub async fn get(
 pub async fn delete(
     State(app_state): State<Arc<AppState>>,
     Path(channel_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
     let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
+    let member = Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
 
     member
         .check_permission(&app_state, Permissions::ManageChannel)
@@ -108,18 +94,14 @@ pub struct NewInfo {
 pub async fn patch(
     State(app_state): State<Arc<AppState>>,
     Path(channel_uuid): Path<Uuid>,
-    TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(new_info): Json<NewInfo>,
 ) -> Result<impl IntoResponse, Error> {
-    let mut conn = app_state.pool.get().await?;
-
-    let uuid = check_access_token(auth.token(), &mut conn).await?;
-
     global_checks(&app_state, uuid).await?;
 
     let mut channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
+    let member = Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
 
     member
         .check_permission(&app_state, Permissions::ManageChannel)
