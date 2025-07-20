@@ -38,8 +38,6 @@ pub async fn res(
         ))?
         .to_owned();
 
-    let access_token_cookie = jar.get("access_token");
-
     let refresh_token = String::from(refresh_token_cookie.value_trimmed());
 
     let mut conn = app_state.pool.get().await?;
@@ -62,14 +60,6 @@ pub async fn res(
         "Set-Cookie",
         HeaderValue::from_str(&refresh_token_cookie.to_string())?,
     );
-
-    if let Some(cookie) = access_token_cookie {
-        let mut cookie = cookie.clone();
-        cookie.make_removal();
-        response
-            .headers_mut()
-            .append("Set-Cookie", HeaderValue::from_str(&cookie.to_string())?);
-    }
 
     Ok(response)
 }
