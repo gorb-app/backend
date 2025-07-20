@@ -1,33 +1,29 @@
-use actix_web::{HttpRequest, HttpResponse, delete, web};
+use std::sync::Arc;
+
+use axum::{
+    Extension,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use uuid::Uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::Me,
-    utils::{get_auth_header, global_checks},
+    AppState, api::v1::auth::CurrentUser, error::Error, objects::Me, utils::global_checks,
 };
 
-#[delete("/friends/{uuid}")]
 pub async fn delete(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(friend_uuid): Path<Uuid>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    me.remove_friend(&mut conn, path.0).await?;
+    me.remove_friend(&mut conn, friend_uuid).await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }

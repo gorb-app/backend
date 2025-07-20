@@ -104,7 +104,7 @@ diesel::table! {
         token -> Varchar,
         uuid -> Uuid,
         created_at -> Int8,
-        #[max_length = 16]
+        #[max_length = 64]
         device_name -> Varchar,
     }
 }

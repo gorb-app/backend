@@ -1,13 +1,17 @@
 //! `/api/v1/stats` Returns stats about the server
 
+use std::sync::Arc;
 use std::time::SystemTime;
 
-use actix_web::{HttpResponse, get, web};
+use axum::Json;
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
 
-use crate::Data;
+use crate::AppState;
 use crate::error::Error;
 use crate::schema::users::dsl::{users, uuid};
 
@@ -39,27 +43,26 @@ struct Response {
 ///     "build_number": "39d01bb"
 /// });
 /// ```
-#[get("/stats")]
-pub async fn res(data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn res(State(app_state): State<Arc<AppState>>) -> Result<impl IntoResponse, Error> {
     let accounts: i64 = users
         .select(uuid)
         .count()
-        .get_result(&mut data.pool.get().await?)
+        .get_result(&mut app_state.pool.get().await?)
         .await?;
 
     let response = Response {
         // TODO: Get number of accounts from db
         accounts,
         uptime: SystemTime::now()
-            .duration_since(data.start_time)
+            .duration_since(app_state.start_time)
             .expect("Seriously why dont you have time??")
             .as_secs(),
         version: String::from(VERSION.unwrap_or("UNKNOWN")),
-        registration_enabled: data.config.instance.registration,
-        email_verification_required: data.config.instance.require_email_verification,
+        registration_enabled: app_state.config.instance.registration,
+        email_verification_required: app_state.config.instance.require_email_verification,
         // TODO: Get build number from git hash or remove this from the spec
         build_number: String::from(GIT_SHORT_HASH),
     };
 
-    Ok(HttpResponse::Ok().json(response))
+    Ok((StatusCode::OK, Json(response)))
 }

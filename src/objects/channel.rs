@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
+    AppState, Conn,
     error::Error,
     schema::{channel_permissions, channels, messages},
     utils::{CHANNEL_REGEX, order_by_is_above},
@@ -102,15 +102,15 @@ impl Channel {
             c.clone().build(&mut conn).await
         });
 
-        futures::future::try_join_all(channel_futures).await
+        futures_util::future::try_join_all(channel_futures).await
     }
 
-    pub async fn fetch_one(data: &Data, channel_uuid: Uuid) -> Result<Self, Error> {
-        if let Ok(cache_hit) = data.get_cache_key(channel_uuid.to_string()).await {
+    pub async fn fetch_one(app_state: &AppState, channel_uuid: Uuid) -> Result<Self, Error> {
+        if let Ok(cache_hit) = app_state.get_cache_key(channel_uuid.to_string()).await {
             return Ok(serde_json::from_str(&cache_hit)?);
         }
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use channels::dsl;
         let channel_builder: ChannelBuilder = dsl::channels
@@ -121,14 +121,15 @@ impl Channel {
 
         let channel = channel_builder.build(&mut conn).await?;
 
-        data.set_cache_key(channel_uuid.to_string(), channel.clone(), 60)
+        app_state
+            .set_cache_key(channel_uuid.to_string(), channel.clone(), 60)
             .await?;
 
         Ok(channel)
     }
 
     pub async fn new(
-        data: actix_web::web::Data<Data>,
+        app_state: &AppState,
         guild_uuid: Uuid,
         name: String,
         description: Option<String>,
@@ -137,11 +138,11 @@ impl Channel {
             return Err(Error::BadRequest("Channel name is invalid".to_string()));
         }
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         let channel_uuid = Uuid::now_v7();
 
-        let channels = Self::fetch_all(&data.pool, guild_uuid).await?;
+        let channels = Self::fetch_all(&app_state.pool, guild_uuid).await?;
 
         let channels_ordered = order_by_is_above(channels).await?;
 
@@ -179,22 +180,25 @@ impl Channel {
             permissions: vec![],
         };
 
-        data.set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
+        app_state
+            .set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
             .await?;
 
-        if data
+        if app_state
             .get_cache_key(format!("{guild_uuid}_channels"))
             .await
             .is_ok()
         {
-            data.del_cache_key(format!("{guild_uuid}_channels")).await?;
+            app_state
+                .del_cache_key(format!("{guild_uuid}_channels"))
+                .await?;
         }
 
         Ok(channel)
     }
 
-    pub async fn delete(self, data: &Data) -> Result<(), Error> {
-        let mut conn = data.pool.get().await?;
+    pub async fn delete(self, app_state: &AppState) -> Result<(), Error> {
+        let mut conn = app_state.pool.get().await?;
 
         use channels::dsl;
         match update(channels::table)
@@ -224,16 +228,17 @@ impl Channel {
             Err(e) => Err(e),
         }?;
 
-        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
-            data.del_cache_key(self.uuid.to_string()).await?;
+        if app_state.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            app_state.del_cache_key(self.uuid.to_string()).await?;
         }
 
-        if data
+        if app_state
             .get_cache_key(format!("{}_channels", self.guild_uuid))
             .await
             .is_ok()
         {
-            data.del_cache_key(format!("{}_channels", self.guild_uuid))
+            app_state
+                .del_cache_key(format!("{}_channels", self.guild_uuid))
                 .await?;
         }
 
@@ -242,11 +247,11 @@ impl Channel {
 
     pub async fn fetch_messages(
         &self,
-        data: &Data,
+        app_state: &AppState,
         amount: i64,
         offset: i64,
     ) -> Result<Vec<Message>, Error> {
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use messages::dsl;
         let messages: Vec<MessageBuilder> = load_or_empty(
@@ -260,14 +265,14 @@ impl Channel {
                 .await,
         )?;
 
-        let message_futures = messages.iter().map(async move |b| b.build(data).await);
+        let message_futures = messages.iter().map(async move |b| b.build(app_state).await);
 
-        futures::future::try_join_all(message_futures).await
+        futures_util::future::try_join_all(message_futures).await
     }
 
     pub async fn new_message(
         &self,
-        data: &Data,
+        app_state: &AppState,
         user_uuid: Uuid,
         message: String,
         reply_to: Option<Uuid>,
@@ -283,14 +288,14 @@ impl Channel {
             is_edited: false,
         };
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         insert_into(messages::table)
             .values(message.clone())
             .execute(&mut conn)
             .await?;
 
-        message.build(data).await
+        message.build(app_state).await
     }
 
     /*pub async fn edit_message(&self, data: &Data, user_uuid: Uuid, message_uuid: Uuid, message: String) -> Result<Message, Error> {
@@ -308,12 +313,12 @@ impl Channel {
         Ok(())
     }*/
 
-    pub async fn set_name(&mut self, data: &Data, new_name: String) -> Result<(), Error> {
+    pub async fn set_name(&mut self, app_state: &AppState, new_name: String) -> Result<(), Error> {
         if !CHANNEL_REGEX.is_match(&new_name) {
             return Err(Error::BadRequest("Channel name is invalid".to_string()));
         }
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use channels::dsl;
         update(channels::table)
@@ -329,10 +334,10 @@ impl Channel {
 
     pub async fn set_description(
         &mut self,
-        data: &Data,
+        app_state: &AppState,
         new_description: String,
     ) -> Result<(), Error> {
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use channels::dsl;
         update(channels::table)
@@ -346,8 +351,12 @@ impl Channel {
         Ok(())
     }
 
-    pub async fn move_channel(&mut self, data: &Data, new_is_above: Uuid) -> Result<(), Error> {
-        let mut conn = data.pool.get().await?;
+    pub async fn move_channel(
+        &mut self,
+        app_state: &AppState,
+        new_is_above: Uuid,
+    ) -> Result<(), Error> {
+        let mut conn = app_state.pool.get().await?;
 
         use channels::dsl;
         let old_above_uuid: Option<Uuid> = match dsl::channels

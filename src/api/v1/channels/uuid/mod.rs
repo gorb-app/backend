@@ -3,75 +3,63 @@
 pub mod messages;
 pub mod socket;
 
+use std::sync::Arc;
+
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
+    AppState,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{Channel, Member, Permissions},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
-use actix_web::{HttpRequest, HttpResponse, delete, get, patch, web};
+use axum::{
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+
 use serde::Deserialize;
 use uuid::Uuid;
 
-#[get("/{uuid}")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(channel_uuid): Path<Uuid>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    let channel_uuid = path.into_inner().0;
+    Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
 
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
-
-    let channel = Channel::fetch_one(&data, channel_uuid).await?;
-
-    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
-
-    Ok(HttpResponse::Ok().json(channel))
+    Ok((StatusCode::OK, Json(channel)))
 }
 
-#[delete("/{uuid}")]
 pub async fn delete(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(channel_uuid): Path<Uuid>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    let channel_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
-
-    let channel = Channel::fetch_one(&data, channel_uuid).await?;
-
-    let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
+    let member =
+        Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid)
+            .await?;
 
     member
-        .check_permission(&data, Permissions::DeleteChannel)
+        .check_permission(&app_state, Permissions::ManageChannel)
         .await?;
 
-    channel.delete(&data).await?;
+    channel.delete(&app_state).await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }
 
 #[derive(Deserialize)]
-struct NewInfo {
+pub struct NewInfo {
     name: Option<String>,
     description: Option<String>,
     is_above: Option<String>,
@@ -108,48 +96,39 @@ struct NewInfo {
 /// });
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
-#[patch("/{uuid}")]
 pub async fn patch(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    new_info: web::Json<NewInfo>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(channel_uuid): Path<Uuid>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+    Json(new_info): Json<NewInfo>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
+    let mut channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    let channel_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
-
-    let mut channel = Channel::fetch_one(&data, channel_uuid).await?;
-
-    let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
+    let member =
+        Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid)
+            .await?;
 
     member
-        .check_permission(&data, Permissions::ManageChannel)
+        .check_permission(&app_state, Permissions::ManageChannel)
         .await?;
 
     if let Some(new_name) = &new_info.name {
-        channel.set_name(&data, new_name.to_string()).await?;
+        channel.set_name(&app_state, new_name.to_string()).await?;
     }
 
     if let Some(new_description) = &new_info.description {
         channel
-            .set_description(&data, new_description.to_string())
+            .set_description(&app_state, new_description.to_string())
             .await?;
     }
 
     if let Some(new_is_above) = &new_info.is_above {
         channel
-            .set_description(&data, new_is_above.to_string())
+            .set_description(&app_state, new_is_above.to_string())
             .await?;
     }
 
-    Ok(HttpResponse::Ok().json(channel))
+    Ok((StatusCode::OK, Json(channel)))
 }

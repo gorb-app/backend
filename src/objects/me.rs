@@ -1,4 +1,4 @@
-use actix_web::web::BytesMut;
+use axum::body::Bytes;
 use diesel::{
     ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper, delete, insert_into,
     update,
@@ -10,7 +10,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
+    AppState, Conn,
     error::Error,
     objects::{Friend, FriendRequest, User},
     schema::{friend_requests, friends, guild_members, guilds, users},
@@ -75,28 +75,26 @@ impl Me {
 
     pub async fn set_avatar(
         &mut self,
-        data: &Data,
+        app_state: &AppState,
         cdn_url: Url,
-        avatar: BytesMut,
+        avatar: Bytes,
     ) -> Result<(), Error> {
         let avatar_clone = avatar.clone();
         let image_type = task::spawn_blocking(move || image_check(avatar_clone)).await??;
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         if let Some(avatar) = &self.avatar {
             let avatar_url: Url = avatar.parse()?;
 
             let relative_url = avatar_url.path().trim_start_matches('/');
 
-            data.bunny_storage.delete(relative_url).await?;
+            app_state.bunny_storage.delete(relative_url).await?;
         }
 
         let path = format!("avatar/{}/{}.{}", self.uuid, Uuid::now_v7(), image_type);
 
-        data.bunny_storage
-            .upload(path.clone(), avatar.into())
-            .await?;
+        app_state.bunny_storage.upload(path.clone(), avatar).await?;
 
         let avatar_url = cdn_url.join(&path)?;
 
@@ -107,8 +105,8 @@ impl Me {
             .execute(&mut conn)
             .await?;
 
-        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
-            data.del_cache_key(self.uuid.to_string()).await?
+        if app_state.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            app_state.del_cache_key(self.uuid.to_string()).await?
         }
 
         self.avatar = Some(avatar_url.to_string());
@@ -127,7 +125,11 @@ impl Me {
         Ok(())
     }
 
-    pub async fn set_username(&mut self, data: &Data, new_username: String) -> Result<(), Error> {
+    pub async fn set_username(
+        &mut self,
+        app_state: &AppState,
+        new_username: String,
+    ) -> Result<(), Error> {
         if !USERNAME_REGEX.is_match(&new_username)
             || new_username.len() < 3
             || new_username.len() > 32
@@ -135,7 +137,7 @@ impl Me {
             return Err(Error::BadRequest("Invalid username".to_string()));
         }
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use users::dsl;
         update(users::table)
@@ -144,8 +146,8 @@ impl Me {
             .execute(&mut conn)
             .await?;
 
-        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
-            data.del_cache_key(self.uuid.to_string()).await?
+        if app_state.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            app_state.del_cache_key(self.uuid.to_string()).await?
         }
 
         self.username = new_username;
@@ -155,10 +157,10 @@ impl Me {
 
     pub async fn set_display_name(
         &mut self,
-        data: &Data,
+        app_state: &AppState,
         new_display_name: String,
     ) -> Result<(), Error> {
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         let new_display_name_option = if new_display_name.is_empty() {
             None
@@ -173,8 +175,8 @@ impl Me {
             .execute(&mut conn)
             .await?;
 
-        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
-            data.del_cache_key(self.uuid.to_string()).await?
+        if app_state.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            app_state.del_cache_key(self.uuid.to_string()).await?
         }
 
         self.display_name = new_display_name_option;
@@ -182,12 +184,16 @@ impl Me {
         Ok(())
     }
 
-    pub async fn set_email(&mut self, data: &Data, new_email: String) -> Result<(), Error> {
+    pub async fn set_email(
+        &mut self,
+        app_state: &AppState,
+        new_email: String,
+    ) -> Result<(), Error> {
         if !EMAIL_REGEX.is_match(&new_email) {
             return Err(Error::BadRequest("Invalid username".to_string()));
         }
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use users::dsl;
         update(users::table)
@@ -199,8 +205,8 @@ impl Me {
             .execute(&mut conn)
             .await?;
 
-        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
-            data.del_cache_key(self.uuid.to_string()).await?
+        if app_state.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            app_state.del_cache_key(self.uuid.to_string()).await?
         }
 
         self.email = new_email;
@@ -208,8 +214,12 @@ impl Me {
         Ok(())
     }
 
-    pub async fn set_pronouns(&mut self, data: &Data, new_pronouns: String) -> Result<(), Error> {
-        let mut conn = data.pool.get().await?;
+    pub async fn set_pronouns(
+        &mut self,
+        app_state: &AppState,
+        new_pronouns: String,
+    ) -> Result<(), Error> {
+        let mut conn = app_state.pool.get().await?;
 
         use users::dsl;
         update(users::table)
@@ -218,15 +228,19 @@ impl Me {
             .execute(&mut conn)
             .await?;
 
-        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
-            data.del_cache_key(self.uuid.to_string()).await?
+        if app_state.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            app_state.del_cache_key(self.uuid.to_string()).await?
         }
 
         Ok(())
     }
 
-    pub async fn set_about(&mut self, data: &Data, new_about: String) -> Result<(), Error> {
-        let mut conn = data.pool.get().await?;
+    pub async fn set_about(
+        &mut self,
+        app_state: &AppState,
+        new_about: String,
+    ) -> Result<(), Error> {
+        let mut conn = app_state.pool.get().await?;
 
         use users::dsl;
         update(users::table)
@@ -235,8 +249,8 @@ impl Me {
             .execute(&mut conn)
             .await?;
 
-        if data.get_cache_key(self.uuid.to_string()).await.is_ok() {
-            data.del_cache_key(self.uuid.to_string()).await?
+        if app_state.get_cache_key(self.uuid.to_string()).await.is_ok() {
+            app_state.del_cache_key(self.uuid.to_string()).await?
         }
 
         Ok(())
@@ -352,10 +366,10 @@ impl Me {
         Ok(())
     }
 
-    pub async fn get_friends(&self, data: &Data) -> Result<Vec<User>, Error> {
+    pub async fn get_friends(&self, app_state: &AppState) -> Result<Vec<User>, Error> {
         use friends::dsl;
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         let friends1 = load_or_empty(
             dsl::friends
@@ -374,16 +388,16 @@ impl Me {
         )?;
 
         let friend_futures = friends1.iter().map(async move |friend| {
-            User::fetch_one_with_friendship(data, self, friend.uuid2).await
+            User::fetch_one_with_friendship(app_state, self, friend.uuid2).await
         });
 
-        let mut friends = futures::future::try_join_all(friend_futures).await?;
+        let mut friends = futures_util::future::try_join_all(friend_futures).await?;
 
         let friend_futures = friends2.iter().map(async move |friend| {
-            User::fetch_one_with_friendship(data, self, friend.uuid1).await
+            User::fetch_one_with_friendship(app_state, self, friend.uuid1).await
         });
 
-        friends.append(&mut futures::future::try_join_all(friend_futures).await?);
+        friends.append(&mut futures_util::future::try_join_all(friend_futures).await?);
 
         Ok(friends)
     }

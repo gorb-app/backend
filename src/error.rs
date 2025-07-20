@@ -1,12 +1,16 @@
 use std::{io, time::SystemTimeError};
 
-use actix_web::{
-    HttpResponse,
-    error::{PayloadError, ResponseError},
+use axum::{
+    Json,
+    extract::{
+        multipart::MultipartError,
+        rejection::{JsonRejection, QueryRejection},
+    },
     http::{
         StatusCode,
-        header::{ContentType, ToStrError},
+        header::{InvalidHeaderValue, ToStrError},
     },
+    response::IntoResponse,
 };
 use bunny_api_tokio::error::Error as BunnyError;
 use deadpool::managed::{BuildError, PoolError};
@@ -54,9 +58,13 @@ pub enum Error {
     #[error(transparent)]
     UrlParseError(#[from] url::ParseError),
     #[error(transparent)]
-    PayloadError(#[from] PayloadError),
+    JsonRejection(#[from] JsonRejection),
     #[error(transparent)]
-    WsClosed(#[from] actix_ws::Closed),
+    QueryRejection(#[from] QueryRejection),
+    #[error(transparent)]
+    MultipartError(#[from] MultipartError),
+    #[error(transparent)]
+    InvalidHeaderValue(#[from] InvalidHeaderValue),
     #[error(transparent)]
     EmailError(#[from] EmailError),
     #[error(transparent)]
@@ -75,28 +83,45 @@ pub enum Error {
     TooManyRequests(String),
     #[error("{0}")]
     InternalServerError(String),
+    // TODO: remove when doing socket.io
+    #[error(transparent)]
+    AxumError(#[from] axum::Error),
 }
 
-impl ResponseError for Error {
-    fn error_response(&self) -> HttpResponse {
+impl IntoResponse for Error {
+    fn into_response(self) -> axum::response::Response {
+        let error = match self {
+            Error::SqlError(DieselError::NotFound) => {
+                (StatusCode::NOT_FOUND, Json(WebError::new(self.to_string())))
+            }
+            Error::BunnyError(BunnyError::NotFound(_)) => {
+                (StatusCode::NOT_FOUND, Json(WebError::new(self.to_string())))
+            }
+            Error::BadRequest(_) => (
+                StatusCode::BAD_REQUEST,
+                Json(WebError::new(self.to_string())),
+            ),
+            Error::Unauthorized(_) => (
+                StatusCode::UNAUTHORIZED,
+                Json(WebError::new(self.to_string())),
+            ),
+            Error::Forbidden(_) => (StatusCode::FORBIDDEN, Json(WebError::new(self.to_string()))),
+            Error::TooManyRequests(_) => (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(WebError::new(self.to_string())),
+            ),
+            _ => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(WebError::new(self.to_string())),
+            ),
+        };
+
+        let (code, _) = error;
+
         debug!("{self:?}");
-        error!("{}: {}", self.status_code(), self);
+        error!("{code}: {self}");
 
-        HttpResponse::build(self.status_code())
-            .insert_header(ContentType::json())
-            .json(WebError::new(self.to_string()))
-    }
-
-    fn status_code(&self) -> StatusCode {
-        match *self {
-            Error::SqlError(DieselError::NotFound) => StatusCode::NOT_FOUND,
-            Error::BunnyError(BunnyError::NotFound(_)) => StatusCode::NOT_FOUND,
-            Error::BadRequest(_) => StatusCode::BAD_REQUEST,
-            Error::Unauthorized(_) => StatusCode::UNAUTHORIZED,
-            Error::Forbidden(_) => StatusCode::FORBIDDEN,
-            Error::TooManyRequests(_) => StatusCode::TOO_MANY_REQUESTS,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        }
+        error.into_response()
     }
 }
 

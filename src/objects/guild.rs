@@ -1,4 +1,4 @@
-use actix_web::web::BytesMut;
+use axum::body::Bytes;
 use diesel::{
     ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into,
     update,
@@ -96,7 +96,7 @@ impl Guild {
         });
 
         // Execute all futures concurrently and collect results
-        futures::future::try_join_all(guild_futures).await
+        futures_util::future::try_join_all(guild_futures).await
     }
 
     pub async fn new(conn: &mut Conn, name: String, owner_uuid: Uuid) -> Result<Self, Error> {
@@ -191,7 +191,7 @@ impl Guild {
         bunny_storage: &bunny_api_tokio::EdgeStorageClient,
         conn: &mut Conn,
         cdn_url: Url,
-        icon: BytesMut,
+        icon: Bytes,
     ) -> Result<(), Error> {
         let icon_clone = icon.clone();
         let image_type = task::spawn_blocking(move || image_check(icon_clone)).await??;
@@ -204,7 +204,7 @@ impl Guild {
 
         let path = format!("icons/{}/{}.{}", self.uuid, Uuid::now_v7(), image_type);
 
-        bunny_storage.upload(path.clone(), icon.into()).await?;
+        bunny_storage.upload(path.clone(), icon).await?;
 
         let icon_url = cdn_url.join(&path)?;
 

@@ -1,28 +1,37 @@
 //! `/api/v1/guilds` Guild related endpoints
 
-use actix_web::{HttpRequest, HttpResponse, Scope, get, post, web};
+use std::sync::Arc;
+
+use ::uuid::Uuid;
+use axum::{
+    Extension, Json, Router,
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
+};
 use serde::Deserialize;
 
 mod uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
+    AppState,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{Guild, StartAmountQuery},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
 
 #[derive(Deserialize)]
-struct GuildInfo {
+pub struct GuildInfo {
     name: String,
 }
 
-pub fn web() -> Scope {
-    web::scope("/guilds")
-        .service(post)
-        .service(get)
-        .service(uuid::web())
+pub fn router() -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/", post(new))
+        .route("/", get(get_guilds))
+        .nest("/{uuid}", uuid::router())
 }
 
 /// `POST /api/v1/guilds` Creates a new guild
@@ -49,23 +58,19 @@ pub fn web() -> Scope {
 /// });
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
-#[post("")]
-pub async fn post(
-    req: HttpRequest,
-    guild_info: web::Json<GuildInfo>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+pub async fn new(
+    State(app_state): State<Arc<AppState>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+    Json(guild_info): Json<GuildInfo>,
+) -> Result<impl IntoResponse, Error> {
+    let guild = Guild::new(
+        &mut app_state.pool.get().await?,
+        guild_info.name.clone(),
+        uuid,
+    )
+    .await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    let guild = Guild::new(&mut conn, guild_info.name.clone(), uuid).await?;
-
-    Ok(HttpResponse::Ok().json(guild))
+    Ok((StatusCode::OK, Json(guild)))
 }
 
 /// `GET /api/v1/servers` Fetches all guilds
@@ -115,25 +120,17 @@ pub async fn post(
 /// ]);
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
-#[get("")]
-pub async fn get(
-    req: HttpRequest,
-    request_query: web::Query<StartAmountQuery>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
-
-    let auth_header = get_auth_header(headers)?;
-
+pub async fn get_guilds(
+    State(app_state): State<Arc<AppState>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+    Json(request_query): Json<StartAmountQuery>,
+) -> Result<impl IntoResponse, Error> {
     let start = request_query.start.unwrap_or(0);
-
     let amount = request_query.amount.unwrap_or(10);
 
-    let uuid = check_access_token(auth_header, &mut data.pool.get().await?).await?;
+    global_checks(&app_state, uuid).await?;
 
-    global_checks(&data, uuid).await?;
+    let guilds = Guild::fetch_amount(&app_state.pool, start, amount).await?;
 
-    let guilds = Guild::fetch_amount(&data.pool, start, amount).await?;
-
-    Ok(HttpResponse::Ok().json(guilds))
+    Ok((StatusCode::OK, Json(guilds)))
 }

@@ -1,6 +1,10 @@
 //! `/api/v1` Contains version 1 of the api
 
-use actix_web::{Scope, web};
+use std::sync::Arc;
+
+use axum::{Router, middleware::from_fn_with_state, routing::get};
+
+use crate::{AppState, api::v1::auth::CurrentUser};
 
 mod auth;
 mod channels;
@@ -10,13 +14,20 @@ mod me;
 mod stats;
 mod users;
 
-pub fn web() -> Scope {
-    web::scope("/v1")
-        .service(stats::res)
-        .service(auth::web())
-        .service(users::web())
-        .service(channels::web())
-        .service(guilds::web())
-        .service(invites::web())
-        .service(me::web())
+pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+    let router_with_auth = Router::new()
+        .nest("/users", users::router())
+        .nest("/guilds", guilds::router())
+        .nest("/invites", invites::router())
+        .nest("/me", me::router())
+        .layer(from_fn_with_state(
+            app_state.clone(),
+            CurrentUser::check_auth_layer,
+        ));
+
+    Router::new()
+        .route("/stats", get(stats::res))
+        .nest("/auth", auth::router(app_state.clone()))
+        .nest("/channels", channels::router(app_state))
+        .merge(router_with_auth)
 }

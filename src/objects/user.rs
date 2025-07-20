@@ -4,7 +4,7 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{Conn, Data, error::Error, objects::Me, schema::users};
+use crate::{AppState, Conn, error::Error, objects::Me, schema::users};
 
 use super::load_or_empty;
 
@@ -46,10 +46,10 @@ pub struct User {
 }
 
 impl User {
-    pub async fn fetch_one(data: &Data, user_uuid: Uuid) -> Result<Self, Error> {
-        let mut conn = data.pool.get().await?;
+    pub async fn fetch_one(app_state: &AppState, user_uuid: Uuid) -> Result<Self, Error> {
+        let mut conn = app_state.pool.get().await?;
 
-        if let Ok(cache_hit) = data.get_cache_key(user_uuid.to_string()).await {
+        if let Ok(cache_hit) = app_state.get_cache_key(user_uuid.to_string()).await {
             return Ok(serde_json::from_str(&cache_hit)?);
         }
 
@@ -62,20 +62,21 @@ impl User {
 
         let user = user_builder.build();
 
-        data.set_cache_key(user_uuid.to_string(), user.clone(), 1800)
+        app_state
+            .set_cache_key(user_uuid.to_string(), user.clone(), 1800)
             .await?;
 
         Ok(user)
     }
 
     pub async fn fetch_one_with_friendship(
-        data: &Data,
+        app_state: &AppState,
         me: &Me,
         user_uuid: Uuid,
     ) -> Result<Self, Error> {
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
-        let mut user = Self::fetch_one(data, user_uuid).await?;
+        let mut user = Self::fetch_one(app_state, user_uuid).await?;
 
         if let Some(friend) = me.friends_with(&mut conn, user_uuid).await? {
             user.friends_since = Some(friend.accepted_at);

@@ -1,14 +1,14 @@
-when:
-  - event: push
-    branch: main
-
 steps:
   - name: build-x86_64
-    image: rust:bookworm
+    image: rust:1.88-bookworm
     commands:
       - cargo build --release
+    when:
+      - event: push
+      - event: pull_request
+
   - name: build-arm64
-    image: rust:bookworm
+    image: rust:1.88-bookworm
     commands:
       - dpkg --add-architecture arm64
       - apt-get update -y && apt-get install -y crossbuild-essential-arm64 libssl-dev:arm64
@@ -18,6 +18,10 @@ steps:
       CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
       PKG_CONFIG_ALLOW_CROSS: 1
       PKG_CONFIG_PATH: /usr/aarch64-linux-gnu/lib/pkgconfig
+    when:
+      - event: push
+      - event: pull_request
+
   - name: container-build-and-publish
     image: docker
     commands:
@@ -28,3 +32,20 @@ steps:
         from_secret: docker_password
     volumes:
       - /var/run/podman/podman.sock:/var/run/docker.sock
+    when:
+    - branch: main
+      event: push
+
+  - name: container-build-and-publish-staging
+    image: docker
+    commands:
+      - docker login --username radical --password $PASSWORD git.gorb.app
+      - docker buildx build --platform linux/amd64,linux/arm64 --rm --push -t git.gorb.app/gorb/backend:staging .
+    environment:
+      PASSWORD:
+        from_secret: docker_password
+    volumes:
+      - /var/run/podman/podman.sock:/var/run/docker.sock
+    when:
+    - branch: staging
+      event: push

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
+    AppState, Conn,
     error::Error,
     schema::{role_members, roles},
     utils::order_by_is_above,
@@ -74,12 +74,18 @@ impl Role {
         Ok(roles)
     }
 
-    pub async fn fetch_from_member(data: &Data, member_uuid: Uuid) -> Result<Vec<Self>, Error> {
-        if let Ok(roles) = data.get_cache_key(format!("{member_uuid}_roles")).await {
+    pub async fn fetch_from_member(
+        app_state: &AppState,
+        member_uuid: Uuid,
+    ) -> Result<Vec<Self>, Error> {
+        if let Ok(roles) = app_state
+            .get_cache_key(format!("{member_uuid}_roles"))
+            .await
+        {
             return Ok(serde_json::from_str(&roles)?);
         }
 
-        let mut conn = data.pool.get().await?;
+        let mut conn = app_state.pool.get().await?;
 
         use role_members::dsl;
         let role_memberships: Vec<RoleMember> = load_or_empty(
@@ -96,7 +102,8 @@ impl Role {
             roles.push(membership.fetch_role(&mut conn).await?);
         }
 
-        data.set_cache_key(format!("{member_uuid}_roles"), roles.clone(), 300)
+        app_state
+            .set_cache_key(format!("{member_uuid}_roles"), roles.clone(), 300)
             .await?;
 
         Ok(roles)
