@@ -1,39 +1,47 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use actix_web::{HttpResponse, post, web};
 use argon2::{PasswordHash, PasswordVerifier};
+use axum::{
+    Json,
+    extract::State,
+    http::{HeaderValue, StatusCode},
+    response::IntoResponse,
+};
 use diesel::{ExpressionMethods, QueryDsl, dsl::insert_into};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 
+use super::Response;
 use crate::{
-    Data,
+    AppState,
     error::Error,
     schema::*,
-    utils::{PASSWORD_REGEX, generate_token, new_refresh_token_cookie, user_uuid_from_identifier},
+    utils::{
+        PASSWORD_REGEX, generate_device_name, generate_token, new_refresh_token_cookie,
+        user_uuid_from_identifier,
+    },
 };
 
-use super::Response;
-
 #[derive(Deserialize)]
-struct LoginInformation {
+pub struct LoginInformation {
     username: String,
     password: String,
-    device_name: String,
 }
 
-#[post("/login")]
 pub async fn response(
-    login_information: web::Json<LoginInformation>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
+    State(app_state): State<Arc<AppState>>,
+    Json(login_information): Json<LoginInformation>,
+) -> Result<impl IntoResponse, Error> {
     if !PASSWORD_REGEX.is_match(&login_information.password) {
-        return Ok(HttpResponse::Forbidden().json(r#"{ "password_hashed": false }"#));
+        return Err(Error::BadRequest("Bad password".to_string()));
     }
 
     use users::dsl;
 
-    let mut conn = data.pool.get().await?;
+    let mut conn = app_state.pool.get().await?;
 
     let uuid = user_uuid_from_identifier(&mut conn, &login_information.username).await?;
 
@@ -46,7 +54,7 @@ pub async fn response(
     let parsed_hash = PasswordHash::new(&database_password)
         .map_err(|e| Error::PasswordHashError(e.to_string()))?;
 
-    if data
+    if app_state
         .argon2
         .verify_password(login_information.password.as_bytes(), &parsed_hash)
         .is_err()
@@ -63,12 +71,14 @@ pub async fn response(
 
     use refresh_tokens::dsl as rdsl;
 
+    let device_name = generate_device_name();
+
     insert_into(refresh_tokens::table)
         .values((
             rdsl::token.eq(&refresh_token),
             rdsl::uuid.eq(uuid),
             rdsl::created_at.eq(current_time),
-            rdsl::device_name.eq(&login_information.device_name),
+            rdsl::device_name.eq(&device_name),
         ))
         .execute(&mut conn)
         .await?;
@@ -85,7 +95,21 @@ pub async fn response(
         .execute(&mut conn)
         .await?;
 
-    Ok(HttpResponse::Ok()
-        .cookie(new_refresh_token_cookie(&data.config, refresh_token))
-        .json(Response { access_token }))
+    let mut response = (
+        StatusCode::OK,
+        Json(Response {
+            access_token,
+            device_name,
+        }),
+    )
+        .into_response();
+
+    response.headers_mut().append(
+        "Set-Cookie",
+        HeaderValue::from_str(
+            &new_refresh_token_cookie(&app_state.config, refresh_token).to_string(),
+        )?,
+    );
+
+    Ok(response)
 }

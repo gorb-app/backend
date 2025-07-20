@@ -1,92 +1,81 @@
-use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::{Channel, Member, Permissions},
-    utils::{get_auth_header, global_checks, order_by_is_above},
-};
+use std::sync::Arc;
+
 use ::uuid::Uuid;
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use axum::{
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use serde::Deserialize;
 
+use crate::{
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{Channel, Member, Permissions},
+    utils::{global_checks, order_by_is_above},
+};
+
 #[derive(Deserialize)]
-struct ChannelInfo {
+pub struct ChannelInfo {
     name: String,
     description: Option<String>,
 }
 
-#[get("{uuid}/channels")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
+    Member::check_membership(&mut app_state.pool.get().await?, uuid, guild_uuid).await?;
 
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
-
-    Member::check_membership(&mut conn, uuid, guild_uuid).await?;
-
-    if let Ok(cache_hit) = data.get_cache_key(format!("{guild_uuid}_channels")).await {
-        return Ok(HttpResponse::Ok()
-            .content_type("application/json")
-            .body(cache_hit));
+    if let Ok(cache_hit) = app_state
+        .get_cache_key(format!("{guild_uuid}_channels"))
+        .await
+    {
+        return Ok((StatusCode::OK, Json(cache_hit)).into_response());
     }
 
-    let channels = Channel::fetch_all(&data.pool, guild_uuid).await?;
+    let channels = Channel::fetch_all(&app_state.pool, guild_uuid).await?;
 
     let channels_ordered = order_by_is_above(channels).await?;
 
-    data.set_cache_key(
-        format!("{guild_uuid}_channels"),
-        channels_ordered.clone(),
-        1800,
-    )
-    .await?;
+    app_state
+        .set_cache_key(
+            format!("{guild_uuid}_channels"),
+            channels_ordered.clone(),
+            1800,
+        )
+        .await?;
 
-    Ok(HttpResponse::Ok().json(channels_ordered))
+    Ok((StatusCode::OK, Json(channels_ordered)).into_response())
 }
 
-#[post("{uuid}/channels")]
 pub async fn create(
-    req: HttpRequest,
-    channel_info: web::Json<ChannelInfo>,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+    Json(channel_info): Json<ChannelInfo>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
-
-    let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
+    let member =
+        Member::check_membership(&mut app_state.pool.get().await?, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&data, Permissions::ManageChannel)
+        .check_permission(&app_state, Permissions::ManageChannel)
         .await?;
 
     let channel = Channel::new(
-        data.clone(),
+        &app_state,
         guild_uuid,
         channel_info.name.clone(),
         channel_info.description.clone(),
     )
     .await?;
 
-    Ok(HttpResponse::Ok().json(channel))
+    Ok((StatusCode::OK, Json(channel)))
 }

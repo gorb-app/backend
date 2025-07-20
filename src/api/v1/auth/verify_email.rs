@@ -1,19 +1,26 @@
 //! `/api/v1/auth/verify-email` Endpoints for verifying user emails
 
-use actix_web::{HttpRequest, HttpResponse, get, post, web};
+use std::sync::Arc;
+
+use axum::{
+    Extension,
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use chrono::{Duration, Utc};
 use serde::Deserialize;
+use uuid::Uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
+    AppState,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{EmailToken, Me},
-    utils::get_auth_header,
 };
 
 #[derive(Deserialize)]
-struct Query {
+pub struct QueryParams {
     token: String,
 }
 
@@ -35,37 +42,30 @@ struct Query {
 ///
 /// 401 Unauthorized
 ///
-#[get("/verify-email")]
 pub async fn get(
-    req: HttpRequest,
-    query: web::Query<Query>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
-
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
+    State(app_state): State<Arc<AppState>>,
+    Query(query): Query<QueryParams>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    let mut conn = app_state.pool.get().await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
     if me.email_verified {
-        return Ok(HttpResponse::NoContent().finish());
+        return Ok(StatusCode::NO_CONTENT);
     }
 
-    let email_token = EmailToken::get(&data, me.uuid).await?;
+    let email_token = EmailToken::get(&app_state, me.uuid).await?;
 
     if query.token != email_token.token {
-        return Ok(HttpResponse::Unauthorized().finish());
+        return Ok(StatusCode::UNAUTHORIZED);
     }
 
     me.verify_email(&mut conn).await?;
 
-    email_token.delete(&data).await?;
+    email_token.delete(&app_state).await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }
 
 /// `POST /api/v1/auth/verify-email` Sends user verification email
@@ -81,25 +81,19 @@ pub async fn get(
 ///
 /// 401 Unauthorized
 ///
-#[post("/verify-email")]
-pub async fn post(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
-
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    let me = Me::get(&mut conn, uuid).await?;
+pub async fn post(
+    State(app_state): State<Arc<AppState>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
 
     if me.email_verified {
-        return Ok(HttpResponse::NoContent().finish());
+        return Ok(StatusCode::NO_CONTENT);
     }
 
-    if let Ok(email_token) = EmailToken::get(&data, me.uuid).await {
+    if let Ok(email_token) = EmailToken::get(&app_state, me.uuid).await {
         if Utc::now().signed_duration_since(email_token.created_at) > Duration::hours(1) {
-            email_token.delete(&data).await?;
+            email_token.delete(&app_state).await?;
         } else {
             return Err(Error::TooManyRequests(
                 "Please allow 1 hour before sending a new email".to_string(),
@@ -107,7 +101,7 @@ pub async fn post(req: HttpRequest, data: web::Data<Data>) -> Result<HttpRespons
         }
     }
 
-    EmailToken::new(&data, me).await?;
+    EmailToken::new(&app_state, me).await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }

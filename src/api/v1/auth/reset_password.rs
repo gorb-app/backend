@@ -1,13 +1,20 @@
 //! `/api/v1/auth/reset-password` Endpoints for resetting user password
 
-use actix_web::{HttpResponse, get, post, web};
+use std::sync::Arc;
+
+use axum::{
+    Json,
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
 use chrono::{Duration, Utc};
 use serde::Deserialize;
 
-use crate::{Data, error::Error, objects::PasswordResetToken};
+use crate::{AppState, error::Error, objects::PasswordResetToken};
 
 #[derive(Deserialize)]
-struct Query {
+pub struct QueryParams {
     identifier: String,
 }
 
@@ -20,17 +27,22 @@ struct Query {
 ///
 /// ### Responses
 /// 200 Email sent
+///
 /// 429 Too Many Requests
+///
 /// 404 Not found
+///
 /// 400 Bad request
 ///
-#[get("/reset-password")]
-pub async fn get(query: web::Query<Query>, data: web::Data<Data>) -> Result<HttpResponse, Error> {
+pub async fn get(
+    State(app_state): State<Arc<AppState>>,
+    query: Query<QueryParams>,
+) -> Result<impl IntoResponse, Error> {
     if let Ok(password_reset_token) =
-        PasswordResetToken::get_with_identifier(&data, query.identifier.clone()).await
+        PasswordResetToken::get_with_identifier(&app_state, query.identifier.clone()).await
     {
         if Utc::now().signed_duration_since(password_reset_token.created_at) > Duration::hours(1) {
-            password_reset_token.delete(&data).await?;
+            password_reset_token.delete(&app_state).await?;
         } else {
             return Err(Error::TooManyRequests(
                 "Please allow 1 hour before sending a new email".to_string(),
@@ -38,13 +50,13 @@ pub async fn get(query: web::Query<Query>, data: web::Data<Data>) -> Result<Http
         }
     }
 
-    PasswordResetToken::new(&data, query.identifier.clone()).await?;
+    PasswordResetToken::new(&app_state, query.identifier.clone()).await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }
 
 #[derive(Deserialize)]
-struct ResetPassword {
+pub struct ResetPassword {
     password: String,
     token: String,
 }
@@ -63,20 +75,23 @@ struct ResetPassword {
 ///
 /// ### Responses
 /// 200 Success
+///
 /// 410 Token Expired
+///
 /// 404 Not Found
+///
 /// 400 Bad Request
 ///
-#[post("/reset-password")]
 pub async fn post(
-    reset_password: web::Json<ResetPassword>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let password_reset_token = PasswordResetToken::get(&data, reset_password.token.clone()).await?;
+    State(app_state): State<Arc<AppState>>,
+    reset_password: Json<ResetPassword>,
+) -> Result<impl IntoResponse, Error> {
+    let password_reset_token =
+        PasswordResetToken::get(&app_state, reset_password.token.clone()).await?;
 
     password_reset_token
-        .set_password(&data, reset_password.password.clone())
+        .set_password(&app_state, reset_password.password.clone())
         .await?;
 
-    Ok(HttpResponse::Ok().finish())
+    Ok(StatusCode::OK)
 }

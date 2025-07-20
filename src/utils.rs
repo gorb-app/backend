@@ -1,10 +1,8 @@
+use rand::seq::IndexedRandom;
 use std::sync::LazyLock;
 
-use actix_web::{
-    cookie::{Cookie, SameSite, time::Duration},
-    http::header::HeaderMap,
-    web::BytesMut,
-};
+use axum::body::Bytes;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use bindet::FileType;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
@@ -13,14 +11,16 @@ use hex::encode;
 use redis::RedisError;
 use regex::Regex;
 use serde::Serialize;
+use time::Duration;
 use uuid::Uuid;
 
 use crate::{
-    Conn, Data,
+    AppState, Conn,
     config::Config,
     error::Error,
     objects::{HasIsAbove, HasUuid},
     schema::users,
+    wordlist::{ADJECTIVES, ANIMALS},
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -33,86 +33,16 @@ pub static USERNAME_REGEX: LazyLock<Regex> =
 pub static CHANNEL_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-z0-9_.-]+$").unwrap());
 
-// Password is expected to be hashed using SHA3-384
 pub static PASSWORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-f]{96}").unwrap());
 
-pub fn get_auth_header(headers: &HeaderMap) -> Result<&str, Error> {
-    let auth_token = headers.get(actix_web::http::header::AUTHORIZATION);
-
-    if auth_token.is_none() {
-        return Err(Error::Unauthorized(
-            "No authorization header provided".to_string(),
-        ));
-    }
-
-    let auth_raw = auth_token.unwrap().to_str()?;
-
-    let mut auth = auth_raw.split_whitespace();
-
-    let auth_type = auth.next();
-
-    let auth_value = auth.next();
-
-    if auth_type.is_none() {
-        return Err(Error::BadRequest(
-            "Authorization header is empty".to_string(),
-        ));
-    } else if auth_type.is_some_and(|at| at != "Bearer") {
-        return Err(Error::BadRequest(
-            "Only token auth is supported".to_string(),
-        ));
-    }
-
-    if auth_value.is_none() {
-        return Err(Error::BadRequest("No token provided".to_string()));
-    }
-
-    Ok(auth_value.unwrap())
-}
-
-pub fn get_ws_protocol_header(headers: &HeaderMap) -> Result<&str, Error> {
-    let auth_token = headers.get(actix_web::http::header::SEC_WEBSOCKET_PROTOCOL);
-
-    if auth_token.is_none() {
-        return Err(Error::Unauthorized(
-            "No authorization header provided".to_string(),
-        ));
-    }
-
-    let auth_raw = auth_token.unwrap().to_str()?;
-
-    let mut auth = auth_raw.split_whitespace();
-
-    let response_proto = auth.next();
-
-    let auth_value = auth.next();
-
-    if response_proto.is_none() {
-        return Err(Error::BadRequest(
-            "Sec-WebSocket-Protocol header is empty".to_string(),
-        ));
-    } else if response_proto.is_some_and(|rp| rp != "Authorization,") {
-        return Err(Error::BadRequest(
-            "First protocol should be Authorization".to_string(),
-        ));
-    }
-
-    if auth_value.is_none() {
-        return Err(Error::BadRequest("No token provided".to_string()));
-    }
-
-    Ok(auth_value.unwrap())
-}
-
-pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cookie<'static> {
-    Cookie::build("refresh_token", refresh_token)
+pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cookie {
+    Cookie::build(("refresh_token", refresh_token))
         .http_only(true)
         .secure(true)
         .same_site(SameSite::None)
-        //.domain(config.web.backend_url.domain().unwrap().to_string())
         .path(config.web.backend_url.path().to_string())
         .max_age(Duration::days(30))
-        .finish()
+        .build()
 }
 
 pub fn generate_token<const N: usize>() -> Result<String, getrandom::Error> {
@@ -121,7 +51,7 @@ pub fn generate_token<const N: usize>() -> Result<String, getrandom::Error> {
     Ok(encode(buf))
 }
 
-pub fn image_check(icon: BytesMut) -> Result<String, Error> {
+pub fn image_check(icon: Bytes) -> Result<String, Error> {
     let buf = std::io::Cursor::new(icon);
 
     let detect = bindet::detect(buf).map_err(|e| e.kind());
@@ -168,10 +98,7 @@ pub async fn user_uuid_from_identifier(
     }
 }
 
-pub async fn user_uuid_from_username(
-    conn: &mut Conn,
-    username: &String,
-) -> Result<Uuid, Error> {
+pub async fn user_uuid_from_username(conn: &mut Conn, username: &String) -> Result<Uuid, Error> {
     if USERNAME_REGEX.is_match(username) {
         use users::dsl;
         let user_uuid = dsl::users
@@ -188,9 +115,9 @@ pub async fn user_uuid_from_username(
     }
 }
 
-pub async fn global_checks(data: &Data, user_uuid: Uuid) -> Result<(), Error> {
-    if data.config.instance.require_email_verification {
-        let mut conn = data.pool.get().await?;
+pub async fn global_checks(app_state: &AppState, user_uuid: Uuid) -> Result<(), Error> {
+    if app_state.config.instance.require_email_verification {
+        let mut conn = app_state.pool.get().await?;
 
         use users::dsl;
         let email_verified: bool = dsl::users
@@ -234,7 +161,7 @@ where
     Ok(ordered)
 }
 
-impl Data {
+impl AppState {
     pub async fn set_cache_key(
         &self,
         key: String,
@@ -281,4 +208,13 @@ impl Data {
             .query_async(&mut conn)
             .await
     }
+}
+
+pub fn generate_device_name() -> String {
+    let mut rng = rand::rng();
+
+    let adjective = ADJECTIVES.choose(&mut rng).unwrap();
+    let animal = ANIMALS.choose(&mut rng).unwrap();
+
+    [*adjective, *animal].join(" ")
 }

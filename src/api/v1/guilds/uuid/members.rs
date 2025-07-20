@@ -1,36 +1,35 @@
+use std::sync::Arc;
+
+use ::uuid::Uuid;
+use axum::{
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
+    AppState,
+    api::v1::auth::CurrentUser,
     error::Error,
     objects::{Me, Member},
-    utils::{get_auth_header, global_checks},
+    utils::global_checks,
 };
-use ::uuid::Uuid;
-use actix_web::{HttpRequest, HttpResponse, get, web};
 
-#[get("{uuid}/members")]
 pub async fn get(
-    req: HttpRequest,
-    path: web::Path<(Uuid,)>,
-    data: web::Data<Data>,
-) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+    State(app_state): State<Arc<AppState>>,
+    Path(guild_uuid): Path<Uuid>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let guild_uuid = path.into_inner().0;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let members = Member::fetch_all(&data, &me, guild_uuid).await?;
+    let members = Member::fetch_all(&app_state, &me, guild_uuid).await?;
 
-    Ok(HttpResponse::Ok().json(members))
+    Ok((StatusCode::OK, Json(members)))
 }

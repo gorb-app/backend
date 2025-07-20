@@ -1,13 +1,12 @@
 //! `/api/v1/me/guilds` Contains endpoint related to guild memberships
 
-use actix_web::{HttpRequest, HttpResponse, get, web};
+use std::sync::Arc;
+
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
+use uuid::Uuid;
 
 use crate::{
-    Data,
-    api::v1::auth::check_access_token,
-    error::Error,
-    objects::Me,
-    utils::{get_auth_header, global_checks},
+    AppState, api::v1::auth::CurrentUser, error::Error, objects::Me, utils::global_checks,
 };
 
 /// `GET /api/v1/me/guilds` Returns all guild memberships in a list
@@ -55,21 +54,17 @@ use crate::{
 /// ]);
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
-#[get("/guilds")]
-pub async fn get(req: HttpRequest, data: web::Data<Data>) -> Result<HttpResponse, Error> {
-    let headers = req.headers();
+pub async fn get(
+    State(app_state): State<Arc<AppState>>,
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
+) -> Result<impl IntoResponse, Error> {
+    global_checks(&app_state, uuid).await?;
 
-    let auth_header = get_auth_header(headers)?;
-
-    let mut conn = data.pool.get().await?;
-
-    let uuid = check_access_token(auth_header, &mut conn).await?;
-
-    global_checks(&data, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 
     let memberships = me.fetch_memberships(&mut conn).await?;
 
-    Ok(HttpResponse::Ok().json(memberships))
+    Ok((StatusCode::OK, Json(memberships)))
 }
