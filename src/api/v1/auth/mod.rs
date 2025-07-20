@@ -27,6 +27,7 @@ mod verify_email;
 #[derive(Serialize)]
 pub struct Response {
     access_token: String,
+    device_name: String,
 }
 
 

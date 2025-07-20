@@ -21,7 +21,7 @@ use crate::{
     schema::*,
     utils::{
         PASSWORD_REGEX, generate_token, new_refresh_token_cookie,
-        user_uuid_from_identifier,
+        user_uuid_from_identifier, generate_device_name
     },
 };
 
@@ -29,7 +29,6 @@ use crate::{
 pub struct LoginInformation {
     username: String,
     password: String,
-    device_name: String,
 }
 
 pub async fn response(
@@ -72,12 +71,14 @@ pub async fn response(
 
     use refresh_tokens::dsl as rdsl;
 
+    let device_name = generate_device_name();
+
     insert_into(refresh_tokens::table)
         .values((
             rdsl::token.eq(&refresh_token),
             rdsl::uuid.eq(uuid),
             rdsl::created_at.eq(current_time),
-            rdsl::device_name.eq(&login_information.device_name),
+            rdsl::device_name.eq(&device_name),
         ))
         .execute(&mut conn)
         .await?;
@@ -94,7 +95,7 @@ pub async fn response(
         .execute(&mut conn)
         .await?;
 
-    let mut response = (StatusCode::OK, Json(Response { access_token })).into_response();
+    let mut response = (StatusCode::OK, Json(Response { access_token, device_name })).into_response();
 
     response.headers_mut().append(
         "Set-Cookie",

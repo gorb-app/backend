@@ -19,8 +19,7 @@ use crate::{
     schema::{
         access_tokens::{self, dsl},
         refresh_tokens::{self, dsl as rdsl},
-    },
-    utils::{generate_token, new_refresh_token_cookie},
+    }, utils::{generate_token, new_refresh_token_cookie}
 };
 
 pub async fn post(
@@ -69,6 +68,7 @@ pub async fn post(
         }
 
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
+        let mut device_name: String = String::new();
 
         if lifetime > 1987200 {
             let new_refresh_token = generate_token::<32>()?;
@@ -79,11 +79,13 @@ pub async fn post(
                     rdsl::token.eq(&new_refresh_token),
                     rdsl::created_at.eq(current_time),
                 ))
-                .execute(&mut conn)
+                .returning(rdsl::device_name)
+                .get_result::<String>(&mut conn)
                 .await
             {
-                Ok(_) => {
+                Ok(existing_device_name) => {
                     refresh_token = new_refresh_token;
+                    device_name = existing_device_name;
                 }
                 Err(error) => {
                     error!("{error}");
@@ -102,7 +104,7 @@ pub async fn post(
             .execute(&mut conn)
             .await?;
 
-        let mut response = (StatusCode::OK, Json(Response { access_token })).into_response();
+        let mut response = (StatusCode::OK, Json(Response { access_token, device_name })).into_response();
 
         // TODO: Dont set this when refresh token is unchanged
         response.headers_mut().append(
