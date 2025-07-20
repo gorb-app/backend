@@ -102,7 +102,7 @@ impl Channel {
             c.clone().build(&mut conn).await
         });
 
-        futures::future::try_join_all(channel_futures).await
+        futures_util::future::try_join_all(channel_futures).await
     }
 
     pub async fn fetch_one(app_state: &AppState, channel_uuid: Uuid) -> Result<Self, Error> {
@@ -267,7 +267,7 @@ impl Channel {
 
         let message_futures = messages.iter().map(async move |b| b.build(app_state).await);
 
-        futures::future::try_join_all(message_futures).await
+        futures_util::future::try_join_all(message_futures).await
     }
 
     pub async fn new_message(

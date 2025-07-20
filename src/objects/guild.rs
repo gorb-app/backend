@@ -96,7 +96,7 @@ impl Guild {
         });
 
         // Execute all futures concurrently and collect results
-        futures::future::try_join_all(guild_futures).await
+        futures_util::future::try_join_all(guild_futures).await
     }
 
     pub async fn new(conn: &mut Conn, name: String, owner_uuid: Uuid) -> Result<Self, Error> {

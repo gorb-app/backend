@@ -5,8 +5,7 @@ use axum::{
     http::HeaderMap,
     response::IntoResponse,
 };
-use futures::SinkExt;
-use futures_util::StreamExt as _;
+use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use uuid::Uuid;
 

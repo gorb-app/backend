@@ -391,13 +391,13 @@ impl Me {
             User::fetch_one_with_friendship(app_state, self, friend.uuid2).await
         });
 
-        let mut friends = futures::future::try_join_all(friend_futures).await?;
+        let mut friends = futures_util::future::try_join_all(friend_futures).await?;
 
         let friend_futures = friends2.iter().map(async move |friend| {
             User::fetch_one_with_friendship(app_state, self, friend.uuid1).await
         });
 
-        friends.append(&mut futures::future::try_join_all(friend_futures).await?);
+        friends.append(&mut futures_util::future::try_join_all(friend_futures).await?);
 
         Ok(friends)
     }
