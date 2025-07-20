@@ -10,7 +10,6 @@ use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use error::Error;
 use objects::MailClient;
-use socketioxide::SocketIo;
 use std::{sync::Arc, time::SystemTime};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
@@ -24,7 +23,7 @@ mod config;
 pub mod error;
 pub mod objects;
 pub mod schema;
-mod socket;
+//mod socket;
 pub mod utils;
 mod wordlist;
 
@@ -53,12 +52,6 @@ pub struct AppState {
 async fn main() -> Result<(), Error> {
     tracing_subscriber::fmt::init();
 
-    //SimpleLogger::new()
-    //    .with_level(log::LevelFilter::Info)
-    //    .with_colors(true)
-    //    .env()
-    //    .init()
-    //    .unwrap();
     let args = Args::parse();
 
     let config = ConfigBuilder::load(args.config).await?.build();
@@ -158,12 +151,12 @@ async fn main() -> Result<(), Error> {
         // Allow credentials
         .allow_credentials(true);
 
-    let (socket_io, io) = SocketIo::builder()
+    /*let (socket_io, io) = SocketIo::builder()
         .with_state(app_state.clone())
         .build_layer();
 
     io.ns("/", socket::on_connect);
-
+    */
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
@@ -172,8 +165,8 @@ async fn main() -> Result<(), Error> {
             app_state.clone(),
         ))
         .with_state(app_state)
-        .layer(cors)
-        .layer(socket_io);
+        //.layer(socket_io)
+        .layer(cors);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind(web.ip + ":" + &web.port.to_string()).await?;

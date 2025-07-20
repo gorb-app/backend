@@ -24,7 +24,6 @@ pub struct RevokeRequest {
 }
 
 // TODO: Should maybe be a delete request?
-#[axum::debug_handler]
 pub async fn post(
     State(app_state): State<Arc<AppState>>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,

@@ -1,20 +1,23 @@
 use std::sync::Arc;
 
 use axum::{
-    Router,
-    routing::{any, delete, get, patch},
+    middleware::from_fn_with_state, routing::{any, delete, get, patch}, Router
 };
 //use socketioxide::SocketIo;
 
-use crate::AppState;
+use crate::{api::v1::auth::CurrentUser, AppState};
 
 mod uuid;
 
-pub fn router() -> Router<Arc<AppState>> {
-    Router::new()
+pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+    let router_with_auth = Router::new()
         .route("/{uuid}", get(uuid::get))
         .route("/{uuid}", delete(uuid::delete))
         .route("/{uuid}", patch(uuid::patch))
-        .route("/{uuid}/socket", any(uuid::socket::ws))
         .route("/{uuid}/messages", get(uuid::messages::get))
+        .layer(from_fn_with_state(app_state, CurrentUser::check_auth_layer));
+
+    Router::new()
+        .route("/{uuid}/socket", any(uuid::socket::ws))
+        .merge(router_with_auth)
 }
