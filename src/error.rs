@@ -83,6 +83,9 @@ pub enum Error {
     TooManyRequests(String),
     #[error("{0}")]
     InternalServerError(String),
+    // TODO: remove when doing socket.io
+    #[error(transparent)]
+    AxumError(#[from] axum::Error),
 }
 
 impl IntoResponse for Error {

@@ -17,7 +17,6 @@ mod users;
 pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let router_with_auth = Router::new()
         .nest("/users", users::router())
-        .nest("/channels", channels::router())
         .nest("/guilds", guilds::router())
         .nest("/invites", invites::router())
         .nest("/me", me::router())
@@ -28,6 +27,7 @@ pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
 
     Router::new()
         .route("/stats", get(stats::res))
-        .nest("/auth", auth::router(app_state))
+        .nest("/auth", auth::router(app_state.clone()))
+        .nest("/channels", channels::router(app_state))
         .merge(router_with_auth)
 }

@@ -38,7 +38,7 @@ bindet = "0.3.2"
 bunny-api-tokio = { version = "0.4", features = ["edge_storage"], default-features = false }
 
 # Web Server
-axum = { version = "0.8.4", features = ["macros", "multipart"] }
+axum = { version = "0.8.4", features = ["macros", "multipart", "ws"] }
 tower-http = { version = "0.6.6", features = ["cors"] }
 axum-extra = { version = "0.10.1", features = ["cookie", "typed-header"] }
 socketioxide = { version = "0.17.2", features = ["state"] }

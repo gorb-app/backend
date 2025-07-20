@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    routing::{delete, get, patch},
+    routing::{any, delete, get, patch},
 };
 //use socketioxide::SocketIo;
 
@@ -15,5 +15,6 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/{uuid}", get(uuid::get))
         .route("/{uuid}", delete(uuid::delete))
         .route("/{uuid}", patch(uuid::patch))
+        .route("/{uuid}/socket", any(uuid::socket::ws))
         .route("/{uuid}/messages", get(uuid::messages::get))
 }

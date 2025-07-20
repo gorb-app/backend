@@ -1,7 +1,7 @@
 //! `/api/v1/channels/{uuid}` Channel specific endpoints
 
 pub mod messages;
-//pub mod socket;
+pub mod socket;
 
 use std::sync::Arc;
 
