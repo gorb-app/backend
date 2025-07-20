@@ -1,6 +1,6 @@
 steps:
   - name: build-x86_64
-    image: rust:bookworm
+    image: rust:1.88-bookworm
     commands:
       - cargo build --release
     when:
@@ -8,7 +8,7 @@ steps:
       - event: pull_request
 
   - name: build-arm64
-    image: rust:bookworm
+    image: rust:1.88-bookworm
     commands:
       - dpkg --add-architecture arm64
       - apt-get update -y && apt-get install -y crossbuild-essential-arm64 libssl-dev:arm64
