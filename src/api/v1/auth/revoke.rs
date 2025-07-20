@@ -1,14 +1,20 @@
 use std::sync::Arc;
 
 use argon2::{PasswordHash, PasswordVerifier};
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use diesel::{ExpressionMethods, QueryDsl, delete};
 use diesel_async::RunQueryDsl;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, schema::{refresh_tokens::{self, dsl as rdsl}, users::dsl as udsl}, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    schema::{
+        refresh_tokens::{self, dsl as rdsl},
+        users::dsl as udsl,
+    },
 };
 
 #[derive(Deserialize)]

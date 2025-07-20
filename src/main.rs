@@ -1,29 +1,32 @@
 use argon2::Argon2;
-use axum::{http::{header, Method}, Router};
+use axum::{
+    Router,
+    http::{Method, header},
+};
 use clap::Parser;
+use config::{Config, ConfigBuilder};
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use error::Error;
 use objects::MailClient;
 use socketioxide::SocketIo;
 use std::{sync::Arc, time::SystemTime};
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use config::{Config, ConfigBuilder};
-use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 type Conn =
     deadpool::managed::Object<AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>>;
 
-mod config;
-mod wordlist;
 mod api;
+mod config;
 pub mod error;
 pub mod objects;
 pub mod schema;
-pub mod utils;
 mod socket;
+pub mod utils;
+mod wordlist;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -129,9 +132,7 @@ async fn main() -> Result<(), Error> {
 
     let cors = CorsLayer::new()
         // Allow any origin (equivalent to allowed_origin_fn returning true)
-        .allow_origin(AllowOrigin::predicate(|_origin, _request_head| {
-            true
-        }))
+        .allow_origin(AllowOrigin::predicate(|_origin, _request_head| true))
         .allow_methods(vec![
             Method::GET,
             Method::POST,
@@ -157,14 +158,19 @@ async fn main() -> Result<(), Error> {
         // Allow credentials
         .allow_credentials(true);
 
-    let (socket_io, io) = SocketIo::builder().with_state(app_state.clone()).build_layer();
+    let (socket_io, io) = SocketIo::builder()
+        .with_state(app_state.clone())
+        .build_layer();
 
     io.ns("/", socket::on_connect);
 
     // build our application with a route
     let app = Router::new()
         // `GET /` goes to `root`
-        .merge(api::router(web.backend_url.path().trim_end_matches("/"), app_state.clone()))
+        .merge(api::router(
+            web.backend_url.path().trim_end_matches("/"),
+            app_state.clone(),
+        ))
         .with_state(app_state)
         .layer(cors)
         .layer(socket_io);

@@ -3,11 +3,18 @@
 use std::sync::Arc;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::{Channel, Member}, utils::global_checks, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{Channel, Member},
+    utils::global_checks,
 };
 use ::uuid::Uuid;
 use axum::{
-    extract::{Path, Query, State}, http::StatusCode, response::IntoResponse, Extension, Json
+    Extension, Json,
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
 };
 use serde::Deserialize;
 

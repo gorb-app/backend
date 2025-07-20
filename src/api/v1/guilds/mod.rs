@@ -2,16 +2,24 @@
 
 use std::sync::Arc;
 
+use ::uuid::Uuid;
 use axum::{
-    extract::State, http::StatusCode, response::IntoResponse, routing::{get, post}, Extension, Json, Router
+    Extension, Json, Router,
+    extract::State,
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, post},
 };
 use serde::Deserialize;
-use ::uuid::Uuid;
 
 mod uuid;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::{Guild, StartAmountQuery}, utils::global_checks, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{Guild, StartAmountQuery},
+    utils::global_checks,
 };
 
 #[derive(Deserialize)]
@@ -55,7 +63,12 @@ pub async fn new(
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(guild_info): Json<GuildInfo>,
 ) -> Result<impl IntoResponse, Error> {
-    let guild = Guild::new(&mut app_state.pool.get().await?, guild_info.name.clone(), uuid).await?;
+    let guild = Guild::new(
+        &mut app_state.pool.get().await?,
+        guild_info.name.clone(),
+        uuid,
+    )
+    .await?;
 
     Ok((StatusCode::OK, Json(guild)))
 }

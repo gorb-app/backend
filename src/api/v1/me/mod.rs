@@ -1,14 +1,18 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{DefaultBodyLimit, Multipart, State}, http::StatusCode, response::IntoResponse, routing::{delete, get, patch, post}, Extension, Json, Router
+    Extension, Json, Router,
+    extract::{DefaultBodyLimit, Multipart, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{delete, get, patch, post},
 };
 use bytes::Bytes;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::Me, utils::global_checks, AppState
+    AppState, api::v1::auth::CurrentUser, error::Error, objects::Me, utils::global_checks,
 };
 
 mod friends;

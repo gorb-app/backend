@@ -3,12 +3,19 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
 };
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::{Me, User}, utils::global_checks, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{Me, User},
+    utils::global_checks,
 };
 
 /// `GET /api/v1/users/{uuid}` Returns user with the given UUID

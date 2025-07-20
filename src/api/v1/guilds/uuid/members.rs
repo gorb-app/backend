@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use ::uuid::Uuid;
 use axum::{
-    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
 };
 
 use crate::{

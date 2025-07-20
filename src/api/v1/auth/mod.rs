@@ -4,9 +4,16 @@ use std::{
 };
 
 use axum::{
-    extract::{Request, State}, middleware::{from_fn_with_state, Next}, response::IntoResponse, routing::{delete, get, post}, Router
+    Router,
+    extract::{Request, State},
+    middleware::{Next, from_fn_with_state},
+    response::IntoResponse,
+    routing::{delete, get, post},
 };
-use axum_extra::{headers::{authorization::Bearer, Authorization}, TypedHeader};
+use axum_extra::{
+    TypedHeader,
+    headers::{Authorization, authorization::Bearer},
+};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
@@ -23,13 +30,11 @@ mod reset_password;
 mod revoke;
 mod verify_email;
 
-
 #[derive(Serialize)]
 pub struct Response {
     access_token: String,
     device_name: String,
 }
-
 
 pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let router_with_auth = Router::new()
@@ -82,9 +87,10 @@ impl CurrentUser<Uuid> {
         State(app_state): State<Arc<AppState>>,
         TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
         mut req: Request,
-        next: Next
+        next: Next,
     ) -> Result<impl IntoResponse, Error> {
-        let current_user = CurrentUser(check_access_token(auth.token(), &mut app_state.pool.get().await?).await?);
+        let current_user =
+            CurrentUser(check_access_token(auth.token(), &mut app_state.pool.get().await?).await?);
 
         req.extensions_mut().insert(current_user);
         Ok(next.run(req).await)

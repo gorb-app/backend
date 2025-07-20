@@ -1,7 +1,8 @@
 use axum::{
+    Json,
     extract::State,
     http::{HeaderValue, StatusCode},
-    response::IntoResponse, Json,
+    response::IntoResponse,
 };
 use axum_extra::extract::CookieJar;
 use diesel::{ExpressionMethods, QueryDsl, delete, update};
@@ -19,7 +20,8 @@ use crate::{
     schema::{
         access_tokens::{self, dsl},
         refresh_tokens::{self, dsl as rdsl},
-    }, utils::{generate_token, new_refresh_token_cookie}
+    },
+    utils::{generate_token, new_refresh_token_cookie},
 };
 
 pub async fn post(
@@ -104,7 +106,14 @@ pub async fn post(
             .execute(&mut conn)
             .await?;
 
-        let mut response = (StatusCode::OK, Json(Response { access_token, device_name })).into_response();
+        let mut response = (
+            StatusCode::OK,
+            Json(Response {
+                access_token,
+                device_name,
+            }),
+        )
+            .into_response();
 
         // TODO: Dont set this when refresh token is unchanged
         response.headers_mut().append(
@@ -113,7 +122,6 @@ pub async fn post(
                 &new_refresh_token_cookie(&app_state.config, refresh_token).to_string(),
             )?,
         );
-        
 
         return Ok(response);
     }

@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use axum::{
+    Extension,
     extract::{Path, State},
     http::StatusCode,
-    response::IntoResponse, Extension,
+    response::IntoResponse,
 };
 use uuid::Uuid;
 

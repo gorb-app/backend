@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use axum::{middleware::from_fn_with_state, routing::get, Router};
+use axum::{Router, middleware::from_fn_with_state, routing::get};
 
-use crate::{api::v1::auth::CurrentUser, AppState};
+use crate::{AppState, api::v1::auth::CurrentUser};
 
 mod auth;
 mod channels;
@@ -21,7 +21,10 @@ pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .nest("/guilds", guilds::router())
         .nest("/invites", invites::router())
         .nest("/me", me::router())
-        .layer(from_fn_with_state(app_state.clone(), CurrentUser::check_auth_layer));
+        .layer(from_fn_with_state(
+            app_state.clone(),
+            CurrentUser::check_auth_layer,
+        ));
 
     Router::new()
         .route("/stats", get(stats::res))

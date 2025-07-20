@@ -2,12 +2,19 @@ use std::sync::Arc;
 
 use ::uuid::Uuid;
 use axum::{
-    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
 };
 use serde::Deserialize;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::{Channel, Member, Permissions}, utils::{global_checks, order_by_is_above}, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{Channel, Member, Permissions},
+    utils::{global_checks, order_by_is_above},
 };
 
 #[derive(Deserialize)]
@@ -55,7 +62,8 @@ pub async fn create(
 ) -> Result<impl IntoResponse, Error> {
     global_checks(&app_state, uuid).await?;
 
-    let member = Member::check_membership(&mut app_state.pool.get().await?, uuid, guild_uuid).await?;
+    let member =
+        Member::check_membership(&mut app_state.pool.get().await?, uuid, guild_uuid).await?;
 
     member
         .check_permission(&app_state, Permissions::ManageChannel)

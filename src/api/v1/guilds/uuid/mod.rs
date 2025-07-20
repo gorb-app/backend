@@ -3,7 +3,11 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Multipart, Path, State}, http::StatusCode, response::IntoResponse, routing::{get, patch, post}, Extension, Json, Router
+    Extension, Json, Router,
+    extract::{Multipart, Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{get, patch, post},
 };
 use bytes::Bytes;
 use uuid::Uuid;

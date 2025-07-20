@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
 };
 use serde::Deserialize;
 use uuid::Uuid;

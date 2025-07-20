@@ -2,14 +2,17 @@
 
 use std::sync::Arc;
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, schema::refresh_tokens::{self, dsl}, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    schema::refresh_tokens::{self, dsl},
 };
 
 #[derive(Serialize, Selectable, Queryable)]

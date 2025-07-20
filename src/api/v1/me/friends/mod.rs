@@ -1,13 +1,17 @@
 use std::sync::Arc;
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Extension, Json};
-use serde::Deserialize;
 use ::uuid::Uuid;
+use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
+use serde::Deserialize;
 
 pub mod uuid;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::Me, utils::{global_checks, user_uuid_from_username}, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::Me,
+    utils::{global_checks, user_uuid_from_username},
 };
 
 /// Returns a list of users that are your friends

@@ -3,16 +3,20 @@
 use std::sync::Arc;
 
 use axum::{
+    Extension,
     extract::{Query, State},
     http::StatusCode,
-    response::IntoResponse, Extension,
+    response::IntoResponse,
 };
 use chrono::{Duration, Utc};
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::{EmailToken, Me}, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{EmailToken, Me},
 };
 
 #[derive(Deserialize)]
@@ -41,7 +45,7 @@ pub struct QueryParams {
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Query(query): Query<QueryParams>,
-    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;
 
@@ -79,7 +83,7 @@ pub async fn get(
 ///
 pub async fn post(
     State(app_state): State<Arc<AppState>>,
-    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>
+    Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
 

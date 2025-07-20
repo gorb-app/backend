@@ -13,7 +13,10 @@ use crate::{
     utils::global_checks,
 };
 use axum::{
-    extract::{Path, State}, http::StatusCode, response::IntoResponse, Extension, Json
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
 };
 
 use serde::Deserialize;
@@ -42,7 +45,9 @@ pub async fn delete(
 
     let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    let member = Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
+    let member =
+        Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid)
+            .await?;
 
     member
         .check_permission(&app_state, Permissions::ManageChannel)
@@ -101,7 +106,9 @@ pub async fn patch(
 
     let mut channel = Channel::fetch_one(&app_state, channel_uuid).await?;
 
-    let member = Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
+    let member =
+        Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid)
+            .await?;
 
     member
         .check_permission(&app_state, Permissions::ManageChannel)

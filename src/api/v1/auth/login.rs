@@ -20,8 +20,8 @@ use crate::{
     error::Error,
     schema::*,
     utils::{
-        PASSWORD_REGEX, generate_token, new_refresh_token_cookie,
-        user_uuid_from_identifier, generate_device_name
+        PASSWORD_REGEX, generate_device_name, generate_token, new_refresh_token_cookie,
+        user_uuid_from_identifier,
     },
 };
 
@@ -95,7 +95,14 @@ pub async fn response(
         .execute(&mut conn)
         .await?;
 
-    let mut response = (StatusCode::OK, Json(Response { access_token, device_name })).into_response();
+    let mut response = (
+        StatusCode::OK,
+        Json(Response {
+            access_token,
+            device_name,
+        }),
+    )
+        .into_response();
 
     response.headers_mut().append(
         "Set-Cookie",

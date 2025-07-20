@@ -1,4 +1,4 @@
-pub const ANIMALS: [&'static str; 223] = [
+pub const ANIMALS: [&str; 223] = [
     "Aardvark",
     "Albatross",
     "Alligator",
@@ -224,7 +224,7 @@ pub const ANIMALS: [&'static str; 223] = [
     "Zebra",
 ];
 
-pub const ADJECTIVES: [&'static str; 765] = [
+pub const ADJECTIVES: [&str; 765] = [
     "Other",
     "Such",
     "First",

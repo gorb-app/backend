@@ -2,13 +2,21 @@
 
 use std::sync::Arc;
 
-use axum::{
-    extract::{Query, State}, http::StatusCode, response::IntoResponse, routing::get, Extension, Json, Router
-};
 use ::uuid::Uuid;
+use axum::{
+    Extension, Json, Router,
+    extract::{Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::get,
+};
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::{StartAmountQuery, User}, utils::global_checks, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{StartAmountQuery, User},
+    utils::global_checks,
 };
 
 mod uuid;

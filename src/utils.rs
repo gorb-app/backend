@@ -1,5 +1,5 @@
+use rand::seq::IndexedRandom;
 use std::sync::LazyLock;
-use rand::{seq::IndexedRandom};
 
 use axum::body::Bytes;
 use axum_extra::extract::cookie::{Cookie, SameSite};
@@ -20,7 +20,7 @@ use crate::{
     error::Error,
     objects::{HasIsAbove, HasUuid},
     schema::users,
-    wordlist::{ADJECTIVES, ANIMALS}
+    wordlist::{ADJECTIVES, ANIMALS},
 };
 
 pub static EMAIL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -216,5 +216,5 @@ pub fn generate_device_name() -> String {
     let adjective = ADJECTIVES.choose(&mut rng).unwrap();
     let animal = ANIMALS.choose(&mut rng).unwrap();
 
-    return [*adjective, *animal].join(" ")
+    [*adjective, *animal].join(" ")
 }

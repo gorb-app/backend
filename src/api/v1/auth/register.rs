@@ -29,8 +29,8 @@ use crate::{
         users::{self, dsl as udsl},
     },
     utils::{
-        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_token,
-        new_refresh_token_cookie, generate_device_name
+        EMAIL_REGEX, PASSWORD_REGEX, USERNAME_REGEX, generate_device_name, generate_token,
+        new_refresh_token_cookie,
     },
 };
 
@@ -137,11 +137,11 @@ pub async fn post(
         let current_time = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
 
         let device_name = generate_device_name();
-        
+
         insert_into(refresh_tokens::table)
-        .values((
-            rdsl::token.eq(&refresh_token),
-            rdsl::uuid.eq(uuid),
+            .values((
+                rdsl::token.eq(&refresh_token),
+                rdsl::uuid.eq(uuid),
                 rdsl::created_at.eq(current_time),
                 rdsl::device_name.eq(&device_name),
             ))
@@ -162,7 +162,14 @@ pub async fn post(
             Member::new(&app_state, uuid, initial_guild).await?;
         }
 
-        let mut response = (StatusCode::OK, Json(Response {access_token, device_name})).into_response();
+        let mut response = (
+            StatusCode::OK,
+            Json(Response {
+                access_token,
+                device_name,
+            }),
+        )
+            .into_response();
 
         response.headers_mut().append(
             "Set-Cookie",
