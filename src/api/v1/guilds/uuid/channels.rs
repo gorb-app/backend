@@ -35,8 +35,9 @@ pub async fn get(
     if let Ok(cache_hit) = app_state
         .get_cache_key(format!("{guild_uuid}_channels"))
         .await
+        && let Ok(channels) = serde_json::from_str::<Vec<Channel>>(&cache_hit)
     {
-        return Ok((StatusCode::OK, Json(cache_hit)).into_response());
+        return Ok((StatusCode::OK, Json(channels)).into_response());
     }
 
     let channels = Channel::fetch_all(&app_state.pool, guild_uuid).await?;

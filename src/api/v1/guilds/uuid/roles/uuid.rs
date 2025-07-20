@@ -27,8 +27,10 @@ pub async fn get(
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    if let Ok(cache_hit) = app_state.get_cache_key(format!("{role_uuid}")).await {
-        return Ok((StatusCode::OK, Json(cache_hit)).into_response());
+    if let Ok(cache_hit) = app_state.get_cache_key(format!("{role_uuid}")).await
+        && let Ok(role) = serde_json::from_str::<Role>(&cache_hit)
+    {
+        return Ok((StatusCode::OK, Json(role)).into_response());
     }
 
     let role = Role::fetch_one(&mut conn, role_uuid).await?;
