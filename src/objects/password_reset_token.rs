@@ -10,10 +10,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AppState,
+    AppState, Conn,
     error::Error,
     schema::users,
-    utils::{PASSWORD_REGEX, generate_token, global_checks, user_uuid_from_identifier},
+    utils::{CacheFns, PASSWORD_REGEX, generate_token, global_checks, user_uuid_from_identifier},
 };
 
 #[derive(Serialize, Deserialize)]
@@ -24,50 +24,49 @@ pub struct PasswordResetToken {
 }
 
 impl PasswordResetToken {
-    pub async fn get(app_state: &AppState, token: String) -> Result<PasswordResetToken, Error> {
-        let user_uuid: Uuid =
-            serde_json::from_str(&app_state.get_cache_key(token.to_string()).await?)?;
-        let password_reset_token = serde_json::from_str(
-            &app_state
-                .get_cache_key(format!("{user_uuid}_password_reset"))
-                .await?,
-        )?;
+    pub async fn get(
+        cache_pool: &redis::Client,
+        token: String,
+    ) -> Result<PasswordResetToken, Error> {
+        let user_uuid: Uuid = cache_pool.get_cache_key(token.to_string()).await?;
+        let password_reset_token = cache_pool
+            .get_cache_key(format!("{user_uuid}_password_reset"))
+            .await?;
 
         Ok(password_reset_token)
     }
 
     pub async fn get_with_identifier(
-        app_state: &AppState,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
         identifier: String,
     ) -> Result<PasswordResetToken, Error> {
-        let mut conn = app_state.pool.get().await?;
+        let user_uuid = user_uuid_from_identifier(conn, &identifier).await?;
 
-        let user_uuid = user_uuid_from_identifier(&mut conn, &identifier).await?;
-
-        let password_reset_token = serde_json::from_str(
-            &app_state
-                .get_cache_key(format!("{user_uuid}_password_reset"))
-                .await?,
-        )?;
+        let password_reset_token = cache_pool
+            .get_cache_key(format!("{user_uuid}_password_reset"))
+            .await?;
 
         Ok(password_reset_token)
     }
 
     #[allow(clippy::new_ret_no_self)]
-    pub async fn new(app_state: &AppState, identifier: String) -> Result<(), Error> {
+    pub async fn new(
+        conn: &mut Conn,
+        app_state: &AppState,
+        identifier: String,
+    ) -> Result<(), Error> {
         let token = generate_token::<32>()?;
 
-        let mut conn = app_state.pool.get().await?;
+        let user_uuid = user_uuid_from_identifier(conn, &identifier).await?;
 
-        let user_uuid = user_uuid_from_identifier(&mut conn, &identifier).await?;
-
-        global_checks(app_state, user_uuid).await?;
+        global_checks(conn, &app_state.config, user_uuid).await?;
 
         use users::dsl as udsl;
         let (username, email_address): (String, String) = udsl::users
             .filter(udsl::uuid.eq(user_uuid))
             .select((udsl::username, udsl::email))
-            .get_result(&mut conn)
+            .get_result(conn)
             .await?;
 
         let password_reset_token = PasswordResetToken {
@@ -77,6 +76,7 @@ impl PasswordResetToken {
         };
 
         app_state
+            .cache_pool
             .set_cache_key(
                 format!("{user_uuid}_password_reset"),
                 password_reset_token,
@@ -84,6 +84,7 @@ impl PasswordResetToken {
             )
             .await?;
         app_state
+            .cache_pool
             .set_cache_key(token.clone(), user_uuid, 86400)
             .await?;
 
@@ -106,7 +107,12 @@ impl PasswordResetToken {
         Ok(())
     }
 
-    pub async fn set_password(&self, app_state: &AppState, password: String) -> Result<(), Error> {
+    pub async fn set_password(
+        &self,
+        conn: &mut Conn,
+        app_state: &AppState,
+        password: String,
+    ) -> Result<(), Error> {
         if !PASSWORD_REGEX.is_match(&password) {
             return Err(Error::BadRequest(
                 "Please provide a valid password".to_string(),
@@ -120,19 +126,17 @@ impl PasswordResetToken {
             .hash_password(password.as_bytes(), &salt)
             .map_err(|e| Error::PasswordHashError(e.to_string()))?;
 
-        let mut conn = app_state.pool.get().await?;
-
         use users::dsl;
         update(users::table)
             .filter(dsl::uuid.eq(self.user_uuid))
             .set(dsl::password.eq(hashed_password.to_string()))
-            .execute(&mut conn)
+            .execute(conn)
             .await?;
 
         let (username, email_address): (String, String) = dsl::users
             .filter(dsl::uuid.eq(self.user_uuid))
             .select((dsl::username, dsl::email))
-            .get_result(&mut conn)
+            .get_result(conn)
             .await?;
 
         let login_page = app_state.config.web.frontend_url.join("login")?;
@@ -149,14 +153,14 @@ impl PasswordResetToken {
 
         app_state.mail_client.send_mail(email).await?;
 
-        self.delete(app_state).await
+        self.delete(&app_state.cache_pool).await
     }
 
-    pub async fn delete(&self, app_state: &AppState) -> Result<(), Error> {
-        app_state
+    pub async fn delete(&self, cache_pool: &redis::Client) -> Result<(), Error> {
+        cache_pool
             .del_cache_key(format!("{}_password_reset", &self.user_uuid))
             .await?;
-        app_state.del_cache_key(self.token.to_string()).await?;
+        cache_pool.del_cache_key(self.token.to_string()).await?;
 
         Ok(())
     }

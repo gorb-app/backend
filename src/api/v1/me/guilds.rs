@@ -58,9 +58,9 @@ pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 

@@ -39,11 +39,14 @@ pub async fn get(
     Path(user_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    let user = User::fetch_one_with_friendship(&app_state, &me, user_uuid).await?;
+    let me = Me::get(&mut conn, uuid).await?;
+
+    let user =
+        User::fetch_one_with_friendship(&mut conn, &app_state.cache_pool, &me, user_uuid).await?;
 
     Ok((StatusCode::OK, Json(user)))
 }

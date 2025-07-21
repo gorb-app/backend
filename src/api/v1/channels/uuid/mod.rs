@@ -27,11 +27,13 @@ pub async fn get(
     Path(channel_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
+    let channel = Channel::fetch_one(&mut conn, &app_state.cache_pool, channel_uuid).await?;
+
+    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     Ok((StatusCode::OK, Json(channel)))
 }
@@ -41,19 +43,19 @@ pub async fn delete(
     Path(channel_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    let member =
-        Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid)
-            .await?;
+    let channel = Channel::fetch_one(&mut conn, &app_state.cache_pool, channel_uuid).await?;
+
+    let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     member
-        .check_permission(&app_state, Permissions::ManageChannel)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageChannel)
         .await?;
 
-    channel.delete(&app_state).await?;
+    channel.delete(&mut conn, &app_state.cache_pool).await?;
 
     Ok(StatusCode::OK)
 }
@@ -102,31 +104,37 @@ pub async fn patch(
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(new_info): Json<NewInfo>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let mut channel = Channel::fetch_one(&app_state, channel_uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    let member =
-        Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid)
-            .await?;
+    let mut channel = Channel::fetch_one(&mut conn, &app_state.cache_pool, channel_uuid).await?;
+
+    let member = Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     member
-        .check_permission(&app_state, Permissions::ManageChannel)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageChannel)
         .await?;
 
     if let Some(new_name) = &new_info.name {
-        channel.set_name(&app_state, new_name.to_string()).await?;
+        channel
+            .set_name(&mut conn, &app_state.cache_pool, new_name.to_string())
+            .await?;
     }
 
     if let Some(new_description) = &new_info.description {
         channel
-            .set_description(&app_state, new_description.to_string())
+            .set_description(
+                &mut conn,
+                &app_state.cache_pool,
+                new_description.to_string(),
+            )
             .await?;
     }
 
     if let Some(new_is_above) = &new_info.is_above {
         channel
-            .set_description(&app_state, new_is_above.to_string())
+            .set_description(&mut conn, &app_state.cache_pool, new_is_above.to_string())
             .await?;
     }
 

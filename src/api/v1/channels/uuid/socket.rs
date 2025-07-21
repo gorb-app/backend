@@ -71,9 +71,9 @@ pub async fn ws(
     // Authorize client using auth header
     let uuid = check_access_token(auth_header, &mut conn).await?;
 
-    global_checks(&app_state, uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
+    let channel = Channel::fetch_one(&mut conn, &app_state.cache_pool, channel_uuid).await?;
 
     Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
@@ -103,7 +103,8 @@ pub async fn ws(
 
                     let message = channel
                         .new_message(
-                            &app_state,
+                            &mut conn,
+                            &app_state.cache_pool,
                             uuid,
                             message_body.message,
                             message_body.reply_to,

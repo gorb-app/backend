@@ -82,9 +82,9 @@ pub async fn get_guild(
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
@@ -102,14 +102,14 @@ pub async fn edit(
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&app_state, Permissions::ManageGuild)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageGuild)
         .await?;
 
     let mut guild = Guild::fetch_one(&mut conn, guild_uuid).await?;
@@ -127,14 +127,7 @@ pub async fn edit(
     }
 
     if let Some(icon) = icon {
-        guild
-            .set_icon(
-                &app_state.bunny_storage,
-                &mut conn,
-                app_state.config.bunny.cdn_url.clone(),
-                icon,
-            )
-            .await?;
+        guild.set_icon(&mut conn, &app_state, icon).await?;
     }
 
     Ok(StatusCode::OK)

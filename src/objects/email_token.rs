@@ -3,7 +3,11 @@ use lettre::message::MultiPart;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{AppState, error::Error, utils::generate_token};
+use crate::{
+    AppState,
+    error::Error,
+    utils::{CacheFns, generate_token},
+};
 
 use super::Me;
 
@@ -15,12 +19,10 @@ pub struct EmailToken {
 }
 
 impl EmailToken {
-    pub async fn get(app_state: &AppState, user_uuid: Uuid) -> Result<EmailToken, Error> {
-        let email_token = serde_json::from_str(
-            &app_state
-                .get_cache_key(format!("{user_uuid}_email_verify"))
-                .await?,
-        )?;
+    pub async fn get(cache_pool: &redis::Client, user_uuid: Uuid) -> Result<EmailToken, Error> {
+        let email_token = cache_pool
+            .get_cache_key(format!("{user_uuid}_email_verify"))
+            .await?;
 
         Ok(email_token)
     }
@@ -37,6 +39,7 @@ impl EmailToken {
         };
 
         app_state
+            .cache_pool
             .set_cache_key(format!("{}_email_verify", me.uuid), email_token, 86400)
             .await?;
 
@@ -59,8 +62,8 @@ impl EmailToken {
         Ok(())
     }
 
-    pub async fn delete(&self, app_state: &AppState) -> Result<(), Error> {
-        app_state
+    pub async fn delete(&self, cache_pool: &redis::Client) -> Result<(), Error> {
+        cache_pool
             .del_cache_key(format!("{}_email_verify", self.user_uuid))
             .await?;
 

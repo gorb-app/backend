@@ -55,7 +55,7 @@ pub async fn get(
         return Ok(StatusCode::NO_CONTENT);
     }
 
-    let email_token = EmailToken::get(&app_state, me.uuid).await?;
+    let email_token = EmailToken::get(&app_state.cache_pool, me.uuid).await?;
 
     if query.token != email_token.token {
         return Ok(StatusCode::UNAUTHORIZED);
@@ -63,7 +63,7 @@ pub async fn get(
 
     me.verify_email(&mut conn).await?;
 
-    email_token.delete(&app_state).await?;
+    email_token.delete(&app_state.cache_pool).await?;
 
     Ok(StatusCode::OK)
 }
@@ -91,9 +91,9 @@ pub async fn post(
         return Ok(StatusCode::NO_CONTENT);
     }
 
-    if let Ok(email_token) = EmailToken::get(&app_state, me.uuid).await {
+    if let Ok(email_token) = EmailToken::get(&app_state.cache_pool, me.uuid).await {
         if Utc::now().signed_duration_since(email_token.created_at) > Duration::hours(1) {
-            email_token.delete(&app_state).await?;
+            email_token.delete(&app_state.cache_pool).await?;
         } else {
             return Err(Error::TooManyRequests(
                 "Please allow 1 hour before sending a new email".to_string(),

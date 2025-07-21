@@ -60,14 +60,21 @@ pub async fn get(
     Query(message_request): Query<MessageRequest>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let channel = Channel::fetch_one(&app_state, channel_uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    Member::check_membership(&mut app_state.pool.get().await?, uuid, channel.guild_uuid).await?;
+    let channel = Channel::fetch_one(&mut conn, &app_state.cache_pool, channel_uuid).await?;
+
+    Member::check_membership(&mut conn, uuid, channel.guild_uuid).await?;
 
     let messages = channel
-        .fetch_messages(&app_state, message_request.amount, message_request.offset)
+        .fetch_messages(
+            &mut conn,
+            &app_state.cache_pool,
+            message_request.amount,
+            message_request.offset,
+        )
         .await?;
 
     Ok((StatusCode::OK, Json(messages)))

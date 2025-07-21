@@ -38,11 +38,17 @@ pub async fn get(
     State(app_state): State<Arc<AppState>>,
     query: Query<QueryParams>,
 ) -> Result<impl IntoResponse, Error> {
-    if let Ok(password_reset_token) =
-        PasswordResetToken::get_with_identifier(&app_state, query.identifier.clone()).await
+    let mut conn = app_state.pool.get().await?;
+
+    if let Ok(password_reset_token) = PasswordResetToken::get_with_identifier(
+        &mut conn,
+        &app_state.cache_pool,
+        query.identifier.clone(),
+    )
+    .await
     {
         if Utc::now().signed_duration_since(password_reset_token.created_at) > Duration::hours(1) {
-            password_reset_token.delete(&app_state).await?;
+            password_reset_token.delete(&app_state.cache_pool).await?;
         } else {
             return Err(Error::TooManyRequests(
                 "Please allow 1 hour before sending a new email".to_string(),
@@ -50,7 +56,7 @@ pub async fn get(
         }
     }
 
-    PasswordResetToken::new(&app_state, query.identifier.clone()).await?;
+    PasswordResetToken::new(&mut conn, &app_state, query.identifier.clone()).await?;
 
     Ok(StatusCode::OK)
 }
@@ -87,10 +93,14 @@ pub async fn post(
     reset_password: Json<ResetPassword>,
 ) -> Result<impl IntoResponse, Error> {
     let password_reset_token =
-        PasswordResetToken::get(&app_state, reset_password.token.clone()).await?;
+        PasswordResetToken::get(&app_state.cache_pool, reset_password.token.clone()).await?;
 
     password_reset_token
-        .set_password(&app_state, reset_password.password.clone())
+        .set_password(
+            &mut app_state.pool.get().await?,
+            &app_state,
+            reset_password.password.clone(),
+        )
         .await?;
 
     Ok(StatusCode::OK)
