@@ -1,4 +1,4 @@
-//! `/api/v1/member/{uuid}` Member specific endpoints
+//! `/api/v1/members/{uuid}` Member specific endpoints
 
 use std::sync::Arc;
 
@@ -41,15 +41,17 @@ pub async fn delete(
 ) -> Result<impl IntoResponse, Error> {
     global_checks(&app_state, uuid).await?;
 
-    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
+
+    let me = Me::get(&mut conn, uuid).await?;
 
     let member = Member::fetch_one_with_member(&app_state, &me, member_uuid).await?;
 
-    let deleter = Member::check_membership(&mut app_state.pool.get().await?, uuid, member.guild_uuid).await?;
+    let deleter = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
     
     deleter.check_permission(&app_state, Permissions::ManageMember).await?;
 
-    member.delete(&mut app_state.pool.get().await?).await?;
+    member.delete(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }
