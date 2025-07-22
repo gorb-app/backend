@@ -26,9 +26,12 @@ pub async fn get(
 ) -> Result<impl IntoResponse, Error> {
     global_checks(&app_state, uuid).await?;
 
-    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
+
+    let me = Me::get(&mut conn, uuid).await?;
 
     let member = Member::fetch_one_with_member(&app_state, &me, member_uuid).await?;
+    Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
     
 
     Ok((StatusCode::OK, Json(member)))
