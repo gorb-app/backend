@@ -49,7 +49,7 @@ pub async fn delete(
     let member = Member::fetch_one_with_member(&app_state, &me, member_uuid).await?;
 
     if member.is_owner {
-        return Error::Forbidden("Can not kick owner".to_string());
+        return Err(Error::Forbidden("Can not kick owner".to_string()));
     }
 
     let deleter = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
