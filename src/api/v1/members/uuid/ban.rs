@@ -39,8 +39,8 @@ pub async fn post(
         return Err(Error::Forbidden("Can not ban owner".to_string()));
     }
 
-    let baner = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
-    baner
+    let caller = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
+    caller
         .check_permission(&app_state, Permissions::ManageMember)
         .await?;
 
