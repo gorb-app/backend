@@ -1,4 +1,4 @@
-//! `/api/v1/channels/{uuid}` Channel specific endpoints
+//! `/api/v1/member/{uuid}` Member specific endpoints
 
 use std::sync::Arc;
 

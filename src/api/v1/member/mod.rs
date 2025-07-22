@@ -5,7 +5,6 @@ use axum::{
     middleware::from_fn_with_state,
     routing::{any, delete, get, patch},
 };
-//use socketioxide::SocketIo;
 
 use crate::{AppState, api::v1::auth::CurrentUser};
 
