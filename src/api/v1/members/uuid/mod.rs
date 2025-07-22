@@ -55,7 +55,7 @@ pub async fn delete(
     let deleter = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
 
     deleter
-        .check_permission(&app_state, Permissions::ManageMember)
+        .check_permission(&app_state, Permissions::KickMember)
         .await?;
 
     member.delete(&mut conn).await?;
