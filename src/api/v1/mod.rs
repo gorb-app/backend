@@ -20,6 +20,7 @@ pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .nest("/users", users::router())
         .nest("/guilds", guilds::router())
         .nest("/invites", invites::router())
+        .nest("/members", members::router())
         .nest("/me", me::router())
         .layer(from_fn_with_state(
             app_state.clone(),
@@ -30,6 +31,5 @@ pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/stats", get(stats::res))
         .nest("/auth", auth::router(app_state.clone()))
         .nest("/channels", channels::router(app_state))
-        .nest("/members", members::router())
         .merge(router_with_auth)
 }
