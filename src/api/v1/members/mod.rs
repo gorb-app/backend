@@ -2,11 +2,10 @@ use std::sync::Arc;
 
 use axum::{
     Router,
-    middleware::from_fn_with_state,
-    routing::{any, delete, get, patch},
+    routing::{delete, get},
 };
 
-use crate::{AppState, api::v1::auth::CurrentUser};
+use crate::AppState;
 
 mod uuid;
 

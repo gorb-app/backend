@@ -11,9 +11,9 @@ mod channels;
 mod guilds;
 mod invites;
 mod me;
+mod members;
 mod stats;
 mod users;
-mod members;
 
 pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let router_with_auth = Router::new()

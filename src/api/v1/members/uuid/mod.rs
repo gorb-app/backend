@@ -6,7 +6,7 @@ use crate::{
     AppState,
     api::v1::auth::CurrentUser,
     error::Error,
-    objects::{Channel, Member, Permissions, Me},
+    objects::{Me, Member, Permissions},
     utils::global_checks,
 };
 use axum::{
@@ -16,7 +16,6 @@ use axum::{
     response::IntoResponse,
 };
 
-use serde::Deserialize;
 use uuid::Uuid;
 
 pub async fn get(
@@ -32,7 +31,6 @@ pub async fn get(
 
     let member = Member::fetch_one_with_member(&app_state, &me, member_uuid).await?;
     Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
-    
 
     Ok((StatusCode::OK, Json(member)))
 }
@@ -51,11 +49,12 @@ pub async fn delete(
     let member = Member::fetch_one_with_member(&app_state, &me, member_uuid).await?;
 
     let deleter = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
-    
-    deleter.check_permission(&app_state, Permissions::ManageMember).await?;
+
+    deleter
+        .check_permission(&app_state, Permissions::ManageMember)
+        .await?;
 
     member.delete(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }
-
