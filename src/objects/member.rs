@@ -1,5 +1,6 @@
 use diesel::{
-    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into,
+    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, delete,
+    insert_into,
 };
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
@@ -119,6 +120,23 @@ impl Member {
         member.build(app_state, Some(me)).await
     }
 
+    pub async fn fetch_one_with_member(
+        app_state: &AppState,
+        me: &Me,
+        uuid: Uuid,
+    ) -> Result<Self, Error> {
+        let mut conn = app_state.pool.get().await?;
+
+        use guild_members::dsl;
+        let member: MemberBuilder = dsl::guild_members
+            .filter(dsl::uuid.eq(uuid))
+            .select(MemberBuilder::as_select())
+            .get_result(&mut conn)
+            .await?;
+
+        member.build(app_state, Some(me)).await
+    }
+
     pub async fn fetch_all(
         app_state: &AppState,
         me: &Me,
@@ -167,5 +185,14 @@ impl Member {
             .await?;
 
         member.build(app_state, None).await
+    }
+
+    pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
+        delete(guild_members::table)
+            .filter(guild_members::uuid.eq(self.uuid))
+            .execute(conn)
+            .await?;
+
+        Ok(())
     }
 }
