@@ -1,4 +1,3 @@
-use axum::http::StatusCode;
 use diesel::{
     ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, delete,
     insert_into,
@@ -11,8 +10,8 @@ use crate::{
     AppState, Conn,
     error::Error,
     objects::{Me, Permissions, Role},
-    schema::guild_members,
     schema::guild_bans,
+    schema::guild_members,
 };
 
 use super::{User, load_or_empty};
