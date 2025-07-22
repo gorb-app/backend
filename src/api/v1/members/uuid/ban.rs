@@ -41,7 +41,7 @@ pub async fn post(
 
     let caller = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
     caller
-        .check_permission(&app_state, Permissions::BanMembers)
+        .check_permission(&app_state, Permissions::BanMember)
         .await?;
 
     member.ban(&mut conn, &payload.reason).await?;

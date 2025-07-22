@@ -177,7 +177,7 @@ pub enum Permissions {
     /// Lets users change member settings (nickname, etc)
     ManageMember = 64,
     /// Lets user ban members
-    BanMembers = 128,
+    BanMember = 128,
 }
 
 impl Permissions {
@@ -190,6 +190,7 @@ impl Permissions {
             Self::ManageInvite,
             Self::ManageGuild,
             Self::ManageMember,
+            Self::BanMember,
         ];
 
         all_perms
