@@ -13,7 +13,7 @@ mod invites;
 mod me;
 mod stats;
 mod users;
-mod members;
+mod member;
 
 pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     let router_with_auth = Router::new()
@@ -30,6 +30,6 @@ pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .route("/stats", get(stats::res))
         .nest("/auth", auth::router(app_state.clone()))
         .nest("/channels", channels::router(app_state.clone()))
-        .nest("/members", members::router(app_state))
+        .nest("/member", member::router(app_state))
         .merge(router_with_auth)
 }
