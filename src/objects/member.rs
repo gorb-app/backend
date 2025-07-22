@@ -122,7 +122,7 @@ impl Member {
 
     pub async fn fetch_one_with_member(
         app_state: &AppState,
-        me: &Me,
+        me: Option<&Me>,
         uuid: Uuid,
     ) -> Result<Self, Error> {
         let mut conn = app_state.pool.get().await?;
@@ -134,7 +134,7 @@ impl Member {
             .get_result(&mut conn)
             .await?;
 
-        member.build(app_state, Some(me)).await
+        member.build(app_state, me).await
     }
 
     pub async fn fetch_all(

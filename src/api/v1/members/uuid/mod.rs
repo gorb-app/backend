@@ -1,5 +1,7 @@
 //! `/api/v1/members/{uuid}` Member specific endpoints
 
+pub mod ban;
+
 use std::sync::Arc;
 
 use crate::{
@@ -29,7 +31,7 @@ pub async fn get(
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let member = Member::fetch_one_with_member(&app_state, &me, member_uuid).await?;
+    let member = Member::fetch_one_with_member(&app_state, Some(&me), member_uuid).await?;
     Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
 
     Ok((StatusCode::OK, Json(member)))
@@ -46,7 +48,7 @@ pub async fn delete(
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let member = Member::fetch_one_with_member(&app_state, &me, member_uuid).await?;
+    let member = Member::fetch_one_with_member(&app_state, Some(&me), member_uuid).await?;
 
     let deleter = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
 
