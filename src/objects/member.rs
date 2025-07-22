@@ -1,3 +1,4 @@
+use axum::http::StatusCode;
 use diesel::{
     ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, delete,
     insert_into,
@@ -11,6 +12,7 @@ use crate::{
     error::Error,
     objects::{Me, Permissions, Role},
     schema::guild_members,
+    schema::guild_bans,
 };
 
 use super::{User, load_or_empty};
@@ -71,6 +73,13 @@ pub struct Member {
     pub guild_uuid: Uuid,
     pub is_owner: bool,
     user: User,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GuildBan {
+    pub guild_uuid: Uuid,
+    pub user_uuid: Uuid,
+    pub reason: String,
 }
 
 impl Member {
@@ -169,6 +178,18 @@ impl Member {
     ) -> Result<Self, Error> {
         let mut conn = app_state.pool.get().await?;
 
+        use guild_bans::dsl;
+        let banned = dsl::guild_bans
+            .filter(guild_bans::guild_uuid.eq(guild_uuid))
+            .filter(guild_bans::user_uuid.eq(user_uuid))
+            .execute(&mut conn)
+            .await;
+        match banned {
+            Ok(_) => Err(Error::Forbidden("User banned".to_string())),
+            Err(diesel::result::Error::NotFound) => Ok(()),
+            Err(e) => Err(e.into()),
+        }?;
+
         let member_uuid = Uuid::now_v7();
 
         let member = MemberBuilder {
@@ -192,6 +213,22 @@ impl Member {
             .filter(guild_members::uuid.eq(self.uuid))
             .execute(conn)
             .await?;
+
+        Ok(())
+    }
+
+    pub async fn ban(self, conn: &mut Conn, reason: &String) -> Result<(), Error> {
+        use guild_bans::dsl;
+        insert_into(guild_bans::table)
+            .values((
+                dsl::guild_uuid.eq(self.guild_uuid),
+                dsl::user_uuid.eq(self.user_uuid),
+                dsl::reason.eq(reason),
+            ))
+            .execute(conn)
+            .await?;
+
+        self.delete(conn).await?;
 
         Ok(())
     }
