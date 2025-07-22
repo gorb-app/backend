@@ -35,10 +35,6 @@ pub async fn post(
 
     let member = Member::fetch_one_with_member(&app_state, None, member_uuid).await?;
 
-    if member.is_owner {
-        return Err(Error::Forbidden("Can not ban owner".to_string()));
-    }
-
     let caller = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
     caller
         .check_permission(&app_state, Permissions::BanMember)
