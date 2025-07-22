@@ -176,6 +176,8 @@ pub enum Permissions {
     ManageGuild = 32,
     /// Lets users change member settings (nickname, etc)
     ManageMember = 64,
+    /// Lets user ban members
+    BanMembers = 128,
 }
 
 impl Permissions {
