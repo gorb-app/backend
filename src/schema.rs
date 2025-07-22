@@ -48,6 +48,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    guild_bans (user_uuid, guild_uuid) {
+        guild_uuid -> Uuid,
+        user_uuid -> Uuid,
+        #[max_length = 200]
+        reason -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
     guild_members (uuid) {
         uuid -> Uuid,
         guild_uuid -> Uuid,
@@ -154,6 +163,8 @@ diesel::joinable!(access_tokens -> refresh_tokens (refresh_token));
 diesel::joinable!(access_tokens -> users (uuid));
 diesel::joinable!(channel_permissions -> channels (channel_uuid));
 diesel::joinable!(channels -> guilds (guild_uuid));
+diesel::joinable!(guild_bans -> guilds (guild_uuid));
+diesel::joinable!(guild_bans -> users (user_uuid));
 diesel::joinable!(guild_members -> guilds (guild_uuid));
 diesel::joinable!(guild_members -> users (user_uuid));
 diesel::joinable!(instance_permissions -> users (uuid));
@@ -171,6 +182,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     channels,
     friend_requests,
     friends,
+    guild_bans,
     guild_members,
     guilds,
     instance_permissions,
