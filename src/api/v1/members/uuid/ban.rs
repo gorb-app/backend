@@ -36,6 +36,7 @@ pub async fn post(
     let member = Member::fetch_one_with_member(&app_state, None, member_uuid).await?;
 
     let caller = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
+
     caller
         .check_permission(&app_state, Permissions::BanMember)
         .await?;
