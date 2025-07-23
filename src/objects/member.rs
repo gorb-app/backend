@@ -1,5 +1,5 @@
 use diesel::{
-    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, delete,
+    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper,
     insert_into,
 };
 use diesel_async::RunQueryDsl;
@@ -9,10 +9,11 @@ use uuid::Uuid;
 use crate::{
     AppState, Conn,
     error::Error,
-    objects::{Me, Permissions, Role},
+    objects::{Me, Permissions, Role, GuildBan},
     schema::guild_bans,
     schema::guild_members,
 };
+
 
 use super::{User, load_or_empty};
 
@@ -74,12 +75,6 @@ pub struct Member {
     user: User,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct GuildBan {
-    pub guild_uuid: Uuid,
-    pub user_uuid: Uuid,
-    pub reason: String,
-}
 
 impl Member {
     pub async fn count(conn: &mut Conn, guild_uuid: Uuid) -> Result<i64, Error> {
@@ -208,7 +203,7 @@ impl Member {
     }
 
     pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
-        delete(guild_members::table)
+        diesel::delete(guild_members::table)
             .filter(guild_members::uuid.eq(self.uuid))
             .execute(conn)
             .await?;
@@ -235,4 +230,5 @@ impl Member {
 
         Ok(())
     }
+
 }

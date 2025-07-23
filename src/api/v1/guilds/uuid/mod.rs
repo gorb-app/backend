@@ -16,6 +16,7 @@ mod channels;
 mod invites;
 mod members;
 mod roles;
+mod bans;
 
 use crate::{
     AppState,
@@ -42,6 +43,8 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/invites", post(invites::create))
         // Members
         .route("/members", get(members::get))
+        // Bans
+        .route("/bans", get(bans::get))
 }
 
 /// `GET /api/v1/guilds/{uuid}` DESCRIPTION
