@@ -53,6 +53,7 @@ diesel::table! {
         user_uuid -> Uuid,
         #[max_length = 200]
         reason -> Nullable<Varchar>,
+        ban_time -> Timestamptz,
     }
 }
 
