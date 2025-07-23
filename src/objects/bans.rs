@@ -13,7 +13,7 @@ pub struct GuildBan {
     pub guild_uuid: Uuid,
     pub user_uuid: Uuid,
     pub reason: Option<String>,
-    pub ban_time: chrono::DateTime<chrono::Utc>,
+    pub banned_since: chrono::DateTime<chrono::Utc>,
 }
 
 impl GuildBan {
