@@ -188,7 +188,7 @@ impl Member {
     }
 
     pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
-        if member.is_owner {
+        if self.is_owner {
             return Err(Error::Forbidden("Can not kick owner".to_string()))
         }
         delete(guild_members::table)
