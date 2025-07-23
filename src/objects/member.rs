@@ -208,10 +208,6 @@ impl Member {
     }
 
     pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
-        if self.is_owner {
-            return Err(Error::Forbidden("Can not ban owner".to_string()));
-        }
-
         delete(guild_members::table)
             .filter(guild_members::uuid.eq(self.uuid))
             .execute(conn)
@@ -221,6 +217,10 @@ impl Member {
     }
 
     pub async fn ban(self, conn: &mut Conn, reason: &String) -> Result<(), Error> {
+        if self.is_owner {
+            return Err(Error::Forbidden("Can not ban owner".to_string()));
+        }
+
         use guild_bans::dsl;
         insert_into(guild_bans::table)
             .values((
