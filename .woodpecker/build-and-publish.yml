@@ -5,7 +5,6 @@ steps:
       - cargo build --release
     when:
       - event: push
-      - event: pull_request
 
   - name: build-arm64
     image: rust:1.88-bookworm
@@ -20,7 +19,6 @@ steps:
       PKG_CONFIG_PATH: /usr/aarch64-linux-gnu/lib/pkgconfig
     when:
       - event: push
-      - event: pull_request
 
   - name: container-build-and-publish
     image: docker
