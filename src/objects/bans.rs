@@ -4,10 +4,7 @@ use uuid::Uuid;
 
 use diesel_async::RunQueryDsl;
 
-use crate::{
-    error::Error, objects::{load_or_empty, Guild}, schema::guild_bans, Conn
-};
-
+use crate::{Conn, error::Error, objects::load_or_empty, schema::guild_bans};
 
 #[derive(Selectable, Queryable, Serialize, Deserialize)]
 #[diesel(table_name = guild_bans)]
@@ -19,9 +16,12 @@ pub struct GuildBan {
     pub ban_time: chrono::DateTime<chrono::Utc>,
 }
 
-
 impl GuildBan {
-    pub async fn fetch_one(conn: &mut Conn, guild_uuid: Uuid, user_uuid: Uuid) -> Result<GuildBan, Error> {
+    pub async fn fetch_one(
+        conn: &mut Conn,
+        guild_uuid: Uuid,
+        user_uuid: Uuid,
+    ) -> Result<GuildBan, Error> {
         use guild_bans::dsl;
         let guild_ban = dsl::guild_bans
             .filter(dsl::guild_uuid.eq(guild_uuid))
@@ -35,12 +35,13 @@ impl GuildBan {
 
     pub async fn fetch_all(conn: &mut Conn, guild_uuid: Uuid) -> Result<Vec<Self>, Error> {
         use guild_bans::dsl;
-        let all_guild_bans = load_or_empty(dsl::guild_bans
-            .filter(dsl::guild_uuid.eq(guild_uuid))
-            .load(conn)
-            .await
-            )?;
-        
+        let all_guild_bans = load_or_empty(
+            dsl::guild_bans
+                .filter(dsl::guild_uuid.eq(guild_uuid))
+                .load(conn)
+                .await,
+        )?;
+
         Ok(all_guild_bans)
     }
 

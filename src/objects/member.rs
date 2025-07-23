@@ -1,6 +1,5 @@
 use diesel::{
-    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper,
-    insert_into,
+    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into,
 };
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
@@ -9,11 +8,10 @@ use uuid::Uuid;
 use crate::{
     AppState, Conn,
     error::Error,
-    objects::{Me, Permissions, Role, GuildBan},
+    objects::{Me, Permissions, Role},
     schema::guild_bans,
     schema::guild_members,
 };
-
 
 use super::{User, load_or_empty};
 
@@ -74,7 +72,6 @@ pub struct Member {
     pub is_owner: bool,
     user: User,
 }
-
 
 impl Member {
     pub async fn count(conn: &mut Conn, guild_uuid: Uuid) -> Result<i64, Error> {
@@ -230,5 +227,4 @@ impl Member {
 
         Ok(())
     }
-
 }
