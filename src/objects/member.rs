@@ -6,7 +6,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    error::Error, objects::{GuildBan, Me, Permissions, Role}, schema::{guild_bans, guild_members}, AppState, Conn
+    AppState, Conn,
+    error::Error,
+    objects::{GuildBan, Me, Permissions, Role},
+    schema::{guild_bans, guild_members},
 };
 
 use super::{User, load_or_empty};
@@ -169,7 +172,7 @@ impl Member {
         match banned {
             Ok(_) => Err(Error::Forbidden("User banned".to_string())),
             Err(Error::SqlError(diesel::result::Error::NotFound)) => Ok(()),
-            Err(e) => Err(e.into()),
+            Err(e) => Err(e),
         }?;
 
         let member_uuid = Uuid::now_v7();

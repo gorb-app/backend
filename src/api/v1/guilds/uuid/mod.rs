@@ -7,7 +7,7 @@ use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, patch, post, delete},
+    routing::{delete, get, patch, post},
 };
 use bytes::Bytes;
 use uuid::Uuid;

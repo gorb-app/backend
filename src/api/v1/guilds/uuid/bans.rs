@@ -45,7 +45,9 @@ pub async fn unban(
     let mut conn = app_state.pool.get().await?;
 
     let caller = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
-    caller.check_permission(&app_state, Permissions::BanMember).await?;
+    caller
+        .check_permission(&app_state, Permissions::BanMember)
+        .await?;
 
     let ban = GuildBan::fetch_one(&mut conn, guild_uuid, user_uuid).await?;
 
