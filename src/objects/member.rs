@@ -6,11 +6,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AppState, Conn,
-    error::Error,
-    objects::{Me, Permissions, Role},
-    schema::guild_bans,
-    schema::guild_members,
+    error::Error, objects::{GuildBan, Me, Permissions, Role}, schema::{guild_bans, guild_members}, AppState, Conn
 };
 
 use super::{User, load_or_empty};
@@ -169,15 +165,10 @@ impl Member {
     ) -> Result<Self, Error> {
         let mut conn = app_state.pool.get().await?;
 
-        use guild_bans::dsl;
-        let banned = dsl::guild_bans
-            .filter(guild_bans::guild_uuid.eq(guild_uuid))
-            .filter(guild_bans::user_uuid.eq(user_uuid))
-            .execute(&mut conn)
-            .await;
+        let banned = GuildBan::fetch_one(&mut conn, guild_uuid, user_uuid).await;
         match banned {
             Ok(_) => Err(Error::Forbidden("User banned".to_string())),
-            Err(diesel::result::Error::NotFound) => Ok(()),
+            Err(Error::SqlError(diesel::result::Error::NotFound)) => Ok(()),
             Err(e) => Err(e.into()),
         }?;
 
