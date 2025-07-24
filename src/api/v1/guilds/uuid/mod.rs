@@ -7,7 +7,7 @@ use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, patch, post},
+    routing::{get, patch, post, delete},
 };
 use bytes::Bytes;
 use uuid::Uuid;
@@ -45,6 +45,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/members", get(members::get))
         // Bans
         .route("/bans", get(bans::get))
+        .route("/bans/{uuid}", delete(bans::unban))
 }
 
 /// `GET /api/v1/guilds/{uuid}` DESCRIPTION
