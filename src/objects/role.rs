@@ -176,6 +176,8 @@ pub enum Permissions {
     ManageGuild = 32,
     /// Lets users change member settings (nickname, etc)
     ManageMember = 64,
+    /// Lets users ban members
+    BanMember = 128,
     /// Lets users kick members
     KickMember = 256,
 }
@@ -190,6 +192,7 @@ impl Permissions {
             Self::ManageInvite,
             Self::ManageGuild,
             Self::ManageMember,
+            Self::BanMember,
             Self::KickMember,
         ];
 

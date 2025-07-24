@@ -7,6 +7,7 @@ use log::debug;
 use serde::Deserialize;
 use uuid::Uuid;
 
+mod bans;
 mod channel;
 mod email_token;
 mod friends;
@@ -19,6 +20,7 @@ mod password_reset_token;
 mod role;
 mod user;
 
+pub use bans::GuildBan;
 pub use channel::Channel;
 pub use email_token::EmailToken;
 pub use friends::Friend;

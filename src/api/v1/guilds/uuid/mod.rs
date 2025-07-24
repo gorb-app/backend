@@ -7,11 +7,12 @@ use axum::{
     extract::{Multipart, Path, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{get, patch, post},
+    routing::{delete, get, patch, post},
 };
 use bytes::Bytes;
 use uuid::Uuid;
 
+mod bans;
 mod channels;
 mod invites;
 mod members;
@@ -42,6 +43,9 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/invites", post(invites::create))
         // Members
         .route("/members", get(members::get))
+        // Bans
+        .route("/bans", get(bans::get))
+        .route("/bans/{uuid}", delete(bans::unban))
 }
 
 /// `GET /api/v1/guilds/{uuid}` DESCRIPTION

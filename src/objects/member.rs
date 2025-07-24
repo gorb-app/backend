@@ -9,8 +9,8 @@ use uuid::Uuid;
 use crate::{
     AppState, Conn,
     error::Error,
-    objects::{Me, Permissions, Role},
-    schema::guild_members,
+    objects::{GuildBan, Me, Permissions, Role},
+    schema::{guild_bans, guild_members},
 };
 
 use super::{User, load_or_empty};
@@ -122,7 +122,7 @@ impl Member {
 
     pub async fn fetch_one_with_member(
         app_state: &AppState,
-        me: &Me,
+        me: Option<&Me>,
         uuid: Uuid,
     ) -> Result<Self, Error> {
         let mut conn = app_state.pool.get().await?;
@@ -134,7 +134,7 @@ impl Member {
             .get_result(&mut conn)
             .await?;
 
-        member.build(app_state, Some(me)).await
+        member.build(app_state, me).await
     }
 
     pub async fn fetch_all(
@@ -169,6 +169,13 @@ impl Member {
     ) -> Result<Self, Error> {
         let mut conn = app_state.pool.get().await?;
 
+        let banned = GuildBan::fetch_one(&mut conn, guild_uuid, user_uuid).await;
+        match banned {
+            Ok(_) => Err(Error::Forbidden("User banned".to_string())),
+            Err(Error::SqlError(diesel::result::Error::NotFound)) => Ok(()),
+            Err(e) => Err(e),
+        }?;
+
         let member_uuid = Uuid::now_v7();
 
         let member = MemberBuilder {
@@ -195,6 +202,26 @@ impl Member {
             .filter(guild_members::uuid.eq(self.uuid))
             .execute(conn)
             .await?;
+
+        Ok(())
+    }
+
+    pub async fn ban(self, conn: &mut Conn, reason: &String) -> Result<(), Error> {
+        if self.is_owner {
+            return Err(Error::Forbidden("Can not ban owner".to_string()));
+        }
+
+        use guild_bans::dsl;
+        insert_into(guild_bans::table)
+            .values((
+                dsl::guild_uuid.eq(self.guild_uuid),
+                dsl::user_uuid.eq(self.user_uuid),
+                dsl::reason.eq(reason),
+            ))
+            .execute(conn)
+            .await?;
+
+        self.delete(conn).await?;
 
         Ok(())
     }
