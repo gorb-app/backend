@@ -1,5 +1,6 @@
 use diesel::{
-    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into, delete,
+    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, delete,
+    insert_into,
 };
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
