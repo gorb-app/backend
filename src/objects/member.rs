@@ -1,5 +1,5 @@
 use diesel::{
-    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into,
+    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into, delete,
 };
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
@@ -194,7 +194,7 @@ impl Member {
     }
 
     pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
-        diesel::delete(guild_members::table)
+        delete(guild_members::table)
             .filter(guild_members::uuid.eq(self.uuid))
             .execute(conn)
             .await?;
