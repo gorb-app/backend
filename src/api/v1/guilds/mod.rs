@@ -128,9 +128,11 @@ pub async fn get_guilds(
     let start = request_query.start.unwrap_or(0);
     let amount = request_query.amount.unwrap_or(10);
 
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let guilds = Guild::fetch_amount(&app_state.pool, start, amount).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
+
+    let guilds = Guild::fetch_amount(&mut conn, start, amount).await?;
 
     Ok((StatusCode::OK, Json(guilds)))
 }

@@ -2,7 +2,7 @@ use diesel::{Insertable, Queryable, Selectable};
 use serde::Serialize;
 use uuid::Uuid;
 
-use crate::{AppState, error::Error, schema::messages};
+use crate::{Conn, error::Error, schema::messages};
 
 use super::User;
 
@@ -18,8 +18,12 @@ pub struct MessageBuilder {
 }
 
 impl MessageBuilder {
-    pub async fn build(&self, app_state: &AppState) -> Result<Message, Error> {
-        let user = User::fetch_one(app_state, self.user_uuid).await?;
+    pub async fn build(
+        &self,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
+    ) -> Result<Message, Error> {
+        let user = User::fetch_one(conn, cache_pool, self.user_uuid).await?;
 
         Ok(Message {
             uuid: self.uuid,

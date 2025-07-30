@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AppState, Conn,
+    Conn,
     error::Error,
     schema::{role_members, roles},
-    utils::order_by_is_above,
+    utils::{CacheFns, order_by_is_above},
 };
 
 use super::{HasIsAbove, HasUuid, load_or_empty};
@@ -75,34 +75,33 @@ impl Role {
     }
 
     pub async fn fetch_from_member(
-        app_state: &AppState,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
         member_uuid: Uuid,
     ) -> Result<Vec<Self>, Error> {
-        if let Ok(roles) = app_state
+        if let Ok(roles) = cache_pool
             .get_cache_key(format!("{member_uuid}_roles"))
             .await
         {
-            return Ok(serde_json::from_str(&roles)?);
+            return Ok(roles);
         }
-
-        let mut conn = app_state.pool.get().await?;
 
         use role_members::dsl;
         let role_memberships: Vec<RoleMember> = load_or_empty(
             dsl::role_members
                 .filter(dsl::member_uuid.eq(member_uuid))
                 .select(RoleMember::as_select())
-                .load(&mut conn)
+                .load(conn)
                 .await,
         )?;
 
         let mut roles = vec![];
 
         for membership in role_memberships {
-            roles.push(membership.fetch_role(&mut conn).await?);
+            roles.push(membership.fetch_role(conn).await?);
         }
 
-        app_state
+        cache_pool
             .set_cache_key(format!("{member_uuid}_roles"), roles.clone(), 300)
             .await?;
 

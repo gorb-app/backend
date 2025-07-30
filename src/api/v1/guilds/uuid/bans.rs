@@ -21,13 +21,13 @@ pub async fn get(
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let caller = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
     caller
-        .check_permission(&app_state, Permissions::BanMember)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::BanMember)
         .await?;
 
     let all_guild_bans = GuildBan::fetch_all(&mut conn, guild_uuid).await?;
@@ -40,13 +40,13 @@ pub async fn unban(
     Path((guild_uuid, user_uuid)): Path<(Uuid, Uuid)>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let caller = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
     caller
-        .check_permission(&app_state, Permissions::BanMember)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::BanMember)
         .await?;
 
     let ban = GuildBan::fetch_one(&mut conn, guild_uuid, user_uuid).await?;

@@ -14,7 +14,7 @@ use crate::{
     api::v1::auth::CurrentUser,
     error::Error,
     objects::{Member, Permissions, Role},
-    utils::{global_checks, order_by_is_above},
+    utils::{CacheFns, global_checks, order_by_is_above},
 };
 
 pub mod uuid;
@@ -29,16 +29,18 @@ pub async fn get(
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
-    if let Ok(cache_hit) = app_state.get_cache_key(format!("{guild_uuid}_roles")).await
-        && let Ok(roles) = serde_json::from_str::<Vec<Role>>(&cache_hit)
+    if let Ok(cache_hit) = app_state
+        .cache_pool
+        .get_cache_key::<Vec<Role>>(format!("{guild_uuid}_roles"))
+        .await
     {
-        return Ok((StatusCode::OK, Json(roles)).into_response());
+        return Ok((StatusCode::OK, Json(cache_hit)).into_response());
     }
 
     let roles = Role::fetch_all(&mut conn, guild_uuid).await?;
@@ -46,6 +48,7 @@ pub async fn get(
     let roles_ordered = order_by_is_above(roles).await?;
 
     app_state
+        .cache_pool
         .set_cache_key(format!("{guild_uuid}_roles"), roles_ordered.clone(), 1800)
         .await?;
 
@@ -58,14 +61,14 @@ pub async fn create(
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(role_info): Json<RoleInfo>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&app_state, Permissions::ManageRole)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageRole)
         .await?;
 
     let role = Role::new(&mut conn, guild_uuid, role_info.name.clone()).await?;

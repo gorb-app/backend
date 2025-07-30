@@ -19,11 +19,13 @@ pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    let friends = me.get_friends(&app_state).await?;
+    let me = Me::get(&mut conn, uuid).await?;
+
+    let friends = me.get_friends(&mut conn, &app_state.cache_pool).await?;
 
     Ok((StatusCode::OK, Json(friends)))
 }
@@ -57,9 +59,9 @@ pub async fn post(
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(user_request): Json<UserReq>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let me = Me::get(&mut conn, uuid).await?;
 

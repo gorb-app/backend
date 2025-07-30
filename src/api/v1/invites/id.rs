@@ -34,15 +34,15 @@ pub async fn join(
     Path(invite_id): Path<String>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let invite = Invite::fetch_one(&mut conn, invite_id).await?;
 
     let guild = Guild::fetch_one(&mut conn, invite.guild_uuid).await?;
 
-    Member::new(&app_state, uuid, guild.uuid).await?;
+    Member::new(&mut conn, &app_state.cache_pool, uuid, guild.uuid).await?;
 
     Ok((StatusCode::OK, Json(guild)))
 }

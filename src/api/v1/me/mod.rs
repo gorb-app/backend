@@ -73,36 +73,41 @@ pub async fn update(
 
     let json = json_raw.unwrap_or_default();
 
+    let mut conn = app_state.pool.get().await?;
+
     if avatar.is_some() || json.username.is_some() || json.display_name.is_some() {
-        global_checks(&app_state, uuid).await?;
+        global_checks(&mut conn, &app_state.config, uuid).await?;
     }
 
-    let mut me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
+    let mut me = Me::get(&mut conn, uuid).await?;
 
     if let Some(avatar) = avatar {
-        me.set_avatar(&app_state, app_state.config.bunny.cdn_url.clone(), avatar)
-            .await?;
+        me.set_avatar(&mut conn, &app_state, avatar).await?;
     }
 
     if let Some(username) = &json.username {
-        me.set_username(&app_state, username.clone()).await?;
+        me.set_username(&mut conn, &app_state.cache_pool, username.clone())
+            .await?;
     }
 
     if let Some(display_name) = &json.display_name {
-        me.set_display_name(&app_state, display_name.clone())
+        me.set_display_name(&mut conn, &app_state.cache_pool, display_name.clone())
             .await?;
     }
 
     if let Some(email) = &json.email {
-        me.set_email(&app_state, email.clone()).await?;
+        me.set_email(&mut conn, &app_state.cache_pool, email.clone())
+            .await?;
     }
 
     if let Some(pronouns) = &json.pronouns {
-        me.set_pronouns(&app_state, pronouns.clone()).await?;
+        me.set_pronouns(&mut conn, &app_state.cache_pool, pronouns.clone())
+            .await?;
     }
 
     if let Some(about) = &json.about {
-        me.set_about(&app_state, about.clone()).await?;
+        me.set_about(&mut conn, &app_state.cache_pool, about.clone())
+            .await?;
     }
 
     Ok(StatusCode::OK)

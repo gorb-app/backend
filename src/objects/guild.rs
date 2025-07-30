@@ -3,14 +3,14 @@ use diesel::{
     ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into,
     update,
 };
-use diesel_async::{RunQueryDsl, pooled_connection::AsyncDieselConnectionManager};
+use diesel_async::RunQueryDsl;
 use serde::Serialize;
 use tokio::task;
 use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    Conn,
+    AppState, Conn,
     error::Error,
     schema::{guild_members, guilds, invites},
     utils::image_check,
@@ -68,16 +68,11 @@ impl Guild {
     }
 
     pub async fn fetch_amount(
-        pool: &deadpool::managed::Pool<
-            AsyncDieselConnectionManager<diesel_async::AsyncPgConnection>,
-            Conn,
-        >,
+        conn: &mut Conn,
         offset: i64,
         amount: i64,
     ) -> Result<Vec<Self>, Error> {
         // Fetch guild data from database
-        let mut conn = pool.get().await?;
-
         use guilds::dsl;
         let guild_builders: Vec<GuildBuilder> = load_or_empty(
             dsl::guilds
@@ -85,18 +80,17 @@ impl Guild {
                 .order_by(dsl::uuid)
                 .offset(offset)
                 .limit(amount)
-                .load(&mut conn)
+                .load(conn)
                 .await,
         )?;
 
-        // Process each guild concurrently
-        let guild_futures = guild_builders.iter().map(async move |g| {
-            let mut conn = pool.get().await?;
-            g.clone().build(&mut conn).await
-        });
+        let mut guilds = vec![];
 
-        // Execute all futures concurrently and collect results
-        futures_util::future::try_join_all(guild_futures).await
+        for builder in guild_builders {
+            guilds.push(builder.build(conn).await?);
+        }
+
+        Ok(guilds)
     }
 
     pub async fn new(conn: &mut Conn, name: String, owner_uuid: Uuid) -> Result<Self, Error> {
@@ -188,9 +182,8 @@ impl Guild {
     // FIXME: Horrible security
     pub async fn set_icon(
         &mut self,
-        bunny_storage: &bunny_api_tokio::EdgeStorageClient,
         conn: &mut Conn,
-        cdn_url: Url,
+        app_state: &AppState,
         icon: Bytes,
     ) -> Result<(), Error> {
         let icon_clone = icon.clone();
@@ -199,14 +192,14 @@ impl Guild {
         if let Some(icon) = &self.icon {
             let relative_url = icon.path().trim_start_matches('/');
 
-            bunny_storage.delete(relative_url).await?;
+            app_state.bunny_storage.delete(relative_url).await?;
         }
 
         let path = format!("icons/{}/{}.{}", self.uuid, Uuid::now_v7(), image_type);
 
-        bunny_storage.upload(path.clone(), icon).await?;
+        app_state.bunny_storage.upload(path.clone(), icon).await?;
 
-        let icon_url = cdn_url.join(&path)?;
+        let icon_url = app_state.config.bunny.cdn_url.join(&path)?;
 
         use guilds::dsl;
         update(guilds::table)

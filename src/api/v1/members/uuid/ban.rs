@@ -29,16 +29,16 @@ pub async fn post(
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(payload): Json<RequstBody>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
 
-    let member = Member::fetch_one_with_member(&app_state, None, member_uuid).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
+
+    let member = Member::fetch_one_with_member(&mut conn, &app_state.cache_pool, None, member_uuid).await?;
 
     let caller = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
 
     caller
-        .check_permission(&app_state, Permissions::BanMember)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::BanMember)
         .await?;
 
     member.ban(&mut conn, &payload.reason).await?;

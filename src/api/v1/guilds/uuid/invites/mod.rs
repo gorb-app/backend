@@ -27,9 +27,9 @@ pub async fn get(
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
@@ -46,14 +46,14 @@ pub async fn create(
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(invite_request): Json<InviteRequest>,
 ) -> Result<impl IntoResponse, Error> {
-    global_checks(&app_state, uuid).await?;
-
     let mut conn = app_state.pool.get().await?;
+
+    global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let member = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
 
     member
-        .check_permission(&app_state, Permissions::CreateInvite)
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::CreateInvite)
         .await?;
 
     let guild = Guild::fetch_one(&mut conn, guild_uuid).await?;

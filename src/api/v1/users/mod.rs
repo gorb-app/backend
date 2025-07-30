@@ -70,9 +70,11 @@ pub async fn users(
         return Ok(StatusCode::BAD_REQUEST.into_response());
     }
 
-    global_checks(&app_state, uuid).await?;
+    let mut conn = app_state.pool.get().await?;
 
-    let users = User::fetch_amount(&mut app_state.pool.get().await?, start, amount).await?;
+    global_checks(&mut conn, &app_state.config, uuid).await?;
+
+    let users = User::fetch_amount(&mut conn, start, amount).await?;
 
     Ok((StatusCode::OK, Json(users)).into_response())
 }

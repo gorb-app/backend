@@ -159,7 +159,7 @@ pub async fn post(
             .await?;
 
         if let Some(initial_guild) = app_state.config.instance.initial_guild {
-            Member::new(&app_state, uuid, initial_guild).await?;
+            Member::new(&mut conn, &app_state.cache_pool, uuid, initial_guild).await?;
         }
 
         let mut response = (

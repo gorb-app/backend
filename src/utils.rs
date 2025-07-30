@@ -8,14 +8,13 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use getrandom::fill;
 use hex::encode;
-use redis::RedisError;
 use regex::Regex;
-use serde::Serialize;
+use serde::{Serialize, de::DeserializeOwned};
 use time::Duration;
 use uuid::Uuid;
 
 use crate::{
-    AppState, Conn,
+    Conn,
     config::Config,
     error::Error,
     objects::{HasIsAbove, HasUuid},
@@ -115,15 +114,13 @@ pub async fn user_uuid_from_username(conn: &mut Conn, username: &String) -> Resu
     }
 }
 
-pub async fn global_checks(app_state: &AppState, user_uuid: Uuid) -> Result<(), Error> {
-    if app_state.config.instance.require_email_verification {
-        let mut conn = app_state.pool.get().await?;
-
+pub async fn global_checks(conn: &mut Conn, config: &Config, user_uuid: Uuid) -> Result<(), Error> {
+    if config.instance.require_email_verification {
         use users::dsl;
         let email_verified: bool = dsl::users
             .filter(dsl::uuid.eq(user_uuid))
             .select(dsl::email_verified)
-            .get_result(&mut conn)
+            .get_result(conn)
             .await?;
 
         if !email_verified {
@@ -161,14 +158,28 @@ where
     Ok(ordered)
 }
 
-impl AppState {
-    pub async fn set_cache_key(
+#[allow(async_fn_in_trait)]
+pub trait CacheFns {
+    async fn set_cache_key(
+        &self,
+        key: String,
+        value: impl Serialize,
+        expire: u32,
+    ) -> Result<(), Error>;
+    async fn get_cache_key<T>(&self, key: String) -> Result<T, Error>
+    where
+        T: DeserializeOwned;
+    async fn del_cache_key(&self, key: String) -> Result<(), Error>;
+}
+
+impl CacheFns for redis::Client {
+    async fn set_cache_key(
         &self,
         key: String,
         value: impl Serialize,
         expire: u32,
     ) -> Result<(), Error> {
-        let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
+        let mut conn = self.get_multiplexed_tokio_connection().await?;
 
         let key_encoded = encode(key);
 
@@ -187,26 +198,31 @@ impl AppState {
         Ok(())
     }
 
-    pub async fn get_cache_key(&self, key: String) -> Result<String, RedisError> {
-        let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
+    async fn get_cache_key<T>(&self, key: String) -> Result<T, Error>
+    where
+        T: DeserializeOwned,
+    {
+        let mut conn = self.get_multiplexed_tokio_connection().await?;
 
         let key_encoded = encode(key);
 
-        redis::cmd("GET")
+        let res: String = redis::cmd("GET")
             .arg(key_encoded)
             .query_async(&mut conn)
-            .await
+            .await?;
+
+        Ok(serde_json::from_str(&res)?)
     }
 
-    pub async fn del_cache_key(&self, key: String) -> Result<(), RedisError> {
-        let mut conn = self.cache_pool.get_multiplexed_tokio_connection().await?;
+    async fn del_cache_key(&self, key: String) -> Result<(), Error> {
+        let mut conn = self.get_multiplexed_tokio_connection().await?;
 
         let key_encoded = encode(key);
 
-        redis::cmd("DEL")
+        Ok(redis::cmd("DEL")
             .arg(key_encoded)
             .query_async(&mut conn)
-            .await
+            .await?)
     }
 }
 

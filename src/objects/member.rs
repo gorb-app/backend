@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    AppState, Conn,
+    Conn,
     error::Error,
     objects::{GuildBan, Me, Permissions, Role},
     schema::{guild_bans, guild_members},
@@ -27,13 +27,18 @@ pub struct MemberBuilder {
 }
 
 impl MemberBuilder {
-    pub async fn build(&self, app_state: &AppState, me: Option<&Me>) -> Result<Member, Error> {
+    pub async fn build(
+        &self,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
+        me: Option<&Me>,
+    ) -> Result<Member, Error> {
         let user;
 
         if let Some(me) = me {
-            user = User::fetch_one_with_friendship(app_state, me, self.user_uuid).await?;
+            user = User::fetch_one_with_friendship(conn, cache_pool, me, self.user_uuid).await?;
         } else {
-            user = User::fetch_one(app_state, self.user_uuid).await?;
+            user = User::fetch_one(conn, cache_pool, self.user_uuid).await?;
         }
 
         Ok(Member {
@@ -48,11 +53,12 @@ impl MemberBuilder {
 
     pub async fn check_permission(
         &self,
-        app_state: &AppState,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
         permission: Permissions,
     ) -> Result<(), Error> {
         if !self.is_owner {
-            let roles = Role::fetch_from_member(app_state, self.uuid).await?;
+            let roles = Role::fetch_from_member(conn, cache_pool, self.uuid).await?;
             let allowed = roles.iter().any(|r| r.permissions & permission as i64 != 0);
             if !allowed {
                 return Err(Error::Forbidden("Not allowed".to_string()));
@@ -102,74 +108,71 @@ impl Member {
     }
 
     pub async fn fetch_one(
-        app_state: &AppState,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
         me: &Me,
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, Error> {
-        let mut conn = app_state.pool.get().await?;
-
         use guild_members::dsl;
         let member: MemberBuilder = dsl::guild_members
             .filter(dsl::user_uuid.eq(user_uuid))
             .filter(dsl::guild_uuid.eq(guild_uuid))
             .select(MemberBuilder::as_select())
-            .get_result(&mut conn)
+            .get_result(conn)
             .await?;
 
-        member.build(app_state, Some(me)).await
+        member.build(conn, cache_pool, Some(me)).await
     }
 
     pub async fn fetch_one_with_member(
-        app_state: &AppState,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
         me: Option<&Me>,
         uuid: Uuid,
     ) -> Result<Self, Error> {
-        let mut conn = app_state.pool.get().await?;
-
         use guild_members::dsl;
         let member: MemberBuilder = dsl::guild_members
             .filter(dsl::uuid.eq(uuid))
             .select(MemberBuilder::as_select())
-            .get_result(&mut conn)
+            .get_result(conn)
             .await?;
 
-        member.build(app_state, me).await
+        member.build(conn, cache_pool, me).await
     }
 
     pub async fn fetch_all(
-        app_state: &AppState,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
         me: &Me,
         guild_uuid: Uuid,
     ) -> Result<Vec<Self>, Error> {
-        let mut conn = app_state.pool.get().await?;
-
         use guild_members::dsl;
         let member_builders: Vec<MemberBuilder> = load_or_empty(
             dsl::guild_members
                 .filter(dsl::guild_uuid.eq(guild_uuid))
                 .select(MemberBuilder::as_select())
-                .load(&mut conn)
+                .load(conn)
                 .await,
         )?;
 
         let mut members = vec![];
 
         for builder in member_builders {
-            members.push(builder.build(app_state, Some(me)).await?);
+            members.push(builder.build(conn, cache_pool, Some(me)).await?);
         }
 
         Ok(members)
     }
 
     pub async fn new(
-        app_state: &AppState,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, Error> {
-        let mut conn = app_state.pool.get().await?;
+        let banned = GuildBan::fetch_one(conn, guild_uuid, user_uuid).await;
 
-        let banned = GuildBan::fetch_one(&mut conn, guild_uuid, user_uuid).await;
         match banned {
             Ok(_) => Err(Error::Forbidden("User banned".to_string())),
             Err(Error::SqlError(diesel::result::Error::NotFound)) => Ok(()),
@@ -188,10 +191,10 @@ impl Member {
 
         insert_into(guild_members::table)
             .values(&member)
-            .execute(&mut conn)
+            .execute(conn)
             .await?;
 
-        member.build(app_state, None).await
+        member.build(conn, cache_pool, None).await
     }
 
     pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
