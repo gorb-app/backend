@@ -11,6 +11,7 @@ mod channels;
 mod guilds;
 mod invites;
 mod me;
+mod members;
 mod stats;
 mod users;
 
@@ -19,6 +20,7 @@ pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         .nest("/users", users::router())
         .nest("/guilds", guilds::router())
         .nest("/invites", invites::router())
+        .nest("/members", members::router())
         .nest("/me", me::router())
         .layer(from_fn_with_state(
             app_state.clone(),
