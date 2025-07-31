@@ -1,6 +1,7 @@
+use diesel::query_dsl::BelongingToDsl;
 use diesel::{
-    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into,
-    update,
+    Associations, ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable, Selectable,
+    SelectableHelper, insert_into, update,
 };
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
@@ -13,10 +14,11 @@ use crate::{
     utils::{CacheFns, order_by_is_above},
 };
 
-use super::{HasIsAbove, HasUuid, load_or_empty};
+use super::{HasIsAbove, HasUuid, load_or_empty, member::MemberBuilder};
 
-#[derive(Deserialize, Serialize, Clone, Queryable, Selectable, Insertable)]
+#[derive(Deserialize, Serialize, Clone, Identifiable, Queryable, Selectable, Insertable)]
 #[diesel(table_name = roles)]
+#[diesel(primary_key(uuid))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Role {
     uuid: Uuid,
@@ -27,25 +29,15 @@ pub struct Role {
     pub permissions: i64,
 }
 
-#[derive(Serialize, Clone, Queryable, Selectable, Insertable)]
+#[derive(Serialize, Clone, Identifiable, Queryable, Selectable, Insertable, Associations)]
 #[diesel(table_name = role_members)]
+#[diesel(belongs_to(MemberBuilder, foreign_key = member_uuid))]
+#[diesel(belongs_to(Role, foreign_key = role_uuid))]
+#[diesel(primary_key(role_uuid, member_uuid))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct RoleMember {
     role_uuid: Uuid,
     member_uuid: Uuid,
-}
-
-impl RoleMember {
-    async fn fetch_role(&self, conn: &mut Conn) -> Result<Role, Error> {
-        use roles::dsl;
-        let role: Role = dsl::roles
-            .filter(dsl::uuid.eq(self.role_uuid))
-            .select(Role::as_select())
-            .get_result(conn)
-            .await?;
-
-        Ok(role)
-    }
 }
 
 impl HasUuid for Role {
@@ -77,32 +69,25 @@ impl Role {
     pub async fn fetch_from_member(
         conn: &mut Conn,
         cache_pool: &redis::Client,
-        member_uuid: Uuid,
+        member: &MemberBuilder,
     ) -> Result<Vec<Self>, Error> {
         if let Ok(roles) = cache_pool
-            .get_cache_key(format!("{member_uuid}_roles"))
+            .get_cache_key(format!("{}_roles", member.uuid))
             .await
         {
             return Ok(roles);
         }
 
-        use role_members::dsl;
-        let role_memberships: Vec<RoleMember> = load_or_empty(
-            dsl::role_members
-                .filter(dsl::member_uuid.eq(member_uuid))
-                .select(RoleMember::as_select())
+        let roles: Vec<Role> = load_or_empty(
+            RoleMember::belonging_to(member)
+                .inner_join(roles::table)
+                .select(Role::as_select())
                 .load(conn)
                 .await,
         )?;
 
-        let mut roles = vec![];
-
-        for membership in role_memberships {
-            roles.push(membership.fetch_role(conn).await?);
-        }
-
         cache_pool
-            .set_cache_key(format!("{member_uuid}_roles"), roles.clone(), 300)
+            .set_cache_key(format!("{}_roles", member.uuid), roles.clone(), 300)
             .await?;
 
         Ok(roles)

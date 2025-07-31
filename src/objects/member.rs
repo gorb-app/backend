@@ -1,6 +1,6 @@
 use diesel::{
-    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, delete,
-    insert_into,
+    ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper,
+    delete, insert_into,
 };
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
@@ -15,8 +15,9 @@ use crate::{
 
 use super::{User, load_or_empty};
 
-#[derive(Serialize, Queryable, Selectable, Insertable)]
+#[derive(Serialize, Queryable, Identifiable, Selectable, Insertable)]
 #[diesel(table_name = guild_members)]
+#[diesel(primary_key(uuid))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct MemberBuilder {
     pub uuid: Uuid,
@@ -41,6 +42,8 @@ impl MemberBuilder {
             user = User::fetch_one(conn, cache_pool, self.user_uuid).await?;
         }
 
+        let roles = Role::fetch_from_member(conn, cache_pool, self).await?;
+
         Ok(Member {
             uuid: self.uuid,
             nickname: self.nickname.clone(),
@@ -48,6 +51,7 @@ impl MemberBuilder {
             guild_uuid: self.guild_uuid,
             is_owner: self.is_owner,
             user,
+            roles,
         })
     }
 
@@ -58,7 +62,7 @@ impl MemberBuilder {
         permission: Permissions,
     ) -> Result<(), Error> {
         if !self.is_owner {
-            let roles = Role::fetch_from_member(conn, cache_pool, self.uuid).await?;
+            let roles = Role::fetch_from_member(conn, cache_pool, self).await?;
             let allowed = roles.iter().any(|r| r.permissions & permission as i64 != 0);
             if !allowed {
                 return Err(Error::Forbidden("Not allowed".to_string()));
@@ -73,10 +77,12 @@ impl MemberBuilder {
 pub struct Member {
     pub uuid: Uuid,
     pub nickname: Option<String>,
+    #[serde(skip)]
     pub user_uuid: Uuid,
     pub guild_uuid: Uuid,
     pub is_owner: bool,
     user: User,
+    roles: Vec<Role>,
 }
 
 impl Member {
@@ -199,7 +205,7 @@ impl Member {
 
     pub async fn delete(self, conn: &mut Conn) -> Result<(), Error> {
         if self.is_owner {
-            return Err(Error::Forbidden("Can not kick owner".to_string()))
+            return Err(Error::Forbidden("Can not kick owner".to_string()));
         }
         delete(guild_members::table)
             .filter(guild_members::uuid.eq(self.uuid))
@@ -227,5 +233,15 @@ impl Member {
         self.delete(conn).await?;
 
         Ok(())
+    }
+
+    pub fn to_builder(&self) -> MemberBuilder {
+        MemberBuilder {
+            uuid: self.uuid,
+            nickname: self.nickname.clone(),
+            user_uuid: self.user_uuid,
+            guild_uuid: self.guild_uuid,
+            is_owner: self.is_owner,
+        }
     }
 }

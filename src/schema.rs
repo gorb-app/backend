@@ -126,7 +126,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    roles (uuid, guild_uuid) {
+    roles (uuid) {
         uuid -> Uuid,
         guild_uuid -> Uuid,
         #[max_length = 50]
@@ -163,6 +163,7 @@ diesel::table! {
 diesel::joinable!(access_tokens -> refresh_tokens (refresh_token));
 diesel::joinable!(access_tokens -> users (uuid));
 diesel::joinable!(channel_permissions -> channels (channel_uuid));
+diesel::joinable!(channel_permissions -> roles (role_uuid));
 diesel::joinable!(channels -> guilds (guild_uuid));
 diesel::joinable!(guild_bans -> guilds (guild_uuid));
 diesel::joinable!(guild_bans -> users (user_uuid));
@@ -175,6 +176,7 @@ diesel::joinable!(messages -> channels (channel_uuid));
 diesel::joinable!(messages -> users (user_uuid));
 diesel::joinable!(refresh_tokens -> users (uuid));
 diesel::joinable!(role_members -> guild_members (member_uuid));
+diesel::joinable!(role_members -> roles (role_uuid));
 diesel::joinable!(roles -> guilds (guild_uuid));
 
 diesel::allow_tables_to_appear_in_same_query!(
