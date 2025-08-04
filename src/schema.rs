@@ -157,6 +157,7 @@ diesel::table! {
         pronouns -> Nullable<Varchar>,
         #[max_length = 200]
         about -> Nullable<Varchar>,
+        online_status -> Int2,
     }
 }
 
