@@ -185,7 +185,7 @@ impl Member {
             .await
     }
 
-    pub async fn fetch_one_with_member(
+    pub async fn fetch_one_with_uuid(
         conn: &mut Conn,
         cache_pool: &redis::Client,
         me: Option<&Me>,
