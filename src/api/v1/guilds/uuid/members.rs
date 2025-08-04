@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ::uuid::Uuid;
 use axum::{
     Extension, Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
 };
@@ -12,13 +12,14 @@ use crate::{
     AppState,
     api::v1::auth::CurrentUser,
     error::Error,
-    objects::{Me, Member},
+    objects::{Me, Member, PaginationRequest},
     utils::global_checks,
 };
 
 pub async fn get(
     State(app_state): State<Arc<AppState>>,
     Path(guild_uuid): Path<Uuid>,
+    Query(pagination): Query<PaginationRequest>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;
@@ -29,7 +30,14 @@ pub async fn get(
 
     let me = Me::get(&mut conn, uuid).await?;
 
-    let members = Member::fetch_all(&mut conn, &app_state.cache_pool, &me, guild_uuid).await?;
+    let members = Member::fetch_page(
+        &mut conn,
+        &app_state.cache_pool,
+        &me,
+        guild_uuid,
+        pagination,
+    )
+    .await?;
 
     Ok((StatusCode::OK, Json(members)))
 }

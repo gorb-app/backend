@@ -32,7 +32,7 @@ pub async fn get(
     let me = Me::get(&mut conn, uuid).await?;
 
     let member =
-        Member::fetch_one_with_member(&mut conn, &app_state.cache_pool, Some(&me), member_uuid)
+        Member::fetch_one_with_uuid(&mut conn, &app_state.cache_pool, Some(&me), member_uuid)
             .await?;
     Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
 
@@ -51,7 +51,7 @@ pub async fn delete(
     let me = Me::get(&mut conn, uuid).await?;
 
     let member =
-        Member::fetch_one_with_member(&mut conn, &app_state.cache_pool, Some(&me), member_uuid)
+        Member::fetch_one_with_uuid(&mut conn, &app_state.cache_pool, Some(&me), member_uuid)
             .await?;
 
     let deleter = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
