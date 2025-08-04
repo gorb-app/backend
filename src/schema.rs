@@ -12,6 +12,25 @@ diesel::table! {
 }
 
 diesel::table! {
+    audit_logs (uuid) {
+        uuid -> Uuid,
+        guild_uuid -> Uuid,
+        action_id -> Int2,
+        by_uuid -> Uuid,
+        channel_uuid -> Nullable<Uuid>,
+        user_uuid -> Nullable<Uuid>,
+        message_uuid -> Nullable<Uuid>,
+        role_uuid -> Nullable<Uuid>,
+        #[max_length = 200]
+        audit_message -> Nullable<Varchar>,
+        #[max_length = 200]
+        changed_from -> Nullable<Varchar>,
+        #[max_length = 200]
+        changed_to -> Nullable<Varchar>,
+    }
+}
+
+diesel::table! {
     channel_permissions (channel_uuid, role_uuid) {
         channel_uuid -> Uuid,
         role_uuid -> Uuid,
@@ -163,6 +182,11 @@ diesel::table! {
 
 diesel::joinable!(access_tokens -> refresh_tokens (refresh_token));
 diesel::joinable!(access_tokens -> users (uuid));
+diesel::joinable!(audit_logs -> channels (channel_uuid));
+diesel::joinable!(audit_logs -> guild_members (by_uuid));
+diesel::joinable!(audit_logs -> messages (message_uuid));
+diesel::joinable!(audit_logs -> roles (role_uuid));
+diesel::joinable!(audit_logs -> users (user_uuid));
 diesel::joinable!(channel_permissions -> channels (channel_uuid));
 diesel::joinable!(channel_permissions -> roles (role_uuid));
 diesel::joinable!(channels -> guilds (guild_uuid));
@@ -182,6 +206,7 @@ diesel::joinable!(roles -> guilds (guild_uuid));
 
 diesel::allow_tables_to_appear_in_same_query!(
     access_tokens,
+    audit_logs,
     channel_permissions,
     channels,
     friend_requests,
