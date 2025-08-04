@@ -29,6 +29,7 @@ pub struct Me {
     avatar: Option<String>,
     pronouns: Option<String>,
     about: Option<String>,
+    online_status: i16,
     pub email: String,
     pub email_verified: bool,
 }
@@ -263,6 +264,35 @@ impl Me {
         update(users::table)
             .filter(dsl::uuid.eq(self.uuid))
             .set((dsl::about.eq(new_about.as_str()),))
+            .execute(conn)
+            .await?;
+
+        if cache_pool
+            .get_cache_key::<User>(self.uuid.to_string())
+            .await
+            .is_ok()
+        {
+            cache_pool.del_cache_key(self.uuid.to_string()).await?
+        }
+
+        Ok(())
+    }
+
+    pub async fn set_online_status(
+        &mut self,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
+        new_status: i16,
+    ) -> Result<(), Error> {
+        if new_status > 4 || new_status < 0 {
+            return Err(Error::BadRequest("Invalid status code".to_string()));
+        }
+        self.online_status = new_status;
+
+        use users::dsl;
+        update(users::table)
+            .filter(dsl::uuid.eq(self.uuid))
+            .set(dsl::online_status.eq(new_status))
             .execute(conn)
             .await?;
 

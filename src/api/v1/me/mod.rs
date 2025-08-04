@@ -49,6 +49,7 @@ struct NewInfo {
     email: Option<String>,
     pronouns: Option<String>,
     about: Option<String>,
+    online_status: Option<i16>,
 }
 
 pub async fn update(
@@ -107,6 +108,11 @@ pub async fn update(
 
     if let Some(about) = &json.about {
         me.set_about(&mut conn, &app_state.cache_pool, about.clone())
+            .await?;
+    }
+
+    if let Some(online_status) = &json.online_status {
+        me.set_online_status(&mut conn, &app_state.cache_pool, *online_status)
             .await?;
     }
 
