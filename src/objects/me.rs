@@ -1,4 +1,4 @@
-use axum::{body::Bytes, http::StatusCode};
+use axum::body::Bytes;
 use diesel::{
     ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper, delete, insert_into,
     update,
@@ -284,7 +284,7 @@ impl Me {
         cache_pool: &redis::Client,
         new_status: i16,
     ) -> Result<(), Error> {
-        if new_status > 4 && new_status < 0 {
+        if new_status > 4 || new_status < 0 {
             return Err(Error::BadRequest("Invalid status code".to_string()));
         }
         self.online_status = new_status;
