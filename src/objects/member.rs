@@ -167,11 +167,6 @@ impl Member {
                         .and(fdsl::uuid2.eq(users::uuid))
                         .or(fdsl::uuid2.eq(me.uuid).and(fdsl::uuid1.eq(users::uuid)))),
                 )
-                .order_by(coalesce(
-                    dsl::nickname,
-                    users::display_name,
-                    users::username,
-                ))
                 .select((
                     MemberBuilder::as_select(),
                     UserBuilder::as_select(),
@@ -206,11 +201,6 @@ impl Member {
                         .and(fdsl::uuid2.eq(users::uuid))
                         .or(fdsl::uuid2.eq(me.uuid).and(fdsl::uuid1.eq(users::uuid)))),
                 )
-                .order_by(coalesce(
-                    dsl::nickname,
-                    users::display_name,
-                    users::username,
-                ))
                 .select((
                     MemberBuilder::as_select(),
                     UserBuilder::as_select(),
@@ -222,11 +212,6 @@ impl Member {
             (member, user) = dsl::guild_members
                 .filter(dsl::uuid.eq(uuid))
                 .inner_join(users::table)
-                .order_by(coalesce(
-                    dsl::nickname,
-                    users::display_name,
-                    users::username,
-                ))
                 .select((MemberBuilder::as_select(), UserBuilder::as_select()))
                 .get_result(conn)
                 .await?;
