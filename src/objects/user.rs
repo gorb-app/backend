@@ -21,7 +21,7 @@ pub struct UserBuilder {
 }
 
 impl UserBuilder {
-    fn build(self) -> User {
+    pub fn build(self) -> User {
         User {
             uuid: self.uuid,
             username: self.username,
@@ -36,13 +36,13 @@ impl UserBuilder {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct User {
-    uuid: Uuid,
+    pub uuid: Uuid,
     username: String,
     display_name: Option<String>,
     avatar: Option<String>,
     pronouns: Option<String>,
     about: Option<String>,
-    friends_since: Option<DateTime<Utc>>,
+    pub friends_since: Option<DateTime<Utc>>,
 }
 
 impl User {

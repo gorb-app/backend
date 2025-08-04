@@ -4,7 +4,7 @@ use lettre::{
     transport::smtp::authentication::Credentials,
 };
 use log::debug;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 mod bans;
@@ -75,6 +75,20 @@ impl Cookies for Request<Body> {
     }
 }
 */
+
+#[derive(Serialize)]
+pub struct Pagination<T> {
+    objects: Vec<T>,
+    amount: i32,
+    pages: i32,
+    page: i32,
+}
+
+#[derive(Deserialize)]
+pub struct PaginationRequest {
+    pub page: i32,
+    pub per_page: Option<i32>,
+}
 
 fn load_or_empty<T>(
     query_result: Result<Vec<T>, diesel::result::Error>,
