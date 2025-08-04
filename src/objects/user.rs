@@ -18,6 +18,7 @@ pub struct UserBuilder {
     avatar: Option<String>,
     pronouns: Option<String>,
     about: Option<String>,
+    online_status: i16,
 }
 
 impl UserBuilder {
@@ -29,6 +30,7 @@ impl UserBuilder {
             avatar: self.avatar,
             pronouns: self.pronouns,
             about: self.about,
+            online_status: self.online_status,
             friends_since: None,
         }
     }
@@ -42,6 +44,7 @@ pub struct User {
     avatar: Option<String>,
     pronouns: Option<String>,
     about: Option<String>,
+    online_status: i16,
     friends_since: Option<DateTime<Utc>>,
 }
 
