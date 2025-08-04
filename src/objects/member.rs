@@ -268,13 +268,7 @@ impl Member {
                 .await,
         )?;
 
-        let member_count: i64 = dsl::guild_members
-            .filter(dsl::guild_uuid.eq(guild_uuid))
-            .count()
-            .get_result(conn)
-            .await?;
-
-        let pages = member_count as f32 / per_page as f32;
+        let pages = Member::count(conn, guild_uuid).await? as f32 / per_page as f32;
 
         let mut members = Pagination::<Member> {
             objects: Vec::with_capacity(member_builders.len()),
