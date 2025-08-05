@@ -53,7 +53,7 @@ pub struct Channel {
     pub uuid: Uuid,
     pub guild_uuid: Uuid,
     pub name: String,
-    description: Option<String>,
+    pub description: Option<String>,
     pub is_above: Option<Uuid>,
     pub permissions: Vec<ChannelPermission>,
 }
