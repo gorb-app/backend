@@ -10,11 +10,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    AppState,
-    api::v1::auth::CurrentUser,
-    error::Error,
-    objects::{Member, Permissions, Role},
-    utils::{CacheFns, global_checks, order_by_is_above},
+    api::v1::auth::CurrentUser, error::Error, objects::{AuditLog, AuditLogId, Member, Permissions, Role}, utils::{global_checks, order_by_is_above, CacheFns}, AppState
 };
 
 pub mod uuid;
@@ -71,7 +67,10 @@ pub async fn create(
         .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageRole)
         .await?;
 
+    // TODO: roles permission
     let role = Role::new(&mut conn, guild_uuid, role_info.name.clone()).await?;
+
+    AuditLog::new(guild_uuid, AuditLogId::RoleCreate as i16, member.uuid, None, None, None, Some(role.uuid), Some(role_info.name.clone()) , None, None).await.push(&mut conn).await?;
 
     Ok((StatusCode::OK, Json(role)).into_response())
 }

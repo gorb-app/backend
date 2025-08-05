@@ -21,9 +21,9 @@ use super::{HasIsAbove, HasUuid, load_or_empty, member::MemberBuilder};
 #[diesel(primary_key(uuid))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Role {
-    uuid: Uuid,
+    pub uuid: Uuid,
     guild_uuid: Uuid,
-    name: String,
+    pub name: String,
     color: i32,
     is_above: Option<Uuid>,
     pub permissions: i64,
