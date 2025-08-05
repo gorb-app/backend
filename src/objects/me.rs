@@ -284,7 +284,7 @@ impl Me {
         cache_pool: &redis::Client,
         new_status: i16,
     ) -> Result<(), Error> {
-        if new_status > 4 || new_status < 0 {
+        if !(0..=4).contains(&new_status) {
             return Err(Error::BadRequest("Invalid status code".to_string()));
         }
         self.online_status = new_status;
