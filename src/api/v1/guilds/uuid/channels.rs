@@ -10,11 +10,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    AppState,
-    api::v1::auth::CurrentUser,
-    error::Error,
-    objects::{Channel, Member, Permissions},
-    utils::{CacheFns, global_checks, order_by_is_above},
+    api::v1::auth::CurrentUser, error::Error, objects::{AuditLog, AuditLogId, Channel, Member, Permissions}, utils::{global_checks, order_by_is_above, CacheFns}, AppState
 };
 
 #[derive(Deserialize)]
@@ -82,6 +78,8 @@ pub async fn create(
         channel_info.description.clone(),
     )
     .await?;
+
+    AuditLog::new(guild_uuid, AuditLogId::ChannelCreate as i16, member.uuid, Some(channel.uuid), None, None, None, Some(channel.name.clone()), None, None).await.push(&mut conn).await?;
 
     Ok((StatusCode::OK, Json(channel)))
 }
