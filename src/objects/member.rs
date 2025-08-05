@@ -107,7 +107,7 @@ impl MemberBuilder {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Member {
     pub uuid: Uuid,
     pub nickname: Option<String>,
@@ -150,14 +150,17 @@ impl Member {
     pub async fn fetch_one(
         conn: &mut Conn,
         cache_pool: &redis::Client,
-        me: &Me,
+        me: Option<&Me>,
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, Error> {
+        let member: MemberBuilder;
+        let user: UserBuilder;
+        let friend: Option<Friend>;
         use friends::dsl as fdsl;
         use guild_members::dsl;
-        let (member, user, friend): (MemberBuilder, UserBuilder, Option<Friend>) =
-            dsl::guild_members
+        if let Some(me) = me {
+            (member, user, friend) = dsl::guild_members
                 .filter(dsl::guild_uuid.eq(guild_uuid))
                 .filter(dsl::user_uuid.eq(user_uuid))
                 .inner_join(users::table)
@@ -174,6 +177,17 @@ impl Member {
                 ))
                 .get_result(conn)
                 .await?;
+        } else {
+            (member, user) = dsl::guild_members
+                .filter(dsl::guild_uuid.eq(guild_uuid))
+                .filter(dsl::user_uuid.eq(user_uuid))
+                .inner_join(users::table)
+                .select((MemberBuilder::as_select(), UserBuilder::as_select()))
+                .get_result(conn)
+                .await?;
+
+            friend = None;
+        }
 
         member
             .build_with_parts(conn, cache_pool, user, friend)
