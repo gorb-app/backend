@@ -10,11 +10,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::CurrentUser,
-    error::Error,
-    objects::{Guild, Member, Permissions},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{AuditLog, AuditLogId, Guild, Member, Permissions}, utils::global_checks, AppState
 };
 
 #[derive(Deserialize)]
@@ -61,6 +57,8 @@ pub async fn create(
     let invite = guild
         .create_invite(&mut conn, uuid, invite_request.custom_id.clone())
         .await?;
+
+    AuditLog::new(guild_uuid, AuditLogId::InviteCreate as i16, member.uuid, None, None, None, None, Some(invite.id.clone()), None, None).await.push(&mut conn).await?;
 
     Ok((StatusCode::OK, Json(invite)))
 }
