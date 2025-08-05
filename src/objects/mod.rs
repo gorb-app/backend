@@ -22,6 +22,7 @@ mod role;
 mod user;
 
 pub use auditlog::AuditLog;
+pub use auditlog::AuditLogId;
 pub use bans::GuildBan;
 pub use channel::Channel;
 pub use email_token::EmailToken;

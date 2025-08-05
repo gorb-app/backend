@@ -6,11 +6,7 @@ pub mod socket;
 use std::sync::Arc;
 
 use crate::{
-    AppState,
-    api::v1::auth::CurrentUser,
-    error::Error,
-    objects::{Channel, Member, Permissions},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{AuditLog, AuditLogId, Channel, Member, Permissions}, utils::global_checks, AppState
 };
 use axum::{
     Extension, Json,
@@ -55,7 +51,9 @@ pub async fn delete(
         .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageChannel)
         .await?;
 
+    let log_entrie = AuditLog::new(channel.guild_uuid, AuditLogId::ChannelDelete as i16, member.uuid, None, None, None, None, Some(channel.name.clone()), None, None).await;
     channel.delete(&mut conn, &app_state.cache_pool).await?;
+    log_entrie.push(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }
