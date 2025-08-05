@@ -1,7 +1,7 @@
 use uuid::Uuid;
-use diesel::{insert_into, Insertable, Queryable, Selectable, SelectableHelper};
+use diesel::{insert_into, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, ExpressionMethods};
 use serde::{Deserialize, Serialize};
-use crate::{error::Error, schema::audit_logs, Conn};
+use crate::{error::Error, objects::{load_or_empty, Pagination, PaginationRequest}, schema::audit_logs, Conn};
 use diesel_async::RunQueryDsl;
 
 
@@ -25,6 +25,55 @@ pub struct AuditLog {
 
 
 impl AuditLog {
+    pub async fn count(conn: &mut Conn, guild_uuid: Uuid) -> Result<i64, Error> {
+        use audit_logs::dsl;
+        let count: i64 = dsl::audit_logs
+            .filter(dsl::guild_uuid.eq(guild_uuid))
+            .count()
+            .get_result(conn)
+            .await?;
+
+        Ok(count)
+    }
+    pub async fn fetch_page(
+        conn: &mut Conn,
+        guild_uuid: Uuid,
+        pagination: PaginationRequest,
+    ) -> Result<Pagination<AuditLog>, Error> {
+
+        // TODO: Maybe add cache, but I do not know how
+        let per_page = pagination.per_page.unwrap_or(20);
+        let offset = (pagination.page - 1) * per_page;
+
+        if !(10..=100).contains(&per_page) {
+            return Err(Error::BadRequest(
+                "Invalid amount per page requested".to_string(),
+            ));
+        }
+
+        use audit_logs::dsl;
+        let logs: Vec<AuditLog> = load_or_empty(
+            dsl::audit_logs
+                .filter(dsl::guild_uuid.eq(guild_uuid))
+                .limit(per_page.into())
+                .offset(offset as i64)
+                .select(AuditLog::as_select())
+                .load(conn)
+                .await
+        )?;
+
+        let pages = (AuditLog::count(conn, guild_uuid).await? as f32 / per_page as f32).ceil();
+
+        let paginated_logs = Pagination::<AuditLog> {
+            objects: logs.clone(),
+            amount: logs.len() as i32,
+            pages: pages as i32,
+            page: pagination.page,
+        };
+        
+        Ok(paginated_logs)
+    }
+
     #[allow(clippy::new_ret_no_self)]
     pub async fn new(
         conn: &mut Conn,
