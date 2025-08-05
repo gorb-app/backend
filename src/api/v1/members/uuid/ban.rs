@@ -34,7 +34,7 @@ pub async fn post(
     global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let member =
-        Member::fetch_one_with_member(&mut conn, &app_state.cache_pool, None, member_uuid).await?;
+        Member::fetch_one_with_uuid(&mut conn, &app_state.cache_pool, None, member_uuid).await?;
 
     let caller = Member::check_membership(&mut conn, uuid, member.guild_uuid).await?;
 

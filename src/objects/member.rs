@@ -1,6 +1,7 @@
 use diesel::{
-    ExpressionMethods, Identifiable, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper,
-    delete, insert_into,
+    Associations, BoolExpressionMethods, ExpressionMethods, Identifiable, Insertable, JoinOnDsl,
+    QueryDsl, Queryable, Selectable, SelectableHelper, define_sql_function, delete, insert_into,
+    sql_types::{Nullable, VarChar},
 };
 use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
@@ -9,14 +10,21 @@ use uuid::Uuid;
 use crate::{
     Conn,
     error::Error,
-    objects::{GuildBan, Me, Permissions, Role},
-    schema::{guild_bans, guild_members},
+    objects::PaginationRequest,
+    schema::{friends, guild_bans, guild_members, users},
 };
 
-use super::{User, load_or_empty};
+use super::{
+    Friend, Guild, GuildBan, Me, Pagination, Permissions, Role, User, load_or_empty,
+    user::UserBuilder,
+};
 
-#[derive(Serialize, Queryable, Identifiable, Selectable, Insertable)]
+define_sql_function! { fn coalesce(x: Nullable<VarChar>, y: Nullable<VarChar>, z: VarChar) -> Text; }
+
+#[derive(Serialize, Queryable, Identifiable, Selectable, Insertable, Associations)]
 #[diesel(table_name = guild_members)]
+#[diesel(belongs_to(UserBuilder, foreign_key = user_uuid))]
+#[diesel(belongs_to(Guild, foreign_key = guild_uuid))]
 #[diesel(primary_key(uuid))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct MemberBuilder {
@@ -55,6 +63,32 @@ impl MemberBuilder {
         })
     }
 
+    async fn build_with_parts(
+        &self,
+        conn: &mut Conn,
+        cache_pool: &redis::Client,
+        user_builder: UserBuilder,
+        friend: Option<Friend>,
+    ) -> Result<Member, Error> {
+        let mut user = user_builder.build();
+
+        if let Some(friend) = friend {
+            user.friends_since = Some(friend.accepted_at);
+        }
+
+        let roles = Role::fetch_from_member(conn, cache_pool, self).await?;
+
+        Ok(Member {
+            uuid: self.uuid,
+            nickname: self.nickname.clone(),
+            user_uuid: self.user_uuid,
+            guild_uuid: self.guild_uuid,
+            is_owner: self.is_owner,
+            user,
+            roles,
+        })
+    }
+
     pub async fn check_permission(
         &self,
         conn: &mut Conn,
@@ -73,7 +107,7 @@ impl MemberBuilder {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Member {
     pub uuid: Uuid,
     pub nickname: Option<String>,
@@ -116,56 +150,153 @@ impl Member {
     pub async fn fetch_one(
         conn: &mut Conn,
         cache_pool: &redis::Client,
-        me: &Me,
+        me: Option<&Me>,
         user_uuid: Uuid,
         guild_uuid: Uuid,
     ) -> Result<Self, Error> {
+        let member: MemberBuilder;
+        let user: UserBuilder;
+        let friend: Option<Friend>;
+        use friends::dsl as fdsl;
         use guild_members::dsl;
-        let member: MemberBuilder = dsl::guild_members
-            .filter(dsl::user_uuid.eq(user_uuid))
-            .filter(dsl::guild_uuid.eq(guild_uuid))
-            .select(MemberBuilder::as_select())
-            .get_result(conn)
-            .await?;
+        if let Some(me) = me {
+            (member, user, friend) = dsl::guild_members
+                .filter(dsl::guild_uuid.eq(guild_uuid))
+                .filter(dsl::user_uuid.eq(user_uuid))
+                .inner_join(users::table)
+                .left_join(
+                    fdsl::friends.on(fdsl::uuid1
+                        .eq(me.uuid)
+                        .and(fdsl::uuid2.eq(users::uuid))
+                        .or(fdsl::uuid2.eq(me.uuid).and(fdsl::uuid1.eq(users::uuid)))),
+                )
+                .select((
+                    MemberBuilder::as_select(),
+                    UserBuilder::as_select(),
+                    Option::<Friend>::as_select(),
+                ))
+                .get_result(conn)
+                .await?;
+        } else {
+            (member, user) = dsl::guild_members
+                .filter(dsl::guild_uuid.eq(guild_uuid))
+                .filter(dsl::user_uuid.eq(user_uuid))
+                .inner_join(users::table)
+                .select((MemberBuilder::as_select(), UserBuilder::as_select()))
+                .get_result(conn)
+                .await?;
 
-        member.build(conn, cache_pool, Some(me)).await
+            friend = None;
+        }
+
+        member
+            .build_with_parts(conn, cache_pool, user, friend)
+            .await
     }
 
-    pub async fn fetch_one_with_member(
+    pub async fn fetch_one_with_uuid(
         conn: &mut Conn,
         cache_pool: &redis::Client,
         me: Option<&Me>,
         uuid: Uuid,
     ) -> Result<Self, Error> {
+        let member: MemberBuilder;
+        let user: UserBuilder;
+        let friend: Option<Friend>;
+        use friends::dsl as fdsl;
         use guild_members::dsl;
-        let member: MemberBuilder = dsl::guild_members
-            .filter(dsl::uuid.eq(uuid))
-            .select(MemberBuilder::as_select())
-            .get_result(conn)
-            .await?;
+        if let Some(me) = me {
+            (member, user, friend) = dsl::guild_members
+                .filter(dsl::uuid.eq(uuid))
+                .inner_join(users::table)
+                .left_join(
+                    fdsl::friends.on(fdsl::uuid1
+                        .eq(me.uuid)
+                        .and(fdsl::uuid2.eq(users::uuid))
+                        .or(fdsl::uuid2.eq(me.uuid).and(fdsl::uuid1.eq(users::uuid)))),
+                )
+                .select((
+                    MemberBuilder::as_select(),
+                    UserBuilder::as_select(),
+                    Option::<Friend>::as_select(),
+                ))
+                .get_result(conn)
+                .await?;
+        } else {
+            (member, user) = dsl::guild_members
+                .filter(dsl::uuid.eq(uuid))
+                .inner_join(users::table)
+                .select((MemberBuilder::as_select(), UserBuilder::as_select()))
+                .get_result(conn)
+                .await?;
 
-        member.build(conn, cache_pool, me).await
+            friend = None;
+        }
+
+        member
+            .build_with_parts(conn, cache_pool, user, friend)
+            .await
     }
 
-    pub async fn fetch_all(
+    pub async fn fetch_page(
         conn: &mut Conn,
         cache_pool: &redis::Client,
         me: &Me,
         guild_uuid: Uuid,
-    ) -> Result<Vec<Self>, Error> {
+        pagination: PaginationRequest,
+    ) -> Result<Pagination<Self>, Error> {
+        let per_page = pagination.per_page.unwrap_or(50);
+        let page_multiplier: i64 = ((pagination.page - 1) * per_page).into();
+
+        if !(10..=100).contains(&per_page) {
+            return Err(Error::BadRequest(
+                "Invalid amount per page requested".to_string(),
+            ));
+        }
+
+        use friends::dsl as fdsl;
         use guild_members::dsl;
-        let member_builders: Vec<MemberBuilder> = load_or_empty(
+        let member_builders: Vec<(MemberBuilder, UserBuilder, Option<Friend>)> = load_or_empty(
             dsl::guild_members
                 .filter(dsl::guild_uuid.eq(guild_uuid))
-                .select(MemberBuilder::as_select())
+                .inner_join(users::table)
+                .left_join(
+                    fdsl::friends.on(fdsl::uuid1
+                        .eq(me.uuid)
+                        .and(fdsl::uuid2.eq(users::uuid))
+                        .or(fdsl::uuid2.eq(me.uuid).and(fdsl::uuid1.eq(users::uuid)))),
+                )
+                .limit(per_page.into())
+                .offset(page_multiplier)
+                .order_by(coalesce(
+                    dsl::nickname,
+                    users::display_name,
+                    users::username,
+                ))
+                .select((
+                    MemberBuilder::as_select(),
+                    UserBuilder::as_select(),
+                    Option::<Friend>::as_select(),
+                ))
                 .load(conn)
                 .await,
         )?;
 
-        let mut members = vec![];
+        let pages = Member::count(conn, guild_uuid).await? as f32 / per_page as f32;
 
-        for builder in member_builders {
-            members.push(builder.build(conn, cache_pool, Some(me)).await?);
+        let mut members = Pagination::<Member> {
+            objects: Vec::with_capacity(member_builders.len()),
+            amount: member_builders.len() as i32,
+            pages: pages.ceil() as i32,
+            page: pagination.page,
+        };
+
+        for (member, user, friend) in member_builders {
+            members.objects.push(
+                member
+                    .build_with_parts(conn, cache_pool, user, friend)
+                    .await?,
+            );
         }
 
         Ok(members)
