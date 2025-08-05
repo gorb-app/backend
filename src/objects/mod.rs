@@ -7,6 +7,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+mod auditlog;
 mod bans;
 mod channel;
 mod email_token;
@@ -19,8 +20,8 @@ mod message;
 mod password_reset_token;
 mod role;
 mod user;
-mod auditlog;
 
+pub use auditlog::AuditLog;
 pub use bans::GuildBan;
 pub use channel::Channel;
 pub use email_token::EmailToken;
@@ -35,7 +36,6 @@ pub use password_reset_token::PasswordResetToken;
 pub use role::Permissions;
 pub use role::Role;
 pub use user::User;
-pub use auditlog::AuditLog;
 
 use crate::error::Error;
 

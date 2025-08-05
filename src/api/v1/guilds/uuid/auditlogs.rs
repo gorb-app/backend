@@ -9,7 +9,11 @@ use axum::{
 };
 
 use crate::{
-    api::v1::auth::CurrentUser, error::Error, objects::{AuditLog, Member, PaginationRequest, Permissions}, utils::global_checks, AppState
+    AppState,
+    api::v1::auth::CurrentUser,
+    error::Error,
+    objects::{AuditLog, Member, PaginationRequest, Permissions},
+    utils::global_checks,
 };
 
 pub async fn get(
@@ -23,15 +27,11 @@ pub async fn get(
     global_checks(&mut conn, &app_state.config, uuid).await?;
 
     let caller = Member::check_membership(&mut conn, uuid, guild_uuid).await?;
-    caller.check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageGuild).await?;
-    
+    caller
+        .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageGuild)
+        .await?;
 
-    let logs = AuditLog::fetch_page(
-        &mut conn,
-        guild_uuid,
-        pagination,
-    )
-    .await?;
+    let logs = AuditLog::fetch_page(&mut conn, guild_uuid, pagination).await?;
 
     Ok((StatusCode::OK, Json(logs)))
 }

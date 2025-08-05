@@ -12,12 +12,12 @@ use axum::{
 use bytes::Bytes;
 use uuid::Uuid;
 
+mod auditlogs;
 mod bans;
 mod channels;
 mod invites;
 mod members;
 mod roles;
-mod auditlogs;
 
 use crate::{
     AppState,

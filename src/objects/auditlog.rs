@@ -1,28 +1,32 @@
-use uuid::Uuid;
-use diesel::{insert_into, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, ExpressionMethods};
-use serde::{Deserialize, Serialize};
-use crate::{error::Error, objects::{load_or_empty, Pagination, PaginationRequest}, schema::audit_logs, Conn};
+use crate::{
+    Conn,
+    error::Error,
+    objects::{Pagination, PaginationRequest, load_or_empty},
+    schema::audit_logs,
+};
+use diesel::{
+    ExpressionMethods, Insertable, QueryDsl, Queryable, Selectable, SelectableHelper, insert_into,
+};
 use diesel_async::RunQueryDsl;
-
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Insertable, Selectable, Queryable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = audit_logs)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct AuditLog {
-    
-	pub uuid: Uuid,
-	pub guild_uuid: Uuid,
-	pub action_id: i16,
-	pub by_uuid: Uuid,
-	pub channel_uuid: Option<Uuid>,
-	pub user_uuid: Option<Uuid>,
-	pub message_uuid: Option<Uuid>,
-	pub role_uuid: Option<Uuid>,
-	pub audit_message: Option<String>,
-	pub changed_from: Option<String>,
-	pub changed_to: Option<String>,
+    pub uuid: Uuid,
+    pub guild_uuid: Uuid,
+    pub action_id: i16,
+    pub by_uuid: Uuid,
+    pub channel_uuid: Option<Uuid>,
+    pub user_uuid: Option<Uuid>,
+    pub message_uuid: Option<Uuid>,
+    pub role_uuid: Option<Uuid>,
+    pub audit_message: Option<String>,
+    pub changed_from: Option<String>,
+    pub changed_to: Option<String>,
 }
-
 
 impl AuditLog {
     pub async fn count(conn: &mut Conn, guild_uuid: Uuid) -> Result<i64, Error> {
@@ -40,7 +44,6 @@ impl AuditLog {
         guild_uuid: Uuid,
         pagination: PaginationRequest,
     ) -> Result<Pagination<AuditLog>, Error> {
-
         // TODO: Maybe add cache, but I do not know how
         let per_page = pagination.per_page.unwrap_or(20);
         let offset = (pagination.page - 1) * per_page;
@@ -59,7 +62,7 @@ impl AuditLog {
                 .offset(offset as i64)
                 .select(AuditLog::as_select())
                 .load(conn)
-                .await
+                .await,
         )?;
 
         let pages = (AuditLog::count(conn, guild_uuid).await? as f32 / per_page as f32).ceil();
@@ -70,7 +73,7 @@ impl AuditLog {
             pages: pages as i32,
             page: pagination.page,
         };
-        
+
         Ok(paginated_logs)
     }
 
@@ -87,7 +90,7 @@ impl AuditLog {
         audit_message: Option<String>,
         changed_from: Option<String>,
         changed_to: Option<String>,
-    ) ->Result<(), Error> {
+    ) -> Result<(), Error> {
         let audit_log = AuditLog {
             uuid: Uuid::now_v7(),
             guild_uuid,
@@ -99,7 +102,7 @@ impl AuditLog {
             role_uuid,
             audit_message,
             changed_from,
-            changed_to
+            changed_to,
         };
 
         insert_into(audit_logs::table)
