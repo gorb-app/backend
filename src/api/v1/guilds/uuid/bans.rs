@@ -9,11 +9,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::{
-    AppState,
-    api::v1::auth::CurrentUser,
-    error::Error,
-    objects::{GuildBan, Member, Permissions},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{AuditLog, AuditLogId, GuildBan, Member, Permissions}, utils::global_checks, AppState
 };
 
 pub async fn get(
@@ -51,7 +47,9 @@ pub async fn unban(
 
     let ban = GuildBan::fetch_one(&mut conn, guild_uuid, user_uuid).await?;
 
+    let log_entrie = AuditLog::new(guild_uuid, AuditLogId::MemberUnban as i16, caller.uuid, None, Some(ban.user_uuid), None, None, None, None, None).await;
     ban.unban(&mut conn).await?;
+    log_entrie.push(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }

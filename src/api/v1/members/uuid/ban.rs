@@ -9,11 +9,7 @@ use axum::{
 use serde::Deserialize;
 
 use crate::{
-    AppState,
-    api::v1::auth::CurrentUser,
-    error::Error,
-    objects::{Member, Permissions},
-    utils::global_checks,
+    api::v1::auth::CurrentUser, error::Error, objects::{AuditLog, AuditLogId, Member, Permissions}, utils::global_checks, AppState
 };
 
 use uuid::Uuid;
@@ -42,7 +38,9 @@ pub async fn post(
         .check_permission(&mut conn, &app_state.cache_pool, Permissions::BanMember)
         .await?;
 
+    let log_entrie = AuditLog::new(member.guild_uuid, AuditLogId::MemberBan as i16, caller.uuid, None, Some(member.user_uuid), None, None, Some(payload.reason.clone()), None, None).await;
     member.ban(&mut conn, &payload.reason).await?;
+    log_entrie.push(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }
