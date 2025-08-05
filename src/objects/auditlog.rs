@@ -11,6 +11,29 @@ use diesel_async::RunQueryDsl;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub enum AuditLogId {
+    MessageDelete = 100,
+    MessageEdit = 101,
+
+    ChannelCreate = 200,
+    ChannelDelete = 201,
+    ChannelUpdateName = 202,
+    ChannelUpdateDescripiton = 203,
+
+    RoleCreate = 300,
+    RoleDelete = 301,
+    RoleUpdateName = 302,
+    RoleUpdatePermission = 303,
+    InviteCreate = 304,
+    InviteDelete = 305,
+
+    MemberKick = 400,
+    MemberBan = 401,
+    MemberUnban = 402,
+    MemberUpdateNickname = 403,
+    MemberUpdateRoles = 404,
+}
+
 #[derive(Insertable, Selectable, Queryable, Serialize, Deserialize, Clone)]
 #[diesel(table_name = audit_logs)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -77,9 +100,7 @@ impl AuditLog {
         Ok(paginated_logs)
     }
 
-    #[allow(clippy::new_ret_no_self)]
     pub async fn new(
-        conn: &mut Conn,
         guild_uuid: Uuid,
         action_id: i16,
         by_uuid: Uuid,
@@ -90,8 +111,8 @@ impl AuditLog {
         audit_message: Option<String>,
         changed_from: Option<String>,
         changed_to: Option<String>,
-    ) -> Result<(), Error> {
-        let audit_log = AuditLog {
+    ) -> AuditLog{
+        AuditLog {
             uuid: Uuid::now_v7(),
             guild_uuid,
             action_id,
@@ -103,10 +124,12 @@ impl AuditLog {
             audit_message,
             changed_from,
             changed_to,
-        };
+        }
+    }
 
+    pub async fn push(self, conn: &mut Conn)  -> Result<(), Error>{
         insert_into(audit_logs::table)
-            .values(audit_log.clone())
+            .values(self.clone())
             .execute(conn)
             .await?;
 
