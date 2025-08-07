@@ -47,9 +47,9 @@ pub async fn unban(
 
     let ban = GuildBan::fetch_one(&mut conn, guild_uuid, user_uuid).await?;
 
-    let log_entrie = AuditLog::new(guild_uuid, AuditLogId::MemberUnban as i16, caller.uuid, None, Some(ban.user_uuid), None, None, None, None, None).await;
+    let log_entry = AuditLog::new(guild_uuid, AuditLogId::MemberUnban as i16, caller.uuid, None, Some(ban.user_uuid), None, None, None, None, None).await;
     ban.unban(&mut conn).await?;
-    log_entrie.push(&mut conn).await?;
+    log_entry.push(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }

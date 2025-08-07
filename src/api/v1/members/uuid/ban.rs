@@ -38,9 +38,9 @@ pub async fn post(
         .check_permission(&mut conn, &app_state.cache_pool, Permissions::BanMember)
         .await?;
 
-    let log_entrie = AuditLog::new(member.guild_uuid, AuditLogId::MemberBan as i16, caller.uuid, None, Some(member.user_uuid), None, None, Some(payload.reason.clone()), None, None).await;
+    let log_entry = AuditLog::new(member.guild_uuid, AuditLogId::MemberBan as i16, caller.uuid, None, Some(member.user_uuid), None, None, Some(payload.reason.clone()), None, None).await;
     member.ban(&mut conn, &payload.reason).await?;
-    log_entrie.push(&mut conn).await?;
+    log_entry.push(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }

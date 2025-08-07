@@ -51,9 +51,9 @@ pub async fn delete(
         .check_permission(&mut conn, &app_state.cache_pool, Permissions::ManageChannel)
         .await?;
 
-    let log_entrie = AuditLog::new(channel.guild_uuid, AuditLogId::ChannelDelete as i16, member.uuid, None, None, None, None, Some(channel.name.clone()), None, None).await;
+    let log_entry = AuditLog::new(channel.guild_uuid, AuditLogId::ChannelDelete as i16, member.uuid, None, None, None, None, Some(channel.name.clone()), None, None).await;
     channel.delete(&mut conn, &app_state.cache_pool).await?;
-    log_entrie.push(&mut conn).await?;
+    log_entry.push(&mut conn).await?;
 
     Ok(StatusCode::OK)
 }
@@ -115,15 +115,15 @@ pub async fn patch(
         .await?;
 
     if let Some(new_name) = &new_info.name {
-        let log_entrie = AuditLog::new(channel.guild_uuid, AuditLogId::ChannelUpdateName as i16, member.uuid, Some(channel_uuid), None, None, None, None, Some(channel.name.clone()), Some(new_name.clone())).await;
+        let log_entry = AuditLog::new(channel.guild_uuid, AuditLogId::ChannelUpdateName as i16, member.uuid, Some(channel_uuid), None, None, None, None, Some(channel.name.clone()), Some(new_name.clone())).await;
         channel
             .set_name(&mut conn, &app_state.cache_pool, new_name.to_string())
             .await?;
-        log_entrie.push(&mut conn).await?;
+        log_entry.push(&mut conn).await?;
     }
 
     if let Some(new_description) = &new_info.description {
-        let log_entrie = AuditLog::new(channel.guild_uuid, AuditLogId::ChannelUpdateDescripiton as i16, member.uuid, Some(channel_uuid), None, None, None, None, Some(channel.description.clone().unwrap_or("".to_string())), Some(new_description.clone())).await;
+        let log_entry = AuditLog::new(channel.guild_uuid, AuditLogId::ChannelUpdateDescripiton as i16, member.uuid, Some(channel_uuid), None, None, None, None, Some(channel.description.clone().unwrap_or("".to_string())), Some(new_description.clone())).await;
         channel
             .set_description(
                 &mut conn,
@@ -131,7 +131,7 @@ pub async fn patch(
                 new_description.to_string(),
             )
             .await?;
-        log_entrie.push(&mut conn).await?;
+        log_entry.push(&mut conn).await?;
     }
 
     if let Some(new_is_above) = &new_info.is_above {
