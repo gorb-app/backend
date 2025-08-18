@@ -15,7 +15,7 @@ mod guild;
 mod invite;
 mod me;
 mod member;
-mod message;
+pub mod message;
 mod password_reset_token;
 mod role;
 mod user;
