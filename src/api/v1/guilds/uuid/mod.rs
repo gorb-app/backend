@@ -12,7 +12,7 @@ use axum::{
 use bytes::Bytes;
 use uuid::Uuid;
 
-mod auditlogs;
+mod audit_logs;
 mod bans;
 mod channels;
 mod invites;
@@ -48,7 +48,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/bans", get(bans::get))
         .route("/bans/{uuid}", delete(bans::unban))
         // Audit Logs
-        .route("/auditlogs", get(auditlogs::get))
+        .route("/audit-logs", get(audit_logs::get))
 }
 
 /// `GET /api/v1/guilds/{uuid}` DESCRIPTION
