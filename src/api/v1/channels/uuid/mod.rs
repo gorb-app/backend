@@ -3,8 +3,6 @@
 pub mod messages;
 pub mod socket;
 
-use std::sync::Arc;
-
 use crate::{
     AppState,
     api::v1::auth::CurrentUser,
@@ -23,7 +21,7 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(channel_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -39,7 +37,7 @@ pub async fn get(
 }
 
 pub async fn delete(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(channel_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -99,7 +97,7 @@ pub struct NewInfo {
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
 pub async fn patch(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(channel_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(new_info): Json<NewInfo>,

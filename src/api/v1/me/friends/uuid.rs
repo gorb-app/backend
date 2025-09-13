@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Extension,
     extract::{Path, State},
@@ -13,7 +11,7 @@ use crate::{
 };
 
 pub async fn delete(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(friend_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {

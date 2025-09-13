@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ::uuid::Uuid;
 use axum::{
     Extension, Json,
@@ -17,7 +15,7 @@ use crate::{
 };
 
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path((guild_uuid, role_uuid)): Path<(Uuid, Uuid)>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
