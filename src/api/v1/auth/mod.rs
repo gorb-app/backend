@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{
     Router,
@@ -36,7 +33,7 @@ pub struct Response {
     device_name: String,
 }
 
-pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+pub fn router(app_state: &'static AppState) -> Router<&'static AppState> {
     let router_with_auth = Router::new()
         .route("/verify-email", get(verify_email::get))
         .route("/verify-email", post(verify_email::post))
@@ -84,7 +81,7 @@ pub struct CurrentUser<Uuid>(pub Uuid);
 
 impl CurrentUser<Uuid> {
     pub async fn check_auth_layer(
-        State(app_state): State<Arc<AppState>>,
+        State(app_state): State<&'static AppState>,
         TypedHeader(auth): TypedHeader<Authorization<Bearer>>,
         mut req: Request,
         next: Next,

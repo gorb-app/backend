@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use argon2::{PasswordHash, PasswordVerifier};
 use axum::{
@@ -32,7 +29,7 @@ pub struct LoginInformation {
 }
 
 pub async fn response(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Json(login_information): Json<LoginInformation>,
 ) -> Result<impl IntoResponse, Error> {
     if !PASSWORD_REGEX.is_match(&login_information.password) {

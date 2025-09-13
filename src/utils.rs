@@ -34,7 +34,7 @@ pub static CHANNEL_REGEX: LazyLock<Regex> =
 
 pub static PASSWORD_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[0-9a-f]{96}").unwrap());
 
-pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cookie {
+pub fn new_refresh_token_cookie(config: &Config, refresh_token: String) -> Cookie<'_> {
     Cookie::build(("refresh_token", refresh_token))
         .http_only(true)
         .secure(true)

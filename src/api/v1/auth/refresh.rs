@@ -8,10 +8,7 @@ use axum_extra::extract::CookieJar;
 use diesel::{ExpressionMethods, QueryDsl, delete, update};
 use diesel_async::RunQueryDsl;
 use log::error;
-use std::{
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::Response;
 use crate::{
@@ -25,7 +22,7 @@ use crate::{
 };
 
 pub async fn post(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     jar: CookieJar,
 ) -> Result<impl IntoResponse, Error> {
     let mut refresh_token_cookie = jar

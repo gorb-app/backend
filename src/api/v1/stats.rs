@@ -1,6 +1,5 @@
 //! `/api/v1/stats` Returns stats about the server
 
-use std::sync::Arc;
 use std::time::SystemTime;
 
 use axum::Json;
@@ -43,7 +42,7 @@ struct Response {
 ///     "build_number": "39d01bb"
 /// });
 /// ```
-pub async fn res(State(app_state): State<Arc<AppState>>) -> Result<impl IntoResponse, Error> {
+pub async fn res(State(app_state): State<&'static AppState>) -> Result<impl IntoResponse, Error> {
     let accounts: i64 = users
         .select(uuid)
         .count()

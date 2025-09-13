@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ::uuid::Uuid;
 use axum::{
     Extension, Json,
@@ -25,7 +23,7 @@ pub struct RoleInfo {
 }
 
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -56,7 +54,7 @@ pub async fn get(
 }
 
 pub async fn create(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(role_info): Json<RoleInfo>,

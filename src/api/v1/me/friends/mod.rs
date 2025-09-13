@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ::uuid::Uuid;
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::Deserialize;
@@ -16,7 +14,7 @@ use crate::{
 
 /// Returns a list of users that are your friends
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;
@@ -55,7 +53,7 @@ pub struct UserReq {
 /// 400 Bad Request (usually means users are already friends)
 ///
 pub async fn post(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(user_request): Json<UserReq>,
 ) -> Result<impl IntoResponse, Error> {
