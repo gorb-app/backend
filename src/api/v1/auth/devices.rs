@@ -1,7 +1,5 @@
 //! `/api/v1/auth/devices` Returns list of logged in devices
 
-use std::sync::Arc;
-
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use diesel::{ExpressionMethods, QueryDsl, Queryable, Selectable, SelectableHelper};
 use diesel_async::RunQueryDsl;
@@ -38,7 +36,7 @@ struct Device {
 /// ]);
 /// ```
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let devices: Vec<Device> = dsl::refresh_tokens

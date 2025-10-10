@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Extension, Json, Router,
     extract::{DefaultBodyLimit, Multipart, State},
@@ -18,7 +16,7 @@ use crate::{
 mod friends;
 mod guilds;
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router() -> Router<&'static AppState> {
     Router::new()
         .route("/", get(get_me))
         .route(
@@ -34,7 +32,7 @@ pub fn router() -> Router<Arc<AppState>> {
 }
 
 pub async fn get_me(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;
@@ -53,7 +51,7 @@ struct NewInfo {
 }
 
 pub async fn update(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, Error> {

@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     extract::State,
     http::{HeaderValue, StatusCode},
@@ -28,7 +26,7 @@ use crate::{
 /// 401 Unauthorized (no refresh token found)
 ///
 pub async fn res(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     jar: CookieJar,
 ) -> Result<impl IntoResponse, Error> {
     let mut refresh_token_cookie = jar

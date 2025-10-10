@@ -10,7 +10,7 @@ use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use error::Error;
 use objects::MailClient;
-use std::{sync::Arc, time::SystemTime};
+use std::time::SystemTime;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -112,7 +112,7 @@ async fn main() -> Result<(), Error> {
         )
     */
 
-    let app_state = Arc::new(AppState {
+    let app_state = Box::leak(Box::new(AppState {
         pool,
         cache_pool,
         config,
@@ -121,7 +121,7 @@ async fn main() -> Result<(), Error> {
         start_time: SystemTime::now(),
         bunny_storage,
         mail_client,
-    });
+    }));
 
     let cors = CorsLayer::new()
         // Allow any origin (equivalent to allowed_origin_fn returning true)
@@ -162,7 +162,7 @@ async fn main() -> Result<(), Error> {
         // `GET /` goes to `root`
         .merge(api::router(
             web.backend_url.path().trim_end_matches("/"),
-            app_state.clone(),
+            app_state,
         ))
         .with_state(app_state)
         //.layer(socket_io)

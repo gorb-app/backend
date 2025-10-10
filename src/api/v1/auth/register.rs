@@ -1,7 +1,4 @@
-use std::{
-    sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use argon2::{
     PasswordHasher,
@@ -65,7 +62,7 @@ impl Default for ResponseError {
 }
 
 pub async fn post(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Json(account_information): Json<AccountInformation>,
 ) -> Result<impl IntoResponse, Error> {
     if !app_state.config.instance.registration {

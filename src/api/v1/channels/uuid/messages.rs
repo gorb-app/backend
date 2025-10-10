@@ -1,7 +1,5 @@
 //! `/api/v1/channels/{uuid}/messages` Endpoints related to channel messages
 
-use std::sync::Arc;
-
 use crate::{
     AppState,
     api::v1::auth::CurrentUser,
@@ -55,7 +53,7 @@ pub struct MessageRequest {
 /// ```
 ///
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(channel_uuid): Path<Uuid>,
     Query(message_request): Query<MessageRequest>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,

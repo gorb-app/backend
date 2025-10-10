@@ -7,7 +7,7 @@ use socketioxide::extract::{AckSender, Data, SocketRef, State};
 use crate::AppState;
 
 pub async fn on_connect(
-    State(_app_state): State<Arc<AppState>>,
+    State(_app_state): State<&'static AppState>,
     socket: SocketRef,
     Data(data): Data<Value>,
 ) {

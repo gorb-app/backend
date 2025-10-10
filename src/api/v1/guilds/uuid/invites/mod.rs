@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Extension, Json,
     extract::{Path, State},
@@ -23,7 +21,7 @@ pub struct InviteRequest {
 }
 
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -41,7 +39,7 @@ pub async fn get(
 }
 
 pub async fn create(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(invite_request): Json<InviteRequest>,

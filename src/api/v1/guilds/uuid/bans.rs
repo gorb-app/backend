@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Extension, Json,
     extract::{Path, State},
@@ -17,7 +15,7 @@ use crate::{
 };
 
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -36,7 +34,7 @@ pub async fn get(
 }
 
 pub async fn unban(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path((guild_uuid, user_uuid)): Path<(Uuid, Uuid)>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {

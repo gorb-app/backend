@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Extension, Json,
     extract::{Path, State},
@@ -17,7 +15,7 @@ use crate::{
 };
 
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(invite_id): Path<String>,
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;
@@ -30,7 +28,7 @@ pub async fn get(
 }
 
 pub async fn join(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(invite_id): Path<String>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {

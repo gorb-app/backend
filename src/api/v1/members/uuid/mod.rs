@@ -2,8 +2,6 @@
 
 pub mod ban;
 
-use std::sync::Arc;
-
 use crate::{
     AppState,
     api::v1::auth::CurrentUser,
@@ -21,7 +19,7 @@ use axum::{
 use uuid::Uuid;
 
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(member_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -40,7 +38,7 @@ pub async fn get(
 }
 
 pub async fn delete(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(member_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {

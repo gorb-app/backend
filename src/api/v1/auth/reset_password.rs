@@ -1,7 +1,5 @@
 //! `/api/v1/auth/reset-password` Endpoints for resetting user password
 
-use std::sync::Arc;
-
 use axum::{
     Json,
     extract::{Query, State},
@@ -35,7 +33,7 @@ pub struct QueryParams {
 /// 400 Bad request
 ///
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     query: Query<QueryParams>,
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;
@@ -89,7 +87,7 @@ pub struct ResetPassword {
 /// 400 Bad Request
 ///
 pub async fn post(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     reset_password: Json<ResetPassword>,
 ) -> Result<impl IntoResponse, Error> {
     let password_reset_token =

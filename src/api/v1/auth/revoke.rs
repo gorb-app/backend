@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use argon2::{PasswordHash, PasswordVerifier};
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use diesel::{ExpressionMethods, QueryDsl, delete};
@@ -25,7 +23,7 @@ pub struct RevokeRequest {
 
 // TODO: Should maybe be a delete request?
 pub async fn post(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(revoke_request): Json<RevokeRequest>,
 ) -> Result<impl IntoResponse, Error> {

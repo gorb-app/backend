@@ -1,7 +1,5 @@
 //! `/api/v1/me/guilds` Contains endpoint related to guild memberships
 
-use std::sync::Arc;
-
 use axum::{Extension, Json, extract::State, http::StatusCode, response::IntoResponse};
 use uuid::Uuid;
 
@@ -55,7 +53,7 @@ use crate::{
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let mut conn = app_state.pool.get().await?;

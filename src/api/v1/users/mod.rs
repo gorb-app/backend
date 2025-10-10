@@ -1,7 +1,5 @@
 //! `/api/v1/users` Contains endpoints related to all users
 
-use std::sync::Arc;
-
 use ::uuid::Uuid;
 use axum::{
     Extension, Json, Router,
@@ -21,7 +19,7 @@ use crate::{
 
 mod uuid;
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router() -> Router<&'static AppState> {
     Router::new()
         .route("/", get(users))
         .route("/{uuid}", get(uuid::get))
@@ -58,7 +56,7 @@ pub fn router() -> Router<Arc<AppState>> {
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
 pub async fn users(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Query(request_query): Query<StartAmountQuery>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {

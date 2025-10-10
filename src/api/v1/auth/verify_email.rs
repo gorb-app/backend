@@ -1,7 +1,5 @@
 //! `/api/v1/auth/verify-email` Endpoints for verifying user emails
 
-use std::sync::Arc;
-
 use axum::{
     Extension,
     extract::{Query, State},
@@ -43,7 +41,7 @@ pub struct QueryParams {
 /// 401 Unauthorized
 ///
 pub async fn get(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Query(query): Query<QueryParams>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -82,7 +80,7 @@ pub async fn get(
 /// 401 Unauthorized
 ///
 pub async fn post(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
     let me = Me::get(&mut app_state.pool.get().await?, uuid).await?;

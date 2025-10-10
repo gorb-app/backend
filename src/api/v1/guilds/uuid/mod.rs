@@ -1,7 +1,5 @@
 //! `/api/v1/guilds/{uuid}` Specific server endpoints
 
-use std::sync::Arc;
-
 use axum::{
     Extension, Json, Router,
     extract::{Multipart, Path, State},
@@ -26,7 +24,7 @@ use crate::{
     utils::global_checks,
 };
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router() -> Router<&'static AppState> {
     Router::new()
         // Servers
         .route("/", get(get_guild))
@@ -82,7 +80,7 @@ pub fn router() -> Router<Arc<AppState>> {
 /// });
 /// ```
 pub async fn get_guild(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
 ) -> Result<impl IntoResponse, Error> {
@@ -101,7 +99,7 @@ pub async fn get_guild(
 ///
 /// requires auth: yes
 pub async fn edit(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(guild_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     mut multipart: Multipart,

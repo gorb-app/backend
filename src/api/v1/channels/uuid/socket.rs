@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     extract::{Path, State, WebSocketUpgrade, ws::Message},
     http::HeaderMap,
@@ -61,7 +59,7 @@ struct SendError {
 
 pub async fn ws(
     ws: WebSocketUpgrade,
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(channel_uuid): Path<Uuid>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, Error> {

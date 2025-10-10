@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use axum::{
     Extension,
     extract::{Json, Path, State},
@@ -24,7 +22,7 @@ pub struct RequstBody {
 }
 
 pub async fn post(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Path(member_uuid): Path<Uuid>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(payload): Json<RequstBody>,

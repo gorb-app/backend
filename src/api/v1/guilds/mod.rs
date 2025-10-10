@@ -1,7 +1,5 @@
 //! `/api/v1/guilds` Guild related endpoints
 
-use std::sync::Arc;
-
 use ::uuid::Uuid;
 use axum::{
     Extension, Json, Router,
@@ -27,7 +25,7 @@ pub struct GuildInfo {
     name: String,
 }
 
-pub fn router() -> Router<Arc<AppState>> {
+pub fn router() -> Router<&'static AppState> {
     Router::new()
         .route("/", post(new))
         .route("/", get(get_guilds))
@@ -59,7 +57,7 @@ pub fn router() -> Router<Arc<AppState>> {
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
 pub async fn new(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(guild_info): Json<GuildInfo>,
 ) -> Result<impl IntoResponse, Error> {
@@ -121,7 +119,7 @@ pub async fn new(
 /// ```
 /// NOTE: UUIDs in this response are made using `uuidgen`, UUIDs made by the actual backend will be UUIDv7 and have extractable timestamps
 pub async fn get_guilds(
-    State(app_state): State<Arc<AppState>>,
+    State(app_state): State<&'static AppState>,
     Extension(CurrentUser(uuid)): Extension<CurrentUser<Uuid>>,
     Json(request_query): Json<StartAmountQuery>,
 ) -> Result<impl IntoResponse, Error> {

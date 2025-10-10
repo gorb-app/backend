@@ -1,7 +1,5 @@
 //! `/api/v1` Contains version 1 of the api
 
-use std::sync::Arc;
-
 use axum::{Router, middleware::from_fn_with_state, routing::get};
 
 use crate::{AppState, api::v1::auth::CurrentUser};
@@ -15,21 +13,18 @@ mod members;
 mod stats;
 mod users;
 
-pub fn router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+pub fn router(app_state: &'static AppState) -> Router<&'static AppState> {
     let router_with_auth = Router::new()
         .nest("/users", users::router())
         .nest("/guilds", guilds::router())
         .nest("/invites", invites::router())
         .nest("/members", members::router())
         .nest("/me", me::router())
-        .layer(from_fn_with_state(
-            app_state.clone(),
-            CurrentUser::check_auth_layer,
-        ));
+        .layer(from_fn_with_state(app_state, CurrentUser::check_auth_layer));
 
     Router::new()
         .route("/stats", get(stats::res))
-        .nest("/auth", auth::router(app_state.clone()))
+        .nest("/auth", auth::router(app_state))
         .nest("/channels", channels::router(app_state))
         .merge(router_with_auth)
 }
