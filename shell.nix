@@ -5,6 +5,7 @@ pkgs.callPackage (
   {
     mkShell,
     cargo,
+    clippy,
     rustc,
     mold,
     clang,
@@ -14,6 +15,7 @@ pkgs.callPackage (
     strictDeps = true;
     nativeBuildInputs = [
       cargo
+      clippy
       rustc
       mold
       clang
@@ -26,5 +28,6 @@ pkgs.callPackage (
 
     RUSTC_LINKER = "${pkgs.llvmPackages.clangUseLLVM}/bin/clang";
     RUSTFLAGS = "-Clink-arg=-fuse-ld=${pkgs.mold}/bin/mold";
+    RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
   }
 ) { }

@@ -1,6 +1,6 @@
 //! `/api/v1` Contains version 1 of the api
 
-use axum::{Router, middleware::from_fn_with_state, routing::get};
+use axum::{Router, middleware::from_fn_with_state, routing::{any, get}};
 
 use crate::{AppState, api::v1::auth::CurrentUser};
 
@@ -12,6 +12,7 @@ mod me;
 mod members;
 mod stats;
 mod users;
+mod socket;
 
 pub fn router(app_state: &'static AppState) -> Router<&'static AppState> {
     let router_with_auth = Router::new()
@@ -24,6 +25,7 @@ pub fn router(app_state: &'static AppState) -> Router<&'static AppState> {
 
     Router::new()
         .route("/stats", get(stats::res))
+        .route("/socket", any(socket::ws))
         .nest("/auth", auth::router(app_state))
         .nest("/channels", channels::router(app_state))
         .merge(router_with_auth)

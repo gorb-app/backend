@@ -4,7 +4,7 @@ use axum::{
     Json,
     extract::{
         multipart::MultipartError,
-        rejection::{JsonRejection, QueryRejection},
+        rejection::{JsonRejection, QueryRejection}, ws::Message,
     },
     http::{
         StatusCode,
@@ -24,7 +24,7 @@ use redis::RedisError;
 use serde::Serialize;
 use serde_json::Error as JsonError;
 use thiserror::Error;
-use tokio::task::JoinError;
+use tokio::{sync::mpsc, task::JoinError};
 use toml::de::Error as TomlError;
 
 #[derive(Debug, Error)]
@@ -83,9 +83,12 @@ pub enum Error {
     TooManyRequests(String),
     #[error("{0}")]
     InternalServerError(String),
-    // TODO: remove when doing socket.io
     #[error(transparent)]
     AxumError(#[from] axum::Error),
+    #[error(transparent)]
+    MpscSendErrorStr(#[from] mpsc::error::SendError<&'static str>),
+    #[error(transparent)]
+    MpscSendError(#[from] mpsc::error::SendError<Message>),
 }
 
 impl IntoResponse for Error {
