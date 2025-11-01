@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::collections::HashMap;
 
 use axum::{
     extract::{State, WebSocketUpgrade, ws::{Message, WebSocket}},
@@ -10,8 +10,9 @@ use diesel::{ExpressionMethods, QueryDsl, SelectableHelper, delete, dsl::insert_
 use diesel_async::RunQueryDsl;
 use futures_util::{SinkExt, StreamExt, stream::{SplitSink, SplitStream}};
 use serde::{Deserialize, Serialize};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use tokio::{sync::{Mutex, mpsc::{self, error::TryRecvError}}, time::{self, Duration}};
+use tokio::{sync::mpsc::{self, error::TryRecvError}, time::{self, Duration}};
 
 use crate::{
     AppState, api::v1::auth::check_access_token, error::Error, objects::{self, message::MessageBuilder}, schema::messages, utils::global_checks
@@ -24,7 +25,7 @@ enum ReceiveEvent {
     MessageEdit { entity: MessageEdit },
     MessageDelete { entity: MessageDelete },
     ChannelSubscribe { entity: Uuid },
-    //ChannelUnsubscribe { entity: Uuid },
+    ChannelUnsubscribe { entity: Uuid },
 }
 
 #[derive(Deserialize)]
@@ -120,22 +121,16 @@ pub async fn ws(
 
     global_checks(&mut conn, &app_state.config, uuid).await?;
 
-    let pubsub = Arc::new(Mutex::new(app_state
-        .cache_pool
-        .get_async_pubsub()
-        .await
-        .map_err(crate::error::Error::from)?));
-
     let mut res = ws.on_upgrade(async move |socket| {
-        let (mut sender, receiver) = socket.split();
+        let (sender, receiver) = socket.split();
         let (sender_heartbeat, receiver_heartbeat) = mpsc::channel(5);
-        let (sender_ws, mut receiver_ws) = mpsc::channel::<Message>(10);
+        let (sender_ws, receiver_ws) = mpsc::channel::<Message>(10);
 
         heartbeat(sender_ws.clone(), receiver_heartbeat).await;
 
-        channel_sender(pubsub.clone(), sender_ws).await;
+        websocket_receiver(app_state, uuid, sender_ws, sender_heartbeat, receiver).await;
 
-        websocket_receiver(app_state, uuid, sender_heartbeat, receiver, pubsub).await;
+        websocket_sender(sender, receiver_ws).await;
     });
 
     let headers = res.headers_mut();
@@ -175,19 +170,10 @@ async fn heartbeat(sender: mpsc::Sender<Message>, mut receiver: mpsc::Receiver<&
     })
 }
 
-async fn channel_sender(pubsub: Arc<Mutex<redis::aio::PubSub>>, sender: mpsc::Sender<Message>) -> tokio::task::JoinHandle<Result<(), Error>> {
+async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mpsc::Sender<Message>, sender_heartbeat: mpsc::Sender<&'static str>, mut receiver: SplitStream<WebSocket>) -> tokio::task::JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
-        while let Some(msg) = pubsub.lock().await.on_message().next().await {
-            let payload: String = msg.get_payload()?;
-            sender.send(payload.into()).await?;
-        }
+        let mut cancellation_tokens: HashMap<Uuid, CancellationToken> = HashMap::new();
 
-        Ok(())
-    })
-}
-
-async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender_heartbeat: mpsc::Sender<&'static str>, mut receiver: SplitStream<WebSocket>, pubsub: Arc<Mutex<redis::aio::PubSub>>) -> tokio::task::JoinHandle<Result<(), Error>> {
-    tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             match msg? {
                 Message::Pong(_) => {
@@ -337,7 +323,44 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender_hea
                                 .await?;
                         },
                         ReceiveEvent::ChannelSubscribe { entity } => {
-                            pubsub.lock().await.subscribe(entity.to_string()).await?;
+                            let mut pubsub = app_state
+                                .cache_pool
+                                .get_async_pubsub()
+                                .await
+                                .map_err(crate::error::Error::from)?;
+
+                            let token = CancellationToken::new();
+
+                            pubsub.subscribe(entity.to_string()).await?;
+
+                            let sender = sender.clone();
+
+                            let cloned_token = token.clone();
+
+                            tokio::spawn(async move {
+                                let mut stream = pubsub.on_message();
+
+                                loop {
+                                    tokio::select! {
+                                        _ = cloned_token.cancelled() => {
+                                            break;
+                                        }
+                                        Some(msg) = stream.next() => {
+                                            let payload: String = msg.get_payload()?;
+                                            sender.send(payload.into()).await?;
+                                        }
+                                    };
+                                }
+
+                                Ok::<(), Error>(())
+                            });
+
+                            cancellation_tokens.insert(entity, token);
+                        },
+                        ReceiveEvent::ChannelUnsubscribe { entity } => {
+                            if let Some(token) = cancellation_tokens.remove(&entity) {
+                                token.cancel();
+                            }
                         },
                     }
                 },
@@ -349,11 +372,10 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender_hea
     })
 }
 
-async fn websocket_sender(sender: SplitSink<WebSocket, Message>) -> tokio::task::JoinHandle<Result<(), Error>> {
+async fn websocket_sender(mut sender: SplitSink<WebSocket, Message>, mut receiver: mpsc::Receiver<Message>) -> tokio::task::JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
-        while let Some(msg) = sender.on_message().next().await {
-            let payload: String = msg.get_payload()?;
-            sender.send(payload.into()).await?;
+        while let Some(msg) = receiver.recv().await {
+            sender.send(msg).await?;
         }
 
         Ok(())

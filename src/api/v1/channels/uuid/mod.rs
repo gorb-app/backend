@@ -1,7 +1,6 @@
 //! `/api/v1/channels/{uuid}` Channel specific endpoints
 
 pub mod messages;
-pub mod socket;
 
 use crate::{
     AppState,
