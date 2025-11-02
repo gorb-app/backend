@@ -84,6 +84,7 @@ impl TryInto<Message> for SendEvent {
 
 #[derive(Serialize)]
 struct SendError {
+    code: i32,
     message: String,
 }
 
@@ -256,20 +257,15 @@ async fn websocket_receiver(
                                 .await?;
 
                             if uuid != message.user_uuid {
-                                redis::cmd("PUBLISH")
-                                    .arg(&[
-                                        entity.channel_uuid.to_string(),
-                                        serde_json::to_string(&SendEvent::Error {
+                                sender
+                                    .send(
+                                        SendEvent::Error {
                                             entity: SendError {
-                                                message: "Not allowed".to_string(),
+                                                code: 401,
+                                                message: "Unauthorized".to_string(),
                                             },
-                                        })?,
-                                    ])
-                                    .exec_async(
-                                        &mut app_state
-                                            .cache_pool
-                                            .get_multiplexed_tokio_connection()
-                                            .await?,
+                                        }
+                                        .try_into()?,
                                     )
                                     .await?;
 
@@ -313,20 +309,15 @@ async fn websocket_receiver(
                                 .await?;
 
                             if uuid != message.user_uuid {
-                                redis::cmd("PUBLISH")
-                                    .arg(&[
-                                        entity.channel_uuid.to_string(),
-                                        serde_json::to_string(&SendEvent::Error {
+                                sender
+                                    .send(
+                                        SendEvent::Error {
                                             entity: SendError {
-                                                message: "Not allowed".to_string(),
+                                                code: 401,
+                                                message: "Unauthorized".to_string(),
                                             },
-                                        })?,
-                                    ])
-                                    .exec_async(
-                                        &mut app_state
-                                            .cache_pool
-                                            .get_multiplexed_tokio_connection()
-                                            .await?,
+                                        }
+                                        .try_into()?,
                                     )
                                     .await?;
 
