@@ -160,7 +160,7 @@ async fn heartbeat(sender: mpsc::Sender<Message>, mut receiver: mpsc::Receiver<&
                     break;
                 } else if msg == Err(TryRecvError::Disconnected) || msg == Err(TryRecvError::Empty) && i == 4 {
                     // Todo figure out how to tell the socket to close
-                    sender.send(Message::Text("".into())).await?;
+                    sender.send(Message::Text("Heartbeat Failed".into())).await?;
                     break 'outer;
                 }
             }
@@ -375,8 +375,14 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mp
 async fn websocket_sender(mut sender: SplitSink<WebSocket, Message>, mut receiver: mpsc::Receiver<Message>) -> tokio::task::JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
         while let Some(msg) = receiver.recv().await {
+            if let Message::Text(text) = &msg && text.as_str() == "Heartbeat failed" {
+                sender.close().await?;
+                break
+            }
             sender.send(msg).await?;
         }
+
+        receiver.close();
 
         Ok(())
     })
