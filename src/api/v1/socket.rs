@@ -202,6 +202,7 @@ async fn websocket_receiver(
         let mut cancellation_tokens: HashMap<Uuid, CancellationToken> = HashMap::new();
 
         while let Some(msg) = receiver.next().await {
+            log::debug!("Received message {msg:?}");
             match msg? {
                 Message::Pong(_) => {
                     sender_heartbeat.send("").await?;
@@ -409,9 +410,11 @@ async fn websocket_sender(
             if let Message::Text(text) = &msg
                 && text.as_str() == "Heartbeat failed"
             {
+                log::debug!("Client not responding, closing");
                 sender.close().await?;
                 break;
             }
+            log::debug!("Trying to send message {msg:?}");
             sender.send(msg).await?;
         }
 
