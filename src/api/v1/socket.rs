@@ -1,21 +1,35 @@
 use std::collections::HashMap;
 
 use axum::{
-    extract::{State, WebSocketUpgrade, ws::{Message, WebSocket}},
+    extract::{
+        State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
+    },
     http::HeaderMap,
     response::IntoResponse,
 };
 use bytes::Bytes;
 use diesel::{ExpressionMethods, QueryDsl, SelectableHelper, delete, dsl::insert_into, update};
 use diesel_async::RunQueryDsl;
-use futures_util::{SinkExt, StreamExt, stream::{SplitSink, SplitStream}};
+use futures_util::{
+    SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
+};
 use serde::{Deserialize, Serialize};
+use tokio::{
+    sync::mpsc::{self, error::TryRecvError},
+    time::{self, Duration},
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use tokio::{sync::mpsc::{self, error::TryRecvError}, time::{self, Duration}};
 
 use crate::{
-    AppState, api::v1::auth::check_access_token, error::Error, objects::{self, message::MessageBuilder}, schema::messages, utils::global_checks
+    AppState,
+    api::v1::auth::check_access_token,
+    error::Error,
+    objects::{self, message::MessageBuilder},
+    schema::messages,
+    utils::global_checks,
 };
 
 #[derive(Deserialize)]
@@ -144,7 +158,10 @@ pub async fn ws(
     Ok(res)
 }
 
-async fn heartbeat(sender: mpsc::Sender<Message>, mut receiver: mpsc::Receiver<&'static str>) -> tokio::task::JoinHandle<Result<(), Error>> {
+async fn heartbeat(
+    sender: mpsc::Sender<Message>,
+    mut receiver: mpsc::Receiver<&'static str>,
+) -> tokio::task::JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
         let mut interval = time::interval(Duration::from_secs(60));
 
@@ -156,11 +173,15 @@ async fn heartbeat(sender: mpsc::Sender<Message>, mut receiver: mpsc::Receiver<&
                 interval.tick().await;
                 let msg = receiver.try_recv();
 
-                if let Ok(_) = msg {
+                if msg.is_ok() {
                     break;
-                } else if msg == Err(TryRecvError::Disconnected) || msg == Err(TryRecvError::Empty) && i == 4 {
+                } else if msg == Err(TryRecvError::Disconnected)
+                    || msg == Err(TryRecvError::Empty) && i == 4
+                {
                     // Todo figure out how to tell the socket to close
-                    sender.send(Message::Text("Heartbeat Failed".into())).await?;
+                    sender
+                        .send(Message::Text("Heartbeat Failed".into()))
+                        .await?;
                     break 'outer;
                 }
             }
@@ -170,7 +191,13 @@ async fn heartbeat(sender: mpsc::Sender<Message>, mut receiver: mpsc::Receiver<&
     })
 }
 
-async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mpsc::Sender<Message>, sender_heartbeat: mpsc::Sender<&'static str>, mut receiver: SplitStream<WebSocket>) -> tokio::task::JoinHandle<Result<(), Error>> {
+async fn websocket_receiver(
+    app_state: &'static AppState,
+    uuid: Uuid,
+    sender: mpsc::Sender<Message>,
+    sender_heartbeat: mpsc::Sender<&'static str>,
+    mut receiver: SplitStream<WebSocket>,
+) -> tokio::task::JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
         let mut cancellation_tokens: HashMap<Uuid, CancellationToken> = HashMap::new();
 
@@ -178,10 +205,9 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mp
             match msg? {
                 Message::Pong(_) => {
                     sender_heartbeat.send("").await?;
-                },
+                }
                 Message::Text(text) => {
                     let message_body: ReceiveEvent = serde_json::from_str(&text)?;
-
 
                     match message_body {
                         ReceiveEvent::MessageSend { entity } => {
@@ -201,7 +227,9 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mp
                                 .execute(&mut app_state.pool.get().await?)
                                 .await?;
 
-                            let message = message.build(&mut app_state.pool.get().await?, &app_state.cache_pool).await?;
+                            let message = message
+                                .build(&mut app_state.pool.get().await?, &app_state.cache_pool)
+                                .await?;
 
                             redis::cmd("PUBLISH")
                                 .arg(&[
@@ -321,7 +349,7 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mp
                                         .await?,
                                 )
                                 .await?;
-                        },
+                        }
                         ReceiveEvent::ChannelSubscribe { entity } => {
                             let mut pubsub = app_state
                                 .cache_pool
@@ -356,15 +384,15 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mp
                             });
 
                             cancellation_tokens.insert(entity, token);
-                        },
+                        }
                         ReceiveEvent::ChannelUnsubscribe { entity } => {
                             if let Some(token) = cancellation_tokens.remove(&entity) {
                                 token.cancel();
                             }
-                        },
+                        }
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
 
@@ -372,12 +400,17 @@ async fn websocket_receiver(app_state: &'static AppState, uuid: Uuid, sender: mp
     })
 }
 
-async fn websocket_sender(mut sender: SplitSink<WebSocket, Message>, mut receiver: mpsc::Receiver<Message>) -> tokio::task::JoinHandle<Result<(), Error>> {
+async fn websocket_sender(
+    mut sender: SplitSink<WebSocket, Message>,
+    mut receiver: mpsc::Receiver<Message>,
+) -> tokio::task::JoinHandle<Result<(), Error>> {
     tokio::spawn(async move {
         while let Some(msg) = receiver.recv().await {
-            if let Message::Text(text) = &msg && text.as_str() == "Heartbeat failed" {
+            if let Message::Text(text) = &msg
+                && text.as_str() == "Heartbeat failed"
+            {
                 sender.close().await?;
-                break
+                break;
             }
             sender.send(msg).await?;
         }

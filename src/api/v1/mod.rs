@@ -1,6 +1,10 @@
 //! `/api/v1` Contains version 1 of the api
 
-use axum::{Router, middleware::from_fn_with_state, routing::{any, get}};
+use axum::{
+    Router,
+    middleware::from_fn_with_state,
+    routing::{any, get},
+};
 
 use crate::{AppState, api::v1::auth::CurrentUser};
 
@@ -10,9 +14,9 @@ mod guilds;
 mod invites;
 mod me;
 mod members;
+mod socket;
 mod stats;
 mod users;
-mod socket;
 
 pub fn router(app_state: &'static AppState) -> Router<&'static AppState> {
     let router_with_auth = Router::new()

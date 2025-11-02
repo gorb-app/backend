@@ -4,7 +4,8 @@ use axum::{
     Json,
     extract::{
         multipart::MultipartError,
-        rejection::{JsonRejection, QueryRejection}, ws::Message,
+        rejection::{JsonRejection, QueryRejection},
+        ws::Message,
     },
     http::{
         StatusCode,
