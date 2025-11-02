@@ -10,6 +10,7 @@ pkgs.callPackage (
     mold,
     clang,
     pkg-config,
+    rustfmt,
   }:
   mkShell {
     strictDeps = true;
@@ -20,6 +21,7 @@ pkgs.callPackage (
       mold
       clang
       pkg-config
+      rustfmt
     ];
     buildInputs = [
       # Add openssl required by the backend
