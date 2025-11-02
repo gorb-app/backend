@@ -68,6 +68,7 @@ enum SendEvent {
     MessageSend { entity: objects::Message },
     MessageEdit { entity: objects::Message },
     MessageDelete { entity: MessageDelete },
+    Success,
     Error { entity: SendError },
 }
 
@@ -367,6 +368,7 @@ async fn websocket_receiver(
 
                             tokio::spawn(async move {
                                 let mut stream = pubsub.on_message();
+                                sender.send(SendEvent::Success.try_into()?).await?;
 
                                 loop {
                                     tokio::select! {
