@@ -209,7 +209,25 @@ async fn websocket_receiver(
                     sender_heartbeat.send("").await?;
                 }
                 Message::Text(text) => {
-                    let message_body: ReceiveEvent = serde_json::from_str(&text)?;
+                    let message_body: ReceiveEvent = match serde_json::from_str(&text) {
+                        Ok(object) => object,
+                        Err(_) => {
+                            sender
+                                .send(
+                                    SendEvent::Error {
+                                        id: 0,
+                                        entity: SendError {
+                                            code: 400,
+                                            message: "unable to deserialize json object"
+                                                .to_string(),
+                                        },
+                                    }
+                                    .try_into()?,
+                                )
+                                .await?;
+                            continue;
+                        }
+                    };
 
                     match message_body {
                         ReceiveEvent::MessageSend { id, entity } => {
