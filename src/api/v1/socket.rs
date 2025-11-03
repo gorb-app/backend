@@ -65,9 +65,9 @@ struct MessageDelete {
 #[derive(Serialize)]
 #[serde(tag = "event")]
 enum SendEvent {
-    MessageSend { id: i32, entity: objects::Message },
-    MessageEdit { id: i32, entity: objects::Message },
-    MessageDelete { id: i32, entity: MessageDelete },
+    MessageSend { entity: objects::Message },
+    MessageEdit { entity: objects::Message },
+    MessageDelete { entity: MessageDelete },
     Success { id: i32 },
     Error { id: i32, entity: SendError },
 }
@@ -256,7 +256,6 @@ async fn websocket_receiver(
                                 .arg(&[
                                     entity.channel_uuid.to_string(),
                                     serde_json::to_string(&SendEvent::MessageSend {
-                                        id,
                                         entity: message,
                                     })?,
                                 ])
@@ -267,6 +266,8 @@ async fn websocket_receiver(
                                         .await?,
                                 )
                                 .await?;
+
+                            sender.send(SendEvent::Success { id }.try_into()?).await?;
                         }
                         ReceiveEvent::MessageEdit { id, entity } => {
                             use messages::dsl;
@@ -305,7 +306,6 @@ async fn websocket_receiver(
                                 .arg(&[
                                     entity.channel_uuid.to_string(),
                                     serde_json::to_string(&SendEvent::MessageEdit {
-                                        id,
                                         entity: message
                                             .build(
                                                 &mut app_state.pool.get().await?,
@@ -321,6 +321,8 @@ async fn websocket_receiver(
                                         .await?,
                                 )
                                 .await?;
+
+                            sender.send(SendEvent::Success { id }.try_into()?).await?;
                         }
                         ReceiveEvent::MessageDelete { id, entity } => {
                             use messages::dsl;
@@ -355,10 +357,7 @@ async fn websocket_receiver(
                             redis::cmd("PUBLISH")
                                 .arg(&[
                                     entity.channel_uuid.to_string(),
-                                    serde_json::to_string(&SendEvent::MessageDelete {
-                                        id,
-                                        entity,
-                                    })?,
+                                    serde_json::to_string(&SendEvent::MessageDelete { entity })?,
                                 ])
                                 .exec_async(
                                     &mut app_state
@@ -367,6 +366,8 @@ async fn websocket_receiver(
                                         .await?,
                                 )
                                 .await?;
+
+                            sender.send(SendEvent::Success { id }.try_into()?).await?;
                         }
                         ReceiveEvent::ChannelSubscribe { id, entity } => {
                             let mut pubsub = app_state
