@@ -35,11 +35,11 @@ use crate::{
 #[derive(Deserialize)]
 #[serde(tag = "event")]
 enum ReceiveEvent {
-    MessageSend { entity: MessageSend },
-    MessageEdit { entity: MessageEdit },
-    MessageDelete { entity: MessageDelete },
-    ChannelSubscribe { entity: Uuid },
-    ChannelUnsubscribe { entity: Uuid },
+    MessageSend { id: i32, entity: MessageSend },
+    MessageEdit { id: i32, entity: MessageEdit },
+    MessageDelete { id: i32, entity: MessageDelete },
+    ChannelSubscribe { id: i32, entity: Uuid },
+    ChannelUnsubscribe { id: i32, entity: Uuid },
 }
 
 #[derive(Deserialize)]
@@ -65,10 +65,11 @@ struct MessageDelete {
 #[derive(Serialize)]
 #[serde(tag = "event")]
 enum SendEvent {
-    MessageSend { entity: objects::Message },
-    MessageEdit { entity: objects::Message },
-    MessageDelete { entity: MessageDelete },
-    Error { entity: SendError },
+    MessageSend { id: i32, entity: objects::Message },
+    MessageEdit { id: i32, entity: objects::Message },
+    MessageDelete { id: i32, entity: MessageDelete },
+    Success { id: i32 },
+    Error { id: i32, entity: SendError },
 }
 
 impl TryInto<Message> for SendEvent {
@@ -83,6 +84,7 @@ impl TryInto<Message> for SendEvent {
 
 #[derive(Serialize)]
 struct SendError {
+    code: i32,
     message: String,
 }
 
@@ -211,7 +213,7 @@ async fn websocket_receiver(
                     let message_body: ReceiveEvent = serde_json::from_str(&text)?;
 
                     match message_body {
-                        ReceiveEvent::MessageSend { entity } => {
+                        ReceiveEvent::MessageSend { id, entity } => {
                             // FIXME: We literally dont even check if the user has access anymore pls send help
                             let message_uuid = Uuid::now_v7();
 
@@ -236,6 +238,7 @@ async fn websocket_receiver(
                                 .arg(&[
                                     entity.channel_uuid.to_string(),
                                     serde_json::to_string(&SendEvent::MessageSend {
+                                        id,
                                         entity: message,
                                     })?,
                                 ])
@@ -247,7 +250,7 @@ async fn websocket_receiver(
                                 )
                                 .await?;
                         }
-                        ReceiveEvent::MessageEdit { entity } => {
+                        ReceiveEvent::MessageEdit { id, entity } => {
                             use messages::dsl;
                             let mut message: MessageBuilder = dsl::messages
                                 .filter(dsl::uuid.eq(entity.uuid))
@@ -256,20 +259,16 @@ async fn websocket_receiver(
                                 .await?;
 
                             if uuid != message.user_uuid {
-                                redis::cmd("PUBLISH")
-                                    .arg(&[
-                                        entity.channel_uuid.to_string(),
-                                        serde_json::to_string(&SendEvent::Error {
+                                sender
+                                    .send(
+                                        SendEvent::Error {
+                                            id,
                                             entity: SendError {
-                                                message: "Not allowed".to_string(),
+                                                code: 401,
+                                                message: "Unauthorized".to_string(),
                                             },
-                                        })?,
-                                    ])
-                                    .exec_async(
-                                        &mut app_state
-                                            .cache_pool
-                                            .get_multiplexed_tokio_connection()
-                                            .await?,
+                                        }
+                                        .try_into()?,
                                     )
                                     .await?;
 
@@ -288,6 +287,7 @@ async fn websocket_receiver(
                                 .arg(&[
                                     entity.channel_uuid.to_string(),
                                     serde_json::to_string(&SendEvent::MessageEdit {
+                                        id,
                                         entity: message
                                             .build(
                                                 &mut app_state.pool.get().await?,
@@ -304,7 +304,7 @@ async fn websocket_receiver(
                                 )
                                 .await?;
                         }
-                        ReceiveEvent::MessageDelete { entity } => {
+                        ReceiveEvent::MessageDelete { id, entity } => {
                             use messages::dsl;
                             let message: MessageBuilder = dsl::messages
                                 .filter(dsl::uuid.eq(entity.uuid))
@@ -313,20 +313,16 @@ async fn websocket_receiver(
                                 .await?;
 
                             if uuid != message.user_uuid {
-                                redis::cmd("PUBLISH")
-                                    .arg(&[
-                                        entity.channel_uuid.to_string(),
-                                        serde_json::to_string(&SendEvent::Error {
+                                sender
+                                    .send(
+                                        SendEvent::Error {
+                                            id,
                                             entity: SendError {
-                                                message: "Not allowed".to_string(),
+                                                code: 401,
+                                                message: "Unauthorized".to_string(),
                                             },
-                                        })?,
-                                    ])
-                                    .exec_async(
-                                        &mut app_state
-                                            .cache_pool
-                                            .get_multiplexed_tokio_connection()
-                                            .await?,
+                                        }
+                                        .try_into()?,
                                     )
                                     .await?;
 
@@ -341,7 +337,10 @@ async fn websocket_receiver(
                             redis::cmd("PUBLISH")
                                 .arg(&[
                                     entity.channel_uuid.to_string(),
-                                    serde_json::to_string(&SendEvent::MessageDelete { entity })?,
+                                    serde_json::to_string(&SendEvent::MessageDelete {
+                                        id,
+                                        entity,
+                                    })?,
                                 ])
                                 .exec_async(
                                     &mut app_state
@@ -351,7 +350,7 @@ async fn websocket_receiver(
                                 )
                                 .await?;
                         }
-                        ReceiveEvent::ChannelSubscribe { entity } => {
+                        ReceiveEvent::ChannelSubscribe { id, entity } => {
                             let mut pubsub = app_state
                                 .cache_pool
                                 .get_async_pubsub()
@@ -368,6 +367,7 @@ async fn websocket_receiver(
 
                             tokio::spawn(async move {
                                 let mut stream = pubsub.on_message();
+                                sender.send(SendEvent::Success { id }.try_into()?).await?;
 
                                 loop {
                                     tokio::select! {
@@ -386,9 +386,23 @@ async fn websocket_receiver(
 
                             cancellation_tokens.insert(entity, token);
                         }
-                        ReceiveEvent::ChannelUnsubscribe { entity } => {
+                        ReceiveEvent::ChannelUnsubscribe { id, entity } => {
                             if let Some(token) = cancellation_tokens.remove(&entity) {
                                 token.cancel();
+                                sender.send(SendEvent::Success { id }.try_into()?).await?;
+                            } else {
+                                sender
+                                    .send(
+                                        SendEvent::Error {
+                                            id,
+                                            entity: SendError {
+                                                code: 404,
+                                                message: "Not subscribed".to_string(),
+                                            },
+                                        }
+                                        .try_into()?,
+                                    )
+                                    .await?;
                             }
                         }
                     }
