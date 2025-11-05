@@ -39,7 +39,8 @@ enum ReceiveEvent {
     MessageEdit { id: i32, entity: MessageEdit },
     MessageDelete { id: i32, entity: MessageDelete },
     ChannelSubscribe { id: i32, entity: Uuid },
-    ChannelUnsubscribe { id: i32, entity: Uuid },
+    GuildSubscribe { id:i32, entity: Uuid },
+    Unsubscribe { id:i32, entity: Uuid },
 }
 
 #[derive(Deserialize)]
@@ -57,17 +58,20 @@ struct MessageEdit {
 }
 
 #[derive(Deserialize, Serialize)]
-struct MessageDelete {
+pub struct MessageDelete {
     channel_uuid: Uuid,
     uuid: Uuid,
 }
 
 #[derive(Serialize)]
 #[serde(tag = "event")]
-enum SendEvent {
+pub enum SendEvent {
     MessageSend { entity: objects::Message },
     MessageEdit { entity: objects::Message },
     MessageDelete { entity: MessageDelete },
+    ChannelCreate { entity: objects::Channel },
+    ChannelUpdate { entity: objects::Channel },
+    ChannelDelete { entity: Uuid },
     Success { id: i32 },
     Error { id: i32, entity: SendError },
 }
@@ -83,7 +87,7 @@ impl TryInto<Message> for SendEvent {
 }
 
 #[derive(Serialize)]
-struct SendError {
+pub struct SendError {
     code: i32,
     message: String,
 }
@@ -404,7 +408,43 @@ async fn websocket_receiver(
 
                             cancellation_tokens.insert(entity, token);
                         }
-                        ReceiveEvent::ChannelUnsubscribe { id, entity } => {
+                        ReceiveEvent::GuildSubscribe { id, entity } => {
+                            let mut pubsub = app_state
+                                .cache_pool
+                                .get_async_pubsub()
+                                .await
+                                .map_err(crate::error::Error::from)?;
+
+                            let token = CancellationToken::new();
+
+                            pubsub.subscribe(entity.to_string()).await?;
+
+                            let sender = sender.clone();
+
+                            let cloned_token = token.clone();
+
+                            tokio::spawn(async move {
+                                let mut stream = pubsub.on_message();
+                                sender.send(SendEvent::Success { id }.try_into()?).await?;
+
+                                loop {
+                                    tokio::select! {
+                                        _ = cloned_token.cancelled() => {
+                                            break;
+                                        }
+                                        Some(msg) = stream.next() => {
+                                            let payload: String = msg.get_payload()?;
+                                            sender.send(payload.into()).await?;
+                                        }
+                                    };
+                                }
+
+                                Ok::<(), Error>(())
+                            });
+
+                            cancellation_tokens.insert(entity, token);
+                        }
+                        ReceiveEvent::Unsubscribe { id, entity } => {
                             if let Some(token) = cancellation_tokens.remove(&entity) {
                                 token.cancel();
                                 sender.send(SendEvent::Success { id }.try_into()?).await?;

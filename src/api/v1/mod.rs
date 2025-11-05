@@ -14,7 +14,7 @@ mod guilds;
 mod invites;
 mod me;
 mod members;
-mod socket;
+pub mod socket;
 mod stats;
 mod users;
 

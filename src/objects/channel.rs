@@ -11,6 +11,7 @@ use crate::{
     error::Error,
     schema::{channel_permissions, channels, messages},
     utils::{CHANNEL_REGEX, CacheFns, order_by_is_above},
+    api::v1::socket::SendEvent,
 };
 
 use super::{HasIsAbove, HasUuid, Message, load_or_empty, message::MessageBuilder};
@@ -155,15 +156,6 @@ impl Channel {
             .execute(conn)
             .await?;
 
-        if let Some(old_last_channel) = last_channel {
-            use channels::dsl;
-            update(channels::table)
-                .filter(dsl::uuid.eq(old_last_channel.uuid))
-                .set(dsl::is_above.eq(new_channel.uuid))
-                .execute(conn)
-                .await?;
-        }
-
         // returns different object because there's no reason to build the channelbuilder (wastes 1 database request)
         let channel = Self {
             uuid: channel_uuid,
@@ -173,6 +165,43 @@ impl Channel {
             is_above: None,
             permissions: vec![],
         };
+
+        redis::cmd("PUBLISH")
+            .arg(&[
+                guild_uuid.to_string(),
+                serde_json::to_string(&SendEvent::ChannelCreate {
+                    entity: channel.clone(),
+                })?,
+            ])
+            .exec_async(
+                &mut cache_pool
+                    .get_multiplexed_tokio_connection()
+                    .await?,
+            )
+            .await?;
+
+        if let Some(old_last_channel) = last_channel {
+            use channels::dsl;
+            update(channels::table)
+                .filter(dsl::uuid.eq(old_last_channel.uuid))
+                .set(dsl::is_above.eq(new_channel.uuid))
+                .execute(conn)
+                .await?;
+
+            redis::cmd("PUBLISH")
+                .arg(&[
+                    guild_uuid.to_string(),
+                    serde_json::to_string(&SendEvent::ChannelUpdate {
+                        entity: old_last_channel.clone(),
+                    })?,
+                ])
+                .exec_async(
+                    &mut cache_pool
+                        .get_multiplexed_tokio_connection()
+                        .await?,
+                )
+                .await?;
+        }
 
         cache_pool
             .set_cache_key(channel_uuid.to_string(), channel.clone(), 1800)
@@ -237,6 +266,20 @@ impl Channel {
                 .del_cache_key(format!("{}_channels", self.guild_uuid))
                 .await?;
         }
+
+        redis::cmd("PUBLISH")
+            .arg(&[
+                self.guild_uuid.to_string(),
+                serde_json::to_string(&SendEvent::ChannelDelete {
+                    entity: self.uuid,
+                })?,
+            ])
+            .exec_async(
+                &mut cache_pool
+                    .get_multiplexed_tokio_connection()
+                    .await?,
+            )
+            .await?;
 
         Ok(())
     }
@@ -332,6 +375,20 @@ impl Channel {
                 .await?;
         }
 
+        redis::cmd("PUBLISH")
+            .arg(&[
+                self.guild_uuid.to_string(),
+                serde_json::to_string(&SendEvent::ChannelUpdate {
+                    entity: self.clone(),
+                })?,
+            ])
+            .exec_async(
+                &mut cache_pool
+                    .get_multiplexed_tokio_connection()
+                    .await?,
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -367,6 +424,20 @@ impl Channel {
                 .del_cache_key(format!("{}_channels", self.guild_uuid))
                 .await?;
         }
+
+        redis::cmd("PUBLISH")
+            .arg(&[
+                self.guild_uuid.to_string(),
+                serde_json::to_string(&SendEvent::ChannelUpdate {
+                    entity: self.clone(),
+                })?,
+            ])
+            .exec_async(
+                &mut cache_pool
+                    .get_multiplexed_tokio_connection()
+                    .await?,
+            )
+            .await?;
 
         Ok(())
     }
@@ -441,6 +512,20 @@ impl Channel {
                 .del_cache_key(format!("{}_channels", self.guild_uuid))
                 .await?;
         }
+
+        redis::cmd("PUBLISH")
+            .arg(&[
+                self.guild_uuid.to_string(),
+                serde_json::to_string(&SendEvent::ChannelUpdate {
+                    entity: self.clone(),
+                })?,
+            ])
+            .exec_async(
+                &mut cache_pool
+                    .get_multiplexed_tokio_connection()
+                    .await?,
+            )
+            .await?;
 
         Ok(())
     }

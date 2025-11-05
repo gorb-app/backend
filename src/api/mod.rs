@@ -4,7 +4,7 @@ use axum::{Router, routing::get};
 
 use crate::AppState;
 
-mod v1;
+pub mod v1;
 mod versions;
 
 pub fn router(path: &str, app_state: &'static AppState) -> Router<&'static AppState> {
